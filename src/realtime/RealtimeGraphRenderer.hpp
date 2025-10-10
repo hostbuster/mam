@@ -96,7 +96,14 @@ private:
       self->sampleCounter_ = cutoff;
       // Simple delivery: call handleEvent on all nodes for now (block-accurate)
       // Future: maintain id->node mapping instead of broadcasting
-      // TODO: bucket by node id and deliver to specific nodes
+      if (!self->drained_.empty()) {
+        // Very simple per-node delivery by id string match (optimize later)
+        for (const Command& c : self->drained_) {
+          self->graph_->forEachNode([&](const std::string& id, Node& n){
+            if (c.nodeId && id == c.nodeId) n.handleEvent(c);
+          });
+        }
+      }
     } else {
       self->sampleCounter_ += static_cast<SampleTime>(inNumberFrames);
     }

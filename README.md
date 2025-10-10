@@ -266,7 +266,39 @@ TBD. Until specified, treat the code as All Rights Reserved.
 - Implementation notes:
   - `SpscCommandQueue` (lock-free, bounded) from control → audio thread
   - `ProcessContext.blockStart` contains the absolute sample start of the current block
-  - Nodes can implement `handleEvent(const Command&)` (currently broadcast pending per-node routing)
+  - Nodes implement `handleEvent(const Command&)`; realtime now routes commands by `nodeId`
+
+### JSON control example
+
+While commands are typically fed at runtime (e.g., via MIDI/OSC/UI), you can also predefine initial parameters in the graph and drive tempo via `bpm/loop`. Example with two kicks and a clap, plus a mixer, and showing intended command IDs for parameters:
+
+```json
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "nodes": [
+    { "id": "kick_fast", "type": "kick", "params": { "f0": 120, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 0.9, "click": 0.1, "bpm": 120, "loop": true } },
+    { "id": "clap1",     "type": "clap", "params": { "ampDecayMs": 180, "gain": 0.8, "bpm": 60,  "loop": true } },
+    { "id": "kick_slow", "type": "kick", "params": { "f0": 90,  "fend": 30, "pitchDecayMs": 70, "ampDecayMs": 220, "gain": 0.9, "click": 0.05, "bpm": 60,  "loop": true } }
+  ],
+  "mixer": {
+    "masterPercent": 90,
+    "softClip": true,
+    "inputs": [
+      { "id": "kick_fast", "gainPercent": 80 },
+      { "id": "clap1",     "gainPercent": 15 },
+      { "id": "kick_slow", "gainPercent": 85 }
+    ]
+  },
+  "connections": []
+}
+```
+
+Parameter IDs for realtime `SetParam` commands (for developers):
+
+- kick: `F0=1`, `FEND=2`, `PITCH_DECAY_MS=3`, `AMP_DECAY_MS=4`, `GAIN=5`, `CLICK=6`, `BPM=7`, `LOOP=8`
+- clap: `AMP_DECAY_MS=1`, `GAIN=2`, `BPM=3`, `LOOP=4`
 
 ## Threading strategy
 

@@ -2,6 +2,8 @@
 
 #include <vector>
 #include <memory>
+#include <functional>
+#include <string>
 #include "Node.hpp"
 #include "MixerNode.hpp"
 
@@ -11,6 +13,11 @@ public:
     nodes_.push_back(NodeEntry{std::move(id), std::move(node)});
   }
   void setMixer(std::unique_ptr<MixerNode> mixer) { mixer_ = std::move(mixer); }
+
+  // Iterate nodes with their ids (read-only access to Node&). Not realtime-safe to mutate graph.
+  void forEachNode(const std::function<void(const std::string&, Node&)>& fn) {
+    for (auto& e : nodes_) fn(e.id, *e.node);
+  }
 
   void prepare(double sampleRate, uint32_t maxBlock) {
     for (auto& e : nodes_) e.node->prepare(sampleRate, maxBlock);
