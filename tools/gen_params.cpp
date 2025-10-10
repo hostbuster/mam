@@ -1,4 +1,5 @@
 #include <cstdio>
+#include <cmath>
 #include <string>
 #include "../src/core/ParamMap.hpp"
 

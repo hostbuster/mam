@@ -136,10 +136,24 @@ static int validateGraphJson(const std::string& path) {
         if (tmp[i] == tmp[i-1]) { std::fprintf(stderr, "Duplicate node id: %s\n", tmp[i].c_str()); errors++; }
       }
     }
-    // Known node types
+    // Known node types + minimal transport check
     for (const auto& n : spec.nodes) {
-      if (!(n.type == "kick" || n.type == "clap")) {
+      if (!(n.type == "kick" || n.type == "clap" || n.type == "transport")) {
         std::fprintf(stderr, "Unknown node type '%s' (id=%s)\n", n.type.c_str(), n.id.c_str());
+      }
+      if (n.type == "transport") {
+        try {
+          nlohmann::json pj = nlohmann::json::parse(n.paramsJson);
+          if (pj.contains("pattern")) {
+            const auto& p = pj.at("pattern");
+            const std::string target = p.value("nodeId", "");
+            const std::string steps = p.value("steps", "");
+            if (target.empty() || !hasNode(target)) { std::fprintf(stderr, "Transport node '%s' references unknown node '%s'\n", n.id.c_str(), target.c_str()); errors++; }
+            if (steps.empty()) { std::fprintf(stderr, "Transport node '%s' has empty steps pattern\n", n.id.c_str()); errors++; }
+          }
+        } catch (...) {
+          std::fprintf(stderr, "Transport node '%s' params parse failed\n", n.id.c_str()); errors++;
+        }
       }
     }
     // Mixer inputs exist
