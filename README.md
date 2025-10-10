@@ -340,6 +340,10 @@ Validation and clamping:
 - Params are validated against ranges at load time. Out-of-range values are clamped to safe min/max per the tables above.
 - Commands using named params (`"param": "F0"`) also resolve via the same maps.
 
+Auto-generated tables:
+
+See `docs/ParamTables.md` for an always-up-to-date table generated from the source-of-truth `ParamMap.hpp`.
+
 ### Offline command timeline
 
 Offline renders now honor JSON `commands` with sample-accurate timing using the timeline renderer.

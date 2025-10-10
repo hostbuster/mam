@@ -59,6 +59,19 @@ if(APPLE)
     )
 endif()
 
+add_executable(gen_params tools/gen_params.cpp)
+target_link_libraries(gen_params PRIVATE mam_core)
+
+add_custom_command(
+  OUTPUT ${CMAKE_CURRENT_SOURCE_DIR}/docs/ParamTables.md
+  COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_SOURCE_DIR}/docs
+  COMMAND gen_params > ${CMAKE_CURRENT_SOURCE_DIR}/docs/ParamTables.md
+  DEPENDS gen_params src/core/ParamMap.hpp
+  COMMENT "Generating docs/ParamTables.md from ParamMap.hpp"
+)
+
+add_custom_target(docs ALL DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/docs/ParamTables.md)
+
 foreach(tgt IN ITEMS mam_core mam_dsp mam_io mam)
     if (MSVC)
         target_compile_options(${tgt} PRIVATE /W4)
