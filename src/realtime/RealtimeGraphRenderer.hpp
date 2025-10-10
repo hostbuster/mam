@@ -5,8 +5,10 @@
 #include <CoreAudio/CoreAudioTypes.h>
 #include <cstdint>
 #include <stdexcept>
+#include <string>
 #include "../core/Graph.hpp"
 #include "../core/ScopedAudioUnit.hpp"
+#include "../core/OsStatusUtils.hpp"
 
 class RealtimeGraphRenderer {
 public:
@@ -26,7 +28,7 @@ public:
     if (!comp) throw std::runtime_error("Default output component not found");
 
     OSStatus err = AudioComponentInstanceNew(comp, unit_.ptr());
-    if (err != noErr) throw std::runtime_error("AudioComponentInstanceNew failed");
+    if (err != noErr) throw std::runtime_error(std::string("AudioComponentInstanceNew failed: ") + osstatusToString(err));
 
     // Interleaved Float32 stereo (or N channels)
     AudioStreamBasicDescription asbd{};
@@ -40,16 +42,16 @@ public:
     asbd.mBytesPerPacket = asbd.mBytesPerFrame;
 
     err = AudioUnitSetProperty(unit_.get(), kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &asbd, sizeof(asbd));
-    if (err != noErr) throw std::runtime_error("AudioUnitSetProperty(StreamFormat) failed");
+    if (err != noErr) throw std::runtime_error(std::string("AudioUnitSetProperty(StreamFormat) failed: ") + osstatusToString(err));
 
     AURenderCallbackStruct cb{};
     cb.inputProc = &RealtimeGraphRenderer::render;
     cb.inputProcRefCon = this;
     err = AudioUnitSetProperty(unit_.get(), kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Global, 0, &cb, sizeof(cb));
-    if (err != noErr) throw std::runtime_error("AudioUnitSetProperty(SetRenderCallback) failed");
+    if (err != noErr) throw std::runtime_error(std::string("AudioUnitSetProperty(SetRenderCallback) failed: ") + osstatusToString(err));
 
     err = AudioUnitInitialize(unit_.get());
-    if (err != noErr) throw std::runtime_error("AudioUnitInitialize failed");
+    if (err != noErr) throw std::runtime_error(std::string("AudioUnitInitialize failed: ") + osstatusToString(err));
 
     // Update graph with actual sample rate
     UInt32 size = sizeof(asbd);
@@ -65,7 +67,7 @@ public:
     }
 
     err = AudioOutputUnitStart(unit_.get());
-    if (err != noErr) throw std::runtime_error("AudioOutputUnitStart failed");
+    if (err != noErr) throw std::runtime_error(std::string("AudioOutputUnitStart failed: ") + osstatusToString(err));
   }
 
   void stop() {

@@ -5,6 +5,11 @@ project(mam LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+option(MAM_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
+option(MAM_ENABLE_ASAN "Enable AddressSanitizer" OFF)
+option(MAM_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
+option(MAM_ENABLE_LTO "Enable Link-Time Optimization" OFF)
+
 include_directories(third_party)
 
 add_executable(mam
@@ -46,7 +51,32 @@ endif()
 if (MSVC)
     target_compile_options(mam PRIVATE /W4)
 else()
-    target_compile_options(mam PRIVATE -Wall -Wextra -Wpedantic)
+    target_compile_options(mam PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+    if (MAM_WARNINGS_AS_ERRORS)
+        target_compile_options(mam PRIVATE -Werror)
+    endif()
+endif()
+
+if (MAM_ENABLE_ASAN)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
+        target_compile_options(mam PRIVATE -fsanitize=address)
+        target_link_options(mam PRIVATE -fsanitize=address)
+    endif()
+endif()
+
+if (MAM_ENABLE_UBSAN)
+    if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
+        target_compile_options(mam PRIVATE -fsanitize=undefined)
+        target_link_options(mam PRIVATE -fsanitize=undefined)
+    endif()
+endif()
+
+if (MAM_ENABLE_LTO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
+    if(ipo_supported)
+        set_property(TARGET mam PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    endif()
 endif()
 
 

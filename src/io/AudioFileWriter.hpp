@@ -66,7 +66,6 @@ inline void writeWithExtAudioFile(const std::string& path, const AudioFileSpec& 
     dst.mFormatFlags |= kLinearPCMFormatFlagIsBigEndian;
   }
 
-  ExtAudioFileRef file = nullptr;
   CFURLRef url = CFURLCreateFromFileSystemRepresentation(kCFAllocatorDefault, reinterpret_cast<const UInt8*>(path.c_str()), static_cast<CFIndex>(path.size()), false);
   if (!url) {
     throw std::runtime_error("CFURLCreateFromFileSystemRepresentation failed");

@@ -18,6 +18,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <sys/select.h>
+#include <cassert>
 #include "instruments/kick/KickSynth.hpp"
 #include "offline/OfflineRenderer.hpp"
 #include "offline/OfflineGraphRenderer.hpp"
@@ -50,12 +51,30 @@ static bool isStdinReady() {
   return (rv > 0) && FD_ISSET(STDIN_FILENO, &readfds);
 }
 
+static const char* toStr(FileFormat f) {
+  switch (f) {
+    case FileFormat::Wav: return "wav";
+    case FileFormat::Aiff: return "aiff";
+    case FileFormat::Caf: return "caf";
+  }
+  return "wav";
+}
+
+static const char* toStr(BitDepth d) {
+  switch (d) {
+    case BitDepth::Pcm16: return "16";
+    case BitDepth::Pcm24: return "24";
+    case BitDepth::Float32: return "32f";
+  }
+  return "32f";
+}
+
 static void printUsage(const char* exe) {
   std::fprintf(stderr,
                "Usage: %s [--f0 Hz] [--fend Hz] [--pitch-decay ms] [--amp-decay ms]\n"
                "          [--gain 0..1] [--bpm N] [--duration sec] [--click 0..1]\n"
                "          [--wav path] [--sr Hz] [--pcm16] [--format wav|aiff|caf] [--bitdepth 16|24|32f]\n"
-               "          [--graph path.json]\n"
+               "          [--graph path.json] [--quit-after sec]\n"
                "\n"
                "Examples:\n"
                "  %s                       # one-shot, defaults (real-time)\n"
@@ -67,11 +86,12 @@ static void printUsage(const char* exe) {
 int main(int argc, char** argv) {
   KickParams params;
   std::string wavPath;
-  std::string outFormat = "wav";
-  std::string bitDepth = "32f";
+  FileFormat outFormat = FileFormat::Wav;
+  BitDepth outDepth = BitDepth::Float32;
   std::string graphPath;
   double offlineSr = 48000.0;
   bool pcm16 = false;
+  double quitAfterSec = 0.0;
 
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
@@ -85,32 +105,44 @@ int main(int argc, char** argv) {
       printUsage(argv[0]);
       return 0;
     } else if (std::strcmp(a, "--f0") == 0) {
-      need(1); params.startFreqHz = std::atof(argv[++i]);
+      need(1); params.startFreqHz = static_cast<float>(std::atof(argv[++i]));
     } else if (std::strcmp(a, "--fend") == 0) {
-      need(1); params.endFreqHz = std::atof(argv[++i]);
+      need(1); params.endFreqHz = static_cast<float>(std::atof(argv[++i]));
     } else if (std::strcmp(a, "--pitch-decay") == 0) {
-      need(1); params.pitchDecayMs = std::atof(argv[++i]);
+      need(1); params.pitchDecayMs = static_cast<float>(std::atof(argv[++i]));
     } else if (std::strcmp(a, "--amp-decay") == 0) {
-      need(1); params.ampDecayMs = std::atof(argv[++i]);
+      need(1); params.ampDecayMs = static_cast<float>(std::atof(argv[++i]));
     } else if (std::strcmp(a, "--gain") == 0) {
-      need(1); params.gain = std::atof(argv[++i]);
+      need(1); params.gain = static_cast<float>(std::atof(argv[++i]));
     } else if (std::strcmp(a, "--bpm") == 0) {
-      need(1); params.bpm = std::atof(argv[++i]);
+      need(1); params.bpm = static_cast<float>(std::atof(argv[++i]));
     } else if (std::strcmp(a, "--duration") == 0) {
-      need(1); params.durationSec = std::atof(argv[++i]);
+      need(1); params.durationSec = static_cast<float>(std::atof(argv[++i]));
     } else if (std::strcmp(a, "--click") == 0) {
-      need(1); params.click = std::atof(argv[++i]);
+      need(1); params.click = static_cast<float>(std::atof(argv[++i]));
     } else if (std::strcmp(a, "--wav") == 0) {
       need(1); wavPath = argv[++i];
     } else if (std::strcmp(a, "--sr") == 0) {
       need(1); offlineSr = std::atof(argv[++i]);
       if (offlineSr <= 8000.0) offlineSr = 8000.0;
     } else if (std::strcmp(a, "--format") == 0) {
-      need(1); outFormat = argv[++i];
+      need(1); {
+        const char* f = argv[++i];
+        if (std::strcmp(f, "wav") == 0) outFormat = FileFormat::Wav;
+        else if (std::strcmp(f, "aiff") == 0) outFormat = FileFormat::Aiff;
+        else if (std::strcmp(f, "caf") == 0) outFormat = FileFormat::Caf;
+      }
     } else if (std::strcmp(a, "--bitdepth") == 0) {
-      need(1); bitDepth = argv[++i];
+      need(1); {
+        const char* b = argv[++i];
+        if (std::strcmp(b, "16") == 0) outDepth = BitDepth::Pcm16;
+        else if (std::strcmp(b, "24") == 0) outDepth = BitDepth::Pcm24;
+        else outDepth = BitDepth::Float32;
+      }
     } else if (std::strcmp(a, "--pcm16") == 0) {
       pcm16 = true;
+    } else if (std::strcmp(a, "--quit-after") == 0) {
+      need(1); quitAfterSec = std::atof(argv[++i]);
     } else if (std::strcmp(a, "--graph") == 0) {
       need(1); graphPath = argv[++i];
     } else {
@@ -163,14 +195,8 @@ int main(int argc, char** argv) {
     auto interleaved = renderGraphInterleaved(graph, sr, channels, totalFrames);
 
     AudioFileSpec spec;
-    if (outFormat == "wav") spec.format = FileFormat::Wav;
-    else if (outFormat == "aiff") spec.format = FileFormat::Aiff;
-    else if (outFormat == "caf") spec.format = FileFormat::Caf;
-    else spec.format = FileFormat::Wav;
-
-    if (pcm16 || bitDepth == "16") spec.bitDepth = BitDepth::Pcm16;
-    else if (bitDepth == "24") spec.bitDepth = BitDepth::Pcm24;
-    else spec.bitDepth = BitDepth::Float32;
+    spec.format = outFormat;
+    spec.bitDepth = pcm16 ? BitDepth::Pcm16 : outDepth;
     spec.sampleRate = sr;
     spec.channels = channels;
 
@@ -178,7 +204,7 @@ int main(int argc, char** argv) {
       writeWithExtAudioFile(wavPath, spec, interleaved);
       std::fprintf(stderr, "Wrote %llu frames at %u Hz to %s (%s/%s)\n",
                    static_cast<unsigned long long>(totalFrames), sr, wavPath.c_str(),
-                   (outFormat.c_str()), (pcm16?"16":"32f"));
+                   toStr(spec.format), toStr(spec.bitDepth));
     } catch (const std::exception& e) {
       std::fprintf(stderr, "Audio file write failed: %s\n", e.what());
       return 1;
@@ -220,12 +246,20 @@ int main(int argc, char** argv) {
   }
 
   // Always allow Ctrl-C or Enter to stop in realtime
+  double elapsedSec = 0.0;
   while (gRunning.load()) {
     if (isStdinReady()) {
       char buf[4];
       (void)read(STDIN_FILENO, buf, sizeof(buf));
       gRunning.store(false);
       break;
+    }
+    if (quitAfterSec > 0.0) {
+      elapsedSec += 0.05;
+      if (elapsedSec >= quitAfterSec) {
+        gRunning.store(false);
+        break;
+      }
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
