@@ -48,6 +48,19 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
     }
   }
 
+  if (j.contains("commands")) {
+    for (const auto& c : j.at("commands")) {
+      GraphSpec::CommandSpec cs;
+      cs.sampleTime = static_cast<uint64_t>(c.value("sampleTime", 0));
+      cs.nodeId = c.value("nodeId", "");
+      cs.type = c.value("type", "");
+      cs.paramId = static_cast<uint16_t>(c.value("paramId", 0));
+      cs.value = c.value("value", 0.0f);
+      cs.rampMs = c.value("rampMs", 0.0f);
+      spec.commands.push_back(cs);
+    }
+  }
+
   return spec;
 }
 

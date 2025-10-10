@@ -51,6 +51,12 @@
       { "id": "kick_slow", "gainPercent": 85 }
     ]
   },
+  "commands": [
+    { "sampleTime": 0,     "nodeId": "kick_fast", "type": "Trigger" },
+    { "sampleTime": 24000, "nodeId": "clap1",     "type": "Trigger" },
+    { "sampleTime": 48000, "nodeId": "kick_fast", "type": "SetParam",     "paramId": 5, "value": 0.6 },
+    { "sampleTime": 72000, "nodeId": "kick_slow", "type": "SetParamRamp", "paramId": 7, "value": 90.0, "rampMs": 200.0 }
+  ],
   "connections": []
 }
 

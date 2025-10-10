@@ -238,6 +238,8 @@ int main(int argc, char** argv) {
     graph.addNode("kick_default", std::make_unique<KickNode>(params));
   }
   RealtimeGraphRenderer rt;
+  SpscCommandQueue<2048> cmdQueue;
+  rt.setCommandQueue(&cmdQueue);
   try {
     rt.start(graph, 48000.0, 2);
   } catch (const std::exception& e) {
@@ -246,6 +248,24 @@ int main(int argc, char** argv) {
   }
 
   // Always allow Ctrl-C or Enter to stop in realtime
+  // If a graph was provided and it has commands, enqueue them immediately (demo)
+  if (!graphPath.empty()) {
+    try {
+      GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
+      for (const auto& c : spec.commands) {
+        Command cmd{};
+        cmd.sampleTime = c.sampleTime;
+        cmd.nodeId = c.nodeId.c_str(); // NOTE: points to transient string; in production, intern IDs
+        if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger;
+        else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam;
+        else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp;
+        cmd.paramId = c.paramId;
+        cmd.value = c.value;
+        cmd.rampMs = c.rampMs;
+        (void)cmdQueue.push(cmd);
+      }
+    } catch (...) {}
+  }
   double elapsedSec = 0.0;
   while (gRunning.load()) {
     if (isStdinReady()) {

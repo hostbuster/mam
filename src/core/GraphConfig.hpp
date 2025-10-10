@@ -20,6 +20,15 @@ struct GraphSpec {
   struct Mixer { std::vector<MixerInput> inputs; float masterPercent = 100.0f; bool softClip = true; };
   bool hasMixer = false;
   Mixer mixer;
+  struct CommandSpec {
+    uint64_t sampleTime = 0;
+    std::string nodeId;
+    std::string type; // "Trigger" | "SetParam" | "SetParamRamp"
+    uint16_t paramId = 0;
+    float value = 0.0f;
+    float rampMs = 0.0f;
+  };
+  std::vector<CommandSpec> commands;
 };
 
 // Parse file into GraphSpec using nlohmann/json
