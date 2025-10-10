@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <memory>
 #include <iostream>
+#include <unistd.h>
+#include <sys/select.h>
 #include "instruments/kick/KickSynth.hpp"
 #include "offline/OfflineRenderer.hpp"
 #include "offline/OfflineGraphRenderer.hpp"
@@ -38,14 +40,14 @@ static void onSigInt(int) {
   gRunning.store(false);
 }
 
-static void startStdinQuitThread() {
-  std::thread([]{
-    std::string line;
-    // Press Enter with empty line or type 'q' then Enter to quit
-    if (std::getline(std::cin, line)) {
-      gRunning.store(false);
-    }
-  }).detach();
+// non-blocking stdin check using select
+static bool isStdinReady() {
+  fd_set readfds;
+  FD_ZERO(&readfds);
+  FD_SET(STDIN_FILENO, &readfds);
+  timeval tv{0, 0};
+  int rv = select(STDIN_FILENO + 1, &readfds, nullptr, nullptr, &tv);
+  return (rv > 0) && FD_ISSET(STDIN_FILENO, &readfds);
 }
 
 static void printUsage(const char* exe) {
@@ -218,8 +220,13 @@ int main(int argc, char** argv) {
   }
 
   // Always allow Ctrl-C or Enter to stop in realtime
-  startStdinQuitThread();
   while (gRunning.load()) {
+    if (isStdinReady()) {
+      char buf[4];
+      (void)read(STDIN_FILENO, buf, sizeof(buf));
+      gRunning.store(false);
+      break;
+    }
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
 
