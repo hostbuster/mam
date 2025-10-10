@@ -65,6 +65,8 @@ public:
     nextStepStartAbs_ += framesPerStep_ + static_cast<uint64_t>(swing + 0.5);
     stepIndex_++;
   }
+
+  SampleTime nextEventSample() const { return nextStepStartAbs_; }
 };
 
 

@@ -1,0 +1,92 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+
+  "nodes": [
+    {
+      "id": "kick1",
+      "type": "kick",
+      "params": { "f0": 120, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 190, "gain": 0.9, "click": 0.1, "bpm": 0, "loop": false }
+    },
+    {
+      "id": "snr1",
+      "type": "clap",
+      "params": { "ampDecayMs": 180, "gain": 0.85, "bpm": 0, "loop": false }
+    },
+    {
+      "id": "hat1",
+      "type": "clap",
+      "params": { "ampDecayMs": 40, "gain": 0.55, "bpm": 0, "loop": false }
+    },
+    {
+      "id": "hat2",
+      "type": "clap",
+      "params": { "ampDecayMs": 25, "gain": 0.45, "bpm": 0, "loop": false }
+    },
+    {
+      "id": "transport1",
+      "type": "transport",
+      "params": {
+        "bpm": 130,
+        "resolution": 16,
+        "pattern": { "nodeId": "hat1", "steps": "x.x.x.x.x.x.x.x." }
+      }
+    }
+  ],
+
+  "mixer": {
+    "masterPercent": 90,
+    "softClip": true,
+    "inputs": [
+      { "id": "kick1", "gainPercent": 85 },
+      { "id": "snr1",  "gainPercent": 75 },
+      { "id": "hat1",  "gainPercent": 75 },
+      { "id": "hat2",  "gainPercent": 65 }
+    ]
+  },
+
+  "transport": {
+    "bpm": 130,
+    "lengthBars": 8,
+    "resolution": 16,
+    "swingPercent": 12,
+    "tempoRamps": [ { "bar": 4, "bpm": 138 } ],
+    "patterns": [
+      { "nodeId": "kick1", "steps": "x...x..x..x..." },
+      { "nodeId": "snr1",  "steps": "..x...x...x..." },
+      { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x." },
+      { "nodeId": "hat2",  "steps": "..x.x..x.x..x.x" }
+    ]
+  },
+
+  "commands": [
+    { "sampleTime":      0, "nodeId": "kick1", "type": "SetParam",     "param": "GAIN",           "value": 0.95 },
+    { "sampleTime":      0, "nodeId": "snr1",  "type": "SetParam",     "param": "GAIN",           "value": 0.85 },
+    { "sampleTime":      0, "nodeId": "hat1",  "type": "SetParam",     "param": "GAIN",           "value": 0.65 },
+    { "sampleTime":      0, "nodeId": "hat2",  "type": "SetParam",     "param": "GAIN",           "value": 0.55 },
+
+    { "sampleTime": 120000, "nodeId": "kick1", "type": "SetParamRamp", "param": "F0",             "value": 150.0, "rampMs": 200.0 },
+    { "sampleTime": 126000, "nodeId": "kick1", "type": "SetParamRamp", "param": "FEND",           "value": 30.0,  "rampMs": 200.0 },
+
+    { "sampleTime": 200000, "nodeId": "hat1",  "type": "SetParamRamp", "param": "AMP_DECAY_MS",   "value": 55.0,  "rampMs": 80.0 },
+    { "sampleTime": 220000, "nodeId": "hat2",  "type": "SetParamRamp", "param": "AMP_DECAY_MS",   "value": 32.0,  "rampMs": 60.0 },
+    { "sampleTime": 240000, "nodeId": "snr1",  "type": "SetParamRamp", "param": "AMP_DECAY_MS",   "value": 220.0, "rampMs": 120.0 },
+    { "sampleTime": 248000, "nodeId": "snr1",  "type": "SetParam",     "param": "GAIN",           "value": 0.75 },
+
+    { "sampleTime": 320000, "nodeId": "hat1",  "type": "SetParam",     "param": "GAIN",           "value": 0.75 },
+    { "sampleTime": 340000, "nodeId": "hat2",  "type": "SetParam",     "param": "GAIN",           "value": 0.65 },
+    { "sampleTime": 360000, "nodeId": "kick1", "type": "SetParamRamp", "param": "PITCH_DECAY_MS", "value": 80.0,  "rampMs": 300.0 },
+    { "sampleTime": 368000, "nodeId": "kick1", "type": "SetParamRamp", "param": "AMP_DECAY_MS",   "value": 240.0, "rampMs": 300.0 },
+
+    { "sampleTime": 420000, "nodeId": "hat1",  "type": "SetParamRamp", "param": "AMP_DECAY_MS",   "value": 45.0,  "rampMs": 100.0 },
+    { "sampleTime": 440000, "nodeId": "hat2",  "type": "SetParamRamp", "param": "AMP_DECAY_MS",   "value": 28.0,  "rampMs": 80.0 },
+    { "sampleTime": 480000, "nodeId": "kick1", "type": "SetParam",     "param": "CLICK",          "value": 0.25 },
+    { "sampleTime": 520000, "nodeId": "snr1",  "type": "SetParam",     "param": "GAIN",           "value": 0.78 },
+    { "sampleTime": 560000, "nodeId": "snr1",  "type": "SetParam",     "param": "GAIN",           "value": 0.68 },
+    { "sampleTime": 720000, "nodeId": "kick1", "type": "SetParamRamp", "param": "F0",             "value": 160.0, "rampMs": 200.0 },
+    { "sampleTime": 736000, "nodeId": "kick1", "type": "SetParamRamp", "param": "FEND",           "value": 26.0,  "rampMs": 200.0 }
+  ],
+
+  "connections": []
+}

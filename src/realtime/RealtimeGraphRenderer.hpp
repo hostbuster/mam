@@ -129,14 +129,19 @@ private:
         }
       }
 
-      // Let transport-like nodes emit events at exact sample offsets
-      const SampleTime segAbsStart = blockStartAbs + static_cast<SampleTime>(segStart);
+      // Let transport-like nodes emit events at exact sample offsets across the whole segment
       self->graph_->forEachNode([&](const std::string& id, Node& n){
         (void)id;
         if (auto* t = dynamic_cast<TransportNode*>(&n)) {
-          t->emitIfMatch(segAbsStart, [&](const Command& c){
-            self->graph_->forEachNode([&](const std::string& nid, Node& nn){ if (nid == c.nodeId) nn.handleEvent(c); });
-          });
+          SampleTime cursor = blockStartAbs + static_cast<SampleTime>(segStart);
+          const SampleTime segAbsEnd = blockStartAbs + static_cast<SampleTime>(segEnd);
+          while (t->nextEventSample() >= cursor && t->nextEventSample() < segAbsEnd) {
+            const SampleTime when = t->nextEventSample();
+            t->emitIfMatch(when, [&](const Command& c){
+              self->graph_->forEachNode([&](const std::string& nid, Node& nn){ if (nid == c.nodeId) nn.handleEvent(c); });
+            });
+            cursor = when + 1; // advance to avoid tight loop on same sample
+          }
         }
       });
 

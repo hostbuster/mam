@@ -3,6 +3,7 @@
 #include <string>
 #include <cstdint>
 #include <initializer_list>
+#include "ParameterRegistry.hpp"
 
 struct ParamDef {
   uint16_t id;
@@ -50,6 +51,29 @@ inline float clampToRange(const ParamMap& map, const std::string& name, float va
     if (value > d->maxValue) return d->maxValue;
   }
   return value;
+}
+
+inline float clampToRangeById(const ParamMap& map, uint16_t id, float value) {
+  for (size_t i = 0; i < map.count; ++i) {
+    if (map.defs[i].id == id) {
+      if (value < map.defs[i].minValue) return map.defs[i].minValue;
+      if (value > map.defs[i].maxValue) return map.defs[i].maxValue;
+      break;
+    }
+  }
+  return value;
+}
+
+inline ParameterRegistry<>::Smoothing smoothingForParamId(const ParamMap& map, uint16_t id) {
+  for (size_t i = 0; i < map.count; ++i) {
+    if (map.defs[i].id == id) {
+      const std::string s = map.defs[i].smoothing;
+      if (s == "step") return ParameterRegistry<>::Smoothing::Step;
+      if (s == "expo") return ParameterRegistry<>::Smoothing::Expo;
+      return ParameterRegistry<>::Smoothing::Linear;
+    }
+  }
+  return ParameterRegistry<>::Smoothing::Linear;
 }
 
 // Kick

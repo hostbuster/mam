@@ -410,6 +410,8 @@ int main(int argc, char** argv) {
         auto gen = generateCommandsFromTransport(spec.transport, 48000);
         baseCmds.insert(baseCmds.end(), gen.begin(), gen.end());
       }
+      // Sort by time to preserve draining order in the SPSC queue
+      std::sort(baseCmds.begin(), baseCmds.end(), [](const auto& a, const auto& b){ return a.sampleTime < b.sampleTime; });
       // Repeat transport loop up to horizon (quit-after or ~60s)
       uint64_t horizonFrames = (quitAfterSec > 0.0) ? static_cast<uint64_t>(quitAfterSec * 48000.0) : static_cast<uint64_t>(60.0 * 48000.0);
       uint64_t loopLen = 0;
