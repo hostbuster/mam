@@ -10,11 +10,14 @@
 #include "../core/ScopedAudioUnit.hpp"
 #include "../core/OsStatusUtils.hpp"
 #include "../core/Command.hpp"
+#include <vector>
 
 class RealtimeGraphRenderer {
 public:
   RealtimeGraphRenderer() = default;
   ~RealtimeGraphRenderer() { stop(); }
+
+  void setCommandQueue(SpscCommandQueue<2048>* q) { cmdQueue_ = q; }
 
   void start(Graph& graph, double requestedSampleRate, uint32_t channels) {
     if (channels == 0) throw std::invalid_argument("channels must be > 0");
@@ -69,6 +72,7 @@ public:
 
     err = AudioOutputUnitStart(unit_.get());
     if (err != noErr) throw std::runtime_error(std::string("AudioOutputUnitStart failed: ") + osstatusToString(err));
+    sampleCounter_ = 0;
   }
 
   void stop() {
@@ -84,6 +88,15 @@ private:
     ctx.sampleRate = self->sampleRate_;
     ctx.frames = inNumberFrames;
     // Future: drain commands to sample-accurate events per node using SpscCommandQueue
+    if (self->cmdQueue_) {
+      self->drained_.clear();
+      const SampleTime cutoff = self->sampleCounter_ + static_cast<SampleTime>(inNumberFrames);
+      self->cmdQueue_->drainUpTo(cutoff, self->drained_);
+      self->sampleCounter_ = cutoff;
+      // TODO: bucket drained_ by node and deliver EventSpan to graph
+    } else {
+      self->sampleCounter_ += static_cast<SampleTime>(inNumberFrames);
+    }
     self->graph_->process(ctx, interleaved, self->channels_);
     return noErr;
   }
@@ -92,6 +105,9 @@ private:
   Graph* graph_ = nullptr;
   uint32_t channels_ = 2;
   double sampleRate_ = 48000.0;
+  SampleTime sampleCounter_ = 0;
+  SpscCommandQueue<2048>* cmdQueue_ = nullptr;
+  std::vector<Command> drained_;
 };
 
 
