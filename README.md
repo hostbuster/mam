@@ -404,7 +404,16 @@ In realtime, a `transport` node can emit sample-accurate triggers at segment bou
 - `RealtimeGraphRenderer` delivers these events to the targeted nodes at the exact sample offset; rendering then proceeds for the sub-block.
 - For stability, the app also maintains a rolling pre-enqueue horizon (seconds or `--quit-after`) so longer patterns continue seamlessly.
 
-Current limitations: a single inline pattern per `transport` node (scaffold). The JSON `transport` section still generates triggers for offline parity.
+Current limitations: a single inline pattern per `transport` node (scaffold). The JSON `transport` section still generates triggers for offline parity. You can also embed a `transport` node in `nodes` for realtime:
+
+```json
+{
+  "nodes": [
+    { "id": "kick1", "type": "kick", "params": { "bpm": 0, "loop": false } },
+    { "id": "transport1", "type": "transport", "params": { "bpm": 130, "resolution": 16, "pattern": { "nodeId": "kick1", "steps": "x...x..x..x..." } } }
+  ]
+}
+```
 
 Command param addressing:
 

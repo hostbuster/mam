@@ -14,7 +14,7 @@
         "required": ["id", "type"],
         "properties": {
           "id": { "type": "string", "minLength": 1 },
-          "type": { "type": "string", "enum": ["kick", "clap"] },
+          "type": { "type": "string", "enum": ["kick", "clap", "transport"] },
           "params": { "type": "object" }
         }
       }

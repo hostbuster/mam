@@ -89,6 +89,13 @@ static void printUsage(const char* exe) {
                exe, exe, exe, exe);
 }
 
+static const char* dupStr(const std::string& s) {
+  char* p = static_cast<char*>(std::malloc(s.size() + 1));
+  if (!p) return nullptr;
+  std::memcpy(p, s.c_str(), s.size() + 1);
+  return p;
+}
+
 static int listNodesGraphJson(const std::string& path) {
   try {
     GraphSpec spec = loadGraphSpecFromJsonFile(path);
@@ -358,6 +365,7 @@ int main(int argc, char** argv) {
 
   // Realtime renderer path via graph
   Graph graph;
+  std::thread transportFeeder;
   if (!graphPath.empty()) {
     try {
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
@@ -392,21 +400,31 @@ int main(int argc, char** argv) {
   }
 
   // Always allow Ctrl-C or Enter to stop in realtime
-  // If a graph was provided and it has commands, enqueue them immediately (demo)
+  // If a graph was provided and it has commands/transport, enqueue them (demo horizon)
   if (!graphPath.empty()) {
     try {
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
-      // Merge transport-generated pattern triggers (basic horizon)
-      std::vector<GraphSpec::CommandSpec> realtimeCmds = spec.commands;
+      // Build initial command set (explicit + transport)
+      std::vector<GraphSpec::CommandSpec> baseCmds = spec.commands;
       if (spec.hasTransport) {
-        // Pre-generate one minute of pattern commands (demo horizon)
         auto gen = generateCommandsFromTransport(spec.transport, 48000);
-        realtimeCmds.insert(realtimeCmds.end(), gen.begin(), gen.end());
+        baseCmds.insert(baseCmds.end(), gen.begin(), gen.end());
+      }
+      // Repeat transport loop up to horizon (quit-after or ~60s)
+      uint64_t horizonFrames = (quitAfterSec > 0.0) ? static_cast<uint64_t>(quitAfterSec * 48000.0) : static_cast<uint64_t>(60.0 * 48000.0);
+      uint64_t loopLen = 0;
+      for (const auto& c : baseCmds) if (c.sampleTime > loopLen) loopLen = c.sampleTime;
+      if (loopLen == 0) loopLen = static_cast<uint64_t>(spec.transport.lengthBars * (4.0 * (60.0 / std::max(1.0f, spec.transport.bpm))) * 48000.0);
+      const uint64_t safety = 128;
+      loopLen += safety;
+      std::vector<GraphSpec::CommandSpec> realtimeCmds;
+      for (uint64_t offset = 0; offset < horizonFrames; offset += loopLen) {
+        for (auto c : baseCmds) { c.sampleTime += offset; realtimeCmds.push_back(c); }
       }
       for (const auto& c : realtimeCmds) {
         Command cmd{};
         cmd.sampleTime = c.sampleTime;
-        cmd.nodeId = c.nodeId.c_str(); // NOTE: points to transient string; in production, intern IDs
+        cmd.nodeId = dupStr(c.nodeId);
         if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger;
         else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam;
         else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp;
@@ -414,6 +432,30 @@ int main(int argc, char** argv) {
         cmd.value = c.value;
         cmd.rampMs = c.rampMs;
         (void)cmdQueue.push(cmd);
+      }
+
+      // Rolling feeder thread to extend horizon in realtime
+      if (spec.hasTransport && loopLen > 0) {
+        uint64_t nextOffset = ((horizonFrames / loopLen) + 1) * loopLen;
+        transportFeeder = std::thread([&cmdQueue, baseCmds, loopLen, nextOffset]() mutable {
+          uint64_t offset = nextOffset;
+          while (gRunning.load()) {
+            for (auto c : baseCmds) {
+              Command cmd{};
+              cmd.sampleTime = c.sampleTime + offset;
+              cmd.nodeId = dupStr(c.nodeId);
+              if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger;
+              else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam;
+              else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp;
+              cmd.paramId = c.paramId;
+              cmd.value = c.value;
+              cmd.rampMs = c.rampMs;
+              (void)cmdQueue.push(cmd);
+            }
+            offset += loopLen;
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+          }
+        });
       }
     } catch (...) {}
   }
@@ -436,6 +478,7 @@ int main(int argc, char** argv) {
   }
 
   rt.stop();
+  if (transportFeeder.joinable()) transportFeeder.join();
 
   return 0;
 }
