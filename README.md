@@ -173,16 +173,17 @@ Notes:
 
 ## Project Structure
 
-- `CMakeLists.txt` — project and Apple framework linking
+- `CMakeLists.txt` — modular build; Apple framework linking
 - `src/main.cpp` — CLI/argument parsing, dispatch to realtime or offline
-- `src/dsp/KickSynth.hpp` — pure DSP kick synth (reusable in all renderers)
-- `src/realtime/RealtimeRenderer.hpp` — CoreAudio default output and render callback
-- `src/offline/OfflineRenderer.hpp` — offline buffer rendering at a target sample rate
-- `src/io/AudioFileWriter.hpp` — ExtAudioFile-based writer (WAV/AIFF/CAF; 16/24/32f)
+- `src/instruments/...` — DSP implementations (kick, clap)
+- `src/core/...` — Graph, Node, ParameterRegistry, ParamMap, config
+- `src/realtime/...` — CoreAudio output and renderers
+- `src/offline/...` — offline renderers and helpers
+- `src/io/...` — audio file writers
 
 ## Architecture Overview
 
-- **Realtime**: `RealtimeRenderer`/`RealtimeGraphRenderer` open the Default Output AU and install a render callback. The callback pulls samples from the graph.
+- **Realtime**: `RealtimeRenderer`/`RealtimeGraphRenderer` open the Default Output AU and install a render callback. The callback pulls samples from the graph. Modular targets: `mam_core`, `mam_dsp`, `mam_io`, `mam_render`.
 - **Render Callback**: Lives inside `RealtimeRenderer`. Pure synthesis (no I/O), non-blocking, no heap allocation, no locks.
 - **Synthesis**: Exponential amplitude and pitch envelopes, sine oscillator, optional onset click. Left and right receive the same mono signal for now.
 - **Timing**: In loop mode, retriggering is based on `BPM` → `framesPerBeat`; one-shot mode just plays for `--duration` seconds.
@@ -190,6 +191,7 @@ Notes:
 - **Control & Concurrency**: `SpscCommandQueue` for sample-accurate commands; `JobPool` for parallel offline renders; mixer stage with soft clip.
 
 ## Development Path
+- See also `PLAN.md` for the modular upgrade roadmap.
 
 - Short-term
   - Event bucketing: drain commands each block, group by node, and apply `Trigger`/`SetParam`/`SetParamRamp` with sample accuracy.
