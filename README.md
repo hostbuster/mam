@@ -335,6 +335,11 @@ Clap (`type: clap`):
 - `BPM` (id=3): 0–300 (loop rate; 0 disables)
 - `LOOP` (id=4): 0.0/1.0 (false/true)
 
+Validation and clamping:
+
+- Params are validated against ranges at load time. Out-of-range values are clamped to safe min/max per the tables above.
+- Commands using named params (`"param": "F0"`) also resolve via the same maps.
+
 ### Offline command timeline
 
 Offline renders now honor JSON `commands` with sample-accurate timing using the timeline renderer.

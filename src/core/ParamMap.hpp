@@ -32,6 +32,26 @@ inline uint16_t resolveParamIdByName(const ParamMap& map, const std::string& nam
   return 0;
 }
 
+inline const ParamDef* findParamByName(const ParamMap& map, const std::string& name) {
+  std::string n;
+  n.reserve(name.size());
+  for (char c : name) n.push_back(static_cast<char>(::toupper(c)));
+  for (size_t i = 0; i < map.count; ++i) {
+    std::string m = map.defs[i].name;
+    for (auto& ch : m) ch = static_cast<char>(::toupper(ch));
+    if (m == n) return &map.defs[i];
+  }
+  return nullptr;
+}
+
+inline float clampToRange(const ParamMap& map, const std::string& name, float value) {
+  if (const ParamDef* d = findParamByName(map, name)) {
+    if (value < d->minValue) return d->minValue;
+    if (value > d->maxValue) return d->maxValue;
+  }
+  return value;
+}
+
 // Kick
 static constexpr ParamDef kKickParams[] = {
   {1, "F0",             "Hz",    40.f, 200.f, 100.f, "linear"},

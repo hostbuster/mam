@@ -3,6 +3,7 @@
 #include <memory>
 #include <nlohmann/json.hpp>
 #include "KickNode.hpp"
+#include "../../core/ParamMap.hpp"
 
 inline std::unique_ptr<KickNode> makeKickNodeFromParamsJson(const std::string& paramsJson) {
   nlohmann::json j = nlohmann::json::parse(paramsJson);
@@ -15,6 +16,12 @@ inline std::unique_ptr<KickNode> makeKickNodeFromParamsJson(const std::string& p
   if (j.contains("click")) p.click = j.at("click").get<float>();
   if (j.contains("bpm")) p.bpm = j.at("bpm").get<float>();
   if (j.contains("loop")) p.loop = j.at("loop").get<bool>();
+  // Clamp using ParamMap ranges
+  p.startFreqHz = clampToRange(kKickParamMap, "F0", p.startFreqHz);
+  p.endFreqHz = clampToRange(kKickParamMap, "FEND", p.endFreqHz);
+  p.pitchDecayMs = clampToRange(kKickParamMap, "PITCH_DECAY_MS", p.pitchDecayMs);
+  p.ampDecayMs = clampToRange(kKickParamMap, "AMP_DECAY_MS", p.ampDecayMs);
+  p.gain = clampToRange(kKickParamMap, "GAIN", p.gain);
   return std::make_unique<KickNode>(p);
 }
 
