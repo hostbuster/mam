@@ -258,3 +258,18 @@ TBD. Until specified, treat the code as All Rights Reserved.
 
 - Apple CoreAudio team and public headers/examples
 - The wider audio DSP community for inspiration and best practices
+
+## Commands and realtime control
+
+- Command types (scaffolded): `Trigger`, `SetParam`, `SetParamRamp`
+- Transport: events are drained per audio block and will be applied at the exact sample offset as we add per-node bucketing
+- Implementation notes:
+  - `SpscCommandQueue` (lock-free, bounded) from control → audio thread
+  - `ProcessContext.blockStart` contains the absolute sample start of the current block
+  - Nodes can implement `handleEvent(const Command&)` (currently broadcast pending per-node routing)
+
+## Threading strategy
+
+- Realtime: single CoreAudio callback as conductor; future: optional worker threads via Audio Workgroup
+- Offline: `JobPool` threads for parallel graph level execution (to be enabled)
+- No allocation or locks on audio thread; preallocate all buffers/queues

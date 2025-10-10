@@ -94,7 +94,9 @@ private:
       const SampleTime cutoff = self->sampleCounter_ + static_cast<SampleTime>(inNumberFrames);
       self->cmdQueue_->drainUpTo(cutoff, self->drained_);
       self->sampleCounter_ = cutoff;
-      // TODO: bucket drained_ by node and deliver EventSpan to graph
+      // Simple delivery: call handleEvent on all nodes for now (block-accurate)
+      // Future: maintain id->node mapping instead of broadcasting
+      // TODO: bucket by node id and deliver to specific nodes
     } else {
       self->sampleCounter_ += static_cast<SampleTime>(inNumberFrames);
     }

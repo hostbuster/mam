@@ -22,6 +22,9 @@ add_executable(mam
     src/core/GraphConfig.cpp
     src/core/Graph.hpp
     src/core/AudioBuffer.hpp
+    src/core/Command.hpp
+    src/core/JobPool.hpp
+    src/core/ParamIds.hpp
     src/instruments/kick/KickSynth.hpp
     src/instruments/kick/KickSynth.cpp
     src/instruments/kick/KickNode.hpp
