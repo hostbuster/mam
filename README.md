@@ -181,6 +181,7 @@ Notes:
 - `src/main.cpp` — CLI/argument parsing, dispatch to realtime or offline
 - `src/instruments/...` — DSP implementations (kick, clap)
 - `src/core/...` — Graph, Node, ParameterRegistry, ParamMap, config
+- `src/core/TransportNode.hpp` — scaffold for future realtime transport-driven triggering
 - `src/realtime/...` — CoreAudio output and renderers
 - `src/offline/...` — offline renderers and helpers
 - `src/io/...` — audio file writers
@@ -203,7 +204,7 @@ Notes:
   - Block scheduler (offline): parallelize graph levels using `JobPool`.
   - More instruments: snare, hat, bass; more mixer controls.
 - Mid-term
-  - Transport node (tempo, swing, patterns) driving triggers per node; host sync options.
+  - Transport node (tempo, swing, patterns) driving triggers per node; host sync options. (Scaffold added)
   - Preset schema for instruments and graphs; versioned upgrades.
   - CI with sanitizer presets; clang-tidy gate; format checks.
 - Long-term

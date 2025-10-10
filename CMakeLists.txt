@@ -27,6 +27,7 @@ add_library(mam_core STATIC
     src/core/ParamIds.hpp
     src/core/ParameterRegistry.hpp
     src/core/ParamMap.hpp
+    src/core/TransportNode.hpp
 )
 
 add_library(mam_dsp STATIC
