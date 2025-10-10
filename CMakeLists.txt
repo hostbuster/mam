@@ -25,6 +25,7 @@ add_executable(mam
     src/core/Command.hpp
     src/core/JobPool.hpp
     src/core/ParamIds.hpp
+    src/core/ParameterRegistry.hpp
     src/instruments/kick/KickSynth.hpp
     src/instruments/kick/KickSynth.cpp
     src/instruments/kick/KickNode.hpp

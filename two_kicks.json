@@ -52,10 +52,22 @@
     ]
   },
   "commands": [
-    { "sampleTime": 0,     "nodeId": "kick_fast", "type": "Trigger" },
-    { "sampleTime": 24000, "nodeId": "clap1",     "type": "Trigger" },
-    { "sampleTime": 48000, "nodeId": "kick_fast", "type": "SetParam",     "paramId": 5, "value": 0.6 },
-    { "sampleTime": 72000, "nodeId": "kick_slow", "type": "SetParamRamp", "paramId": 7, "value": 90.0, "rampMs": 200.0 }
+    { "sampleTime":    0,   "nodeId": "kick_fast", "type": "Trigger" },
+    { "sampleTime": 24000,  "nodeId": "clap1",     "type": "Trigger" },
+    { "sampleTime": 48000,  "nodeId": "kick_fast", "type": "Trigger" },
+    { "sampleTime": 72000,  "nodeId": "kick_slow", "type": "Trigger" },
+    { "sampleTime": 96000,  "nodeId": "clap1",     "type": "Trigger" },
+    { "sampleTime": 120000, "nodeId": "kick_fast", "type": "SetParam", "paramId": 5, "value": 0.70 },  
+    { "sampleTime": 144000, "nodeId": "kick_fast", "type": "Trigger" },
+    { "sampleTime": 168000, "nodeId": "clap1",     "type": "SetParam", "paramId": 2, "value": 0.60 },  
+    { "sampleTime": 192000, "nodeId": "kick_slow", "type": "Trigger" },
+    { "sampleTime": 216000, "nodeId": "kick_slow", "type": "SetParam", "paramId": 3, "value": 60.0 },   
+    { "sampleTime": 240000, "nodeId": "clap1",     "type": "Trigger" },
+    { "sampleTime": 264000, "nodeId": "kick_fast", "type": "SetParam", "paramId": 6, "value": 0.20 },  
+    { "sampleTime": 288000, "nodeId": "kick_fast", "type": "Trigger" },
+    { "sampleTime": 312000, "nodeId": "kick_slow", "type": "SetParam", "paramId": 7, "value": 75.0 },   
+    { "sampleTime": 336000, "nodeId": "clap1",     "type": "Trigger" },
+    { "sampleTime": 360000, "nodeId": "clap1",     "type": "SetParam", "paramId": 1, "value": 140.0 }   
   ],
   "connections": []
 }
