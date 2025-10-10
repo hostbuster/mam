@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <stdexcept>
 #include "../core/Graph.hpp"
+#include "../core/ScopedAudioUnit.hpp"
 
 class RealtimeGraphRenderer {
 public:
@@ -24,7 +25,7 @@ public:
     AudioComponent comp = AudioComponentFindNext(nullptr, &desc);
     if (!comp) throw std::runtime_error("Default output component not found");
 
-    OSStatus err = AudioComponentInstanceNew(comp, &unit_);
+    OSStatus err = AudioComponentInstanceNew(comp, unit_.ptr());
     if (err != noErr) throw std::runtime_error("AudioComponentInstanceNew failed");
 
     // Interleaved Float32 stereo (or N channels)
@@ -38,21 +39,21 @@ public:
     asbd.mBytesPerFrame = 4 * channels_;
     asbd.mBytesPerPacket = asbd.mBytesPerFrame;
 
-    err = AudioUnitSetProperty(unit_, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &asbd, sizeof(asbd));
+    err = AudioUnitSetProperty(unit_.get(), kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &asbd, sizeof(asbd));
     if (err != noErr) throw std::runtime_error("AudioUnitSetProperty(StreamFormat) failed");
 
     AURenderCallbackStruct cb{};
     cb.inputProc = &RealtimeGraphRenderer::render;
     cb.inputProcRefCon = this;
-    err = AudioUnitSetProperty(unit_, kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Global, 0, &cb, sizeof(cb));
+    err = AudioUnitSetProperty(unit_.get(), kAudioUnitProperty_SetRenderCallback, kAudioUnitScope_Global, 0, &cb, sizeof(cb));
     if (err != noErr) throw std::runtime_error("AudioUnitSetProperty(SetRenderCallback) failed");
 
-    err = AudioUnitInitialize(unit_);
+    err = AudioUnitInitialize(unit_.get());
     if (err != noErr) throw std::runtime_error("AudioUnitInitialize failed");
 
     // Update graph with actual sample rate
     UInt32 size = sizeof(asbd);
-    err = AudioUnitGetProperty(unit_, kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &asbd, &size);
+    err = AudioUnitGetProperty(unit_.get(), kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &asbd, &size);
     if (err == noErr && asbd.mSampleRate > 0.0) {
       graph_->prepare(asbd.mSampleRate, 1024);
       graph_->reset();
@@ -63,17 +64,12 @@ public:
       sampleRate_ = requestedSampleRate;
     }
 
-    err = AudioOutputUnitStart(unit_);
+    err = AudioOutputUnitStart(unit_.get());
     if (err != noErr) throw std::runtime_error("AudioOutputUnitStart failed");
   }
 
   void stop() {
-    if (unit_) {
-      AudioOutputUnitStop(unit_);
-      AudioUnitUninitialize(unit_);
-      AudioComponentInstanceDispose(unit_);
-      unit_ = nullptr;
-    }
+    unit_.release();
   }
 
 private:
@@ -88,7 +84,7 @@ private:
     return noErr;
   }
 
-  AudioUnit unit_ = nullptr;
+  AudioUnitHandle unit_{};
   Graph* graph_ = nullptr;
   uint32_t channels_ = 2;
   double sampleRate_ = 48000.0;
