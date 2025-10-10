@@ -347,6 +347,11 @@ Examples:
 ./build/mam --graph breakbeat.json --wav breakbeat.wav --sr 48000 --duration 16 --offline-threads 4
 ```
 
+Command param addressing:
+
+- You can specify parameters by numeric `paramId` (legacy) or by name using `"param": "F0"` etc.
+- Names are resolved based on the node’s `type` using the Parameter Maps above.
+
 ## Threading strategy
 
 - Realtime: single CoreAudio callback as conductor; future: optional worker threads via Audio Workgroup

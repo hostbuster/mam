@@ -24,6 +24,7 @@ struct GraphSpec {
     uint64_t sampleTime = 0;
     std::string nodeId;
     std::string type; // "Trigger" | "SetParam" | "SetParamRamp"
+    std::string paramName; // optional: named param (e.g., "F0")
     uint16_t paramId = 0;
     float value = 0.0f;
     float rampMs = 0.0f;

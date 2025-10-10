@@ -83,8 +83,8 @@
     { "sampleTime": 155084, "nodeId": "hat1",  "type": "Trigger" },
     { "sampleTime": 166162, "nodeId": "hat1",  "type": "Trigger" },
 
-    { "sampleTime": 144000, "nodeId": "hat1",  "type": "SetParam",     "paramId": 2, "value": 0.45 },
-    { "sampleTime": 166000, "nodeId": "snr1",  "type": "SetParamRamp", "paramId": 1, "value": 220.0, "rampMs": 80.0 },
+    { "sampleTime": 144000, "nodeId": "hat1",  "type": "SetParam",     "param": "GAIN",          "value": 0.45 },
+    { "sampleTime": 166000, "nodeId": "snr1",  "type": "SetParamRamp", "param": "AMP_DECAY_MS",  "value": 220.0, "rampMs": 80.0 },
 
     
     { "sampleTime": 177232,  "nodeId": "kick1", "type": "Trigger" },
@@ -101,7 +101,7 @@
     { "sampleTime": 232622,  "nodeId": "hat1",  "type": "Trigger" },
     { "sampleTime": 243700,  "nodeId": "hat1",  "type": "Trigger" },
     { "sampleTime": 254778,  "nodeId": "hat1",  "type": "Trigger" },
-    { "sampleTime": 232600,  "nodeId": "hat1",  "type": "SetParam",     "paramId": 2, "value": 0.50 },
+    { "sampleTime": 232600,  "nodeId": "hat1",  "type": "SetParam",     "param": "GAIN",          "value": 0.50 },
 
     
     { "sampleTime": 265848,  "nodeId": "kick1", "type": "Trigger" },
@@ -118,7 +118,7 @@
     { "sampleTime": 321238,  "nodeId": "hat1",  "type": "Trigger" },
     { "sampleTime": 332316,  "nodeId": "hat1",  "type": "Trigger" },
     { "sampleTime": 343394,  "nodeId": "hat1",  "type": "Trigger" },
-    { "sampleTime": 343400,  "nodeId": "snr1",  "type": "SetParamRamp", "paramId": 1, "value": 160.0, "rampMs": 120.0 },
+    { "sampleTime": 343400,  "nodeId": "snr1",  "type": "SetParamRamp", "param": "AMP_DECAY_MS",  "value": 160.0, "rampMs": 120.0 },
 
     
     { "sampleTime": 354464,  "nodeId": "kick1", "type": "Trigger" },
@@ -185,10 +185,18 @@
     { "sampleTime": 697858,  "nodeId": "hat1",  "type": "Trigger" },
 
     
-    { "sampleTime": 697800,  "nodeId": "kick1", "type": "SetParamRamp", "paramId": 1, "value": 150.0, "rampMs": 200.0 },
-    { "sampleTime": 705000,  "nodeId": "kick1", "type": "SetParamRamp", "paramId": 2, "value": 30.0,  "rampMs": 200.0 },
-    { "sampleTime": 712000,  "nodeId": "kick1", "type": "SetParam",     "paramId": 6, "value": 0.20 },
-    { "sampleTime": 719000,  "nodeId": "kick1", "type": "SetParamRamp", "paramId": 5, "value": 0.60,  "rampMs": 300.0 }
+    { "sampleTime": 697800,  "nodeId": "kick1", "type": "SetParamRamp", "param": "F0",            "value": 150.0, "rampMs": 200.0 },
+    { "sampleTime": 705000,  "nodeId": "kick1", "type": "SetParamRamp", "param": "FEND",          "value": 30.0,  "rampMs": 200.0 },
+    { "sampleTime": 712000,  "nodeId": "kick1", "type": "SetParam",     "param": "CLICK",         "value": 0.20 },
+    { "sampleTime": 719000,  "nodeId": "kick1", "type": "SetParamRamp", "param": "GAIN",          "value": 0.60,  "rampMs": 300.0 },
+    
+    
+    { "sampleTime": 728000,  "nodeId": "kick1", "type": "SetParamRamp", "param": "F0",            "value": 180.0, "rampMs": 400.0 },
+    { "sampleTime": 736000,  "nodeId": "kick1", "type": "SetParamRamp", "param": "FEND",          "value": 25.0,  "rampMs": 400.0 },
+    { "sampleTime": 744000,  "nodeId": "kick1", "type": "SetParamRamp", "param": "PITCH_DECAY_MS", "value": 80.0,  "rampMs": 300.0 },
+    { "sampleTime": 752000,  "nodeId": "kick1", "type": "SetParamRamp", "param": "AMP_DECAY_MS",  "value": 240.0, "rampMs": 300.0 },
+    { "sampleTime": 760000,  "nodeId": "clap1", "type": "SetParamRamp", "param": "AMP_DECAY_MS",  "value": 220.0, "rampMs": 200.0 },
+    { "sampleTime": 768000,  "nodeId": "clap1", "type": "SetParam",     "param": "GAIN",          "value": 0.50 }
   ],
   "connections": []
 }
