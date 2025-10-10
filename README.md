@@ -276,6 +276,11 @@ TBD. Until specified, treat the code as All Rights Reserved.
   - `ProcessContext.blockStart` contains the absolute sample start of the current block
   - Nodes implement `handleEvent(const Command&)`; realtime now routes commands by `nodeId`
 
+Smoothed parameters (current):
+
+- kick: `f0`, `fend`, `pitchDecayMs`, `ampDecayMs`, `gain`
+- clap: `ampDecayMs`, `gain`
+
 ### JSON control example
 
 While commands are typically fed at runtime (e.g., via MIDI/OSC/UI), you can also predefine initial parameters in the graph and drive tempo via `bpm/loop`. Example with two kicks and a clap, plus a mixer, and showing intended command IDs for parameters:
@@ -307,6 +312,20 @@ Parameter IDs for realtime `SetParam` commands (for developers):
 
 - kick: `F0=1`, `FEND=2`, `PITCH_DECAY_MS=3`, `AMP_DECAY_MS=4`, `GAIN=5`, `CLICK=6`, `BPM=7`, `LOOP=8`
 - clap: `AMP_DECAY_MS=1`, `GAIN=2`, `BPM=3`, `LOOP=4`
+
+### Offline command timeline
+
+Offline renders now honor JSON `commands` with sample-accurate timing using the timeline renderer.
+
+Examples:
+
+```bash
+# Short demo with param changes
+./build/mam --graph two_kicks.json --wav two_kicks.wav --sr 48000 --duration 8
+
+# Oldschool breakbeat (~16s) with evolving params and parallel render
+./build/mam --graph breakbeat.json --wav breakbeat.wav --sr 48000 --duration 16 --offline-threads 4
+```
 
 ## Threading strategy
 
