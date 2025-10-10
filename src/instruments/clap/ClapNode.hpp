@@ -14,6 +14,8 @@ public:
     params_.prepare(sampleRate);
     params_.ensureParam(ClapParam::GAIN, nodeGain_);
     params_.ensureParam(ClapParam::AMP_DECAY_MS, synth_.params().ampDecayMs);
+    params_.setSmoothing(ClapParam::GAIN, ParameterRegistry<>::Smoothing::Linear);
+    params_.setSmoothing(ClapParam::AMP_DECAY_MS, ParameterRegistry<>::Smoothing::Expo);
   }
   void reset() override { synth_.reset(); }
   void process(ProcessContext ctx, float* interleavedOut, uint32_t channels) override {

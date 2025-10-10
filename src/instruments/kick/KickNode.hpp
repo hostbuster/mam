@@ -18,6 +18,10 @@ public:
     params_.ensureParam(KickParam::FEND, synth_.params().endFreqHz);
     params_.ensureParam(KickParam::PITCH_DECAY_MS, synth_.params().pitchDecayMs);
     params_.ensureParam(KickParam::AMP_DECAY_MS, synth_.params().ampDecayMs);
+    // Smoothing modes: gain linear; decays exponential; freqs linear
+    params_.setSmoothing(KickParam::GAIN, ParameterRegistry<>::Smoothing::Linear);
+    params_.setSmoothing(KickParam::PITCH_DECAY_MS, ParameterRegistry<>::Smoothing::Expo);
+    params_.setSmoothing(KickParam::AMP_DECAY_MS, ParameterRegistry<>::Smoothing::Expo);
   }
   void reset() override { synth_.reset(); }
   void process(ProcessContext ctx, float* interleavedOut, uint32_t channels) override {
