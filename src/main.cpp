@@ -24,6 +24,7 @@
 #include "offline/OfflineGraphRenderer.hpp"
 #include "offline/OfflineParallelGraphRenderer.hpp"
 #include "offline/OfflineTimelineRenderer.hpp"
+#include "offline/TransportGenerator.hpp"
 #include "io/AudioFileWriter.hpp"
 #include "realtime/RealtimeRenderer.hpp"
 #include "realtime/RealtimeGraphRenderer.hpp"
@@ -202,7 +203,13 @@ int main(int argc, char** argv) {
     if (!graphPath.empty()) {
       try {
         GraphSpec spec2 = loadGraphSpecFromJsonFile(graphPath);
-        interleaved = renderGraphWithCommands(graph, spec2.commands, sr, channels, totalFrames);
+        // Synthesize commands from transport, if present
+        std::vector<GraphSpec::CommandSpec> cmds = spec2.commands;
+        if (spec2.hasTransport) {
+          auto gen = generateCommandsFromTransport(spec2.transport, sr);
+          cmds.insert(cmds.end(), gen.begin(), gen.end());
+        }
+        interleaved = renderGraphWithCommands(graph, cmds, sr, channels, totalFrames);
       } catch (...) {
         interleaved = (offlineThreads > 1) ? renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads)
                                            : renderGraphInterleaved(graph, sr, channels, totalFrames);
@@ -270,7 +277,14 @@ int main(int argc, char** argv) {
   if (!graphPath.empty()) {
     try {
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
-      for (const auto& c : spec.commands) {
+      // Merge transport-generated pattern triggers (basic horizon)
+      std::vector<GraphSpec::CommandSpec> realtimeCmds = spec.commands;
+      if (spec.hasTransport) {
+        // Pre-generate one minute of pattern commands (demo horizon)
+        auto gen = generateCommandsFromTransport(spec.transport, 48000);
+        realtimeCmds.insert(realtimeCmds.end(), gen.begin(), gen.end());
+      }
+      for (const auto& c : realtimeCmds) {
         Command cmd{};
         cmd.sampleTime = c.sampleTime;
         cmd.nodeId = c.nodeId.c_str(); // NOTE: points to transient string; in production, intern IDs

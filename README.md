@@ -313,6 +313,26 @@ Parameter IDs for realtime `SetParam` commands (for developers):
 - kick: `F0=1`, `FEND=2`, `PITCH_DECAY_MS=3`, `AMP_DECAY_MS=4`, `GAIN=5`, `CLICK=6`, `BPM=7`, `LOOP=8`
 - clap: `AMP_DECAY_MS=1`, `GAIN=2`, `BPM=3`, `LOOP=4`
 
+### Parameter maps (IDs, ranges, units)
+
+Kick (`type: kick`):
+
+- `F0` (id=1): 40–200 Hz
+- `FEND` (id=2): 20–120 Hz
+- `PITCH_DECAY_MS` (id=3): 10–200 ms
+- `AMP_DECAY_MS` (id=4): 50–400 ms
+- `GAIN` (id=5): 0.0–1.5 (linear)
+- `CLICK` (id=6): 0.0–1.0 (linear)
+- `BPM` (id=7): 0–300 (loop rate; 0 disables)
+- `LOOP` (id=8): 0.0/1.0 (false/true)
+
+Clap (`type: clap`):
+
+- `AMP_DECAY_MS` (id=1): 20–300 ms
+- `GAIN` (id=2): 0.0–1.5 (linear)
+- `BPM` (id=3): 0–300 (loop rate; 0 disables)
+- `LOOP` (id=4): 0.0/1.0 (false/true)
+
 ### Offline command timeline
 
 Offline renders now honor JSON `commands` with sample-accurate timing using the timeline renderer.

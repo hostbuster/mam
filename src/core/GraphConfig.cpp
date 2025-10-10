@@ -61,6 +61,22 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
     }
   }
 
+  if (j.contains("transport")) {
+    spec.hasTransport = true;
+    const auto& t = j.at("transport");
+    spec.transport.bpm = t.value("bpm", 120.0f);
+    spec.transport.lengthBars = t.value("lengthBars", 1u);
+    spec.transport.resolution = t.value("resolution", 16u);
+    if (t.contains("patterns")) {
+      for (const auto& p : t.at("patterns")) {
+        GraphSpec::TransportPattern tp;
+        tp.nodeId = p.value("nodeId", "");
+        tp.steps = p.value("steps", "");
+        spec.transport.patterns.push_back(tp);
+      }
+    }
+  }
+
   return spec;
 }
 

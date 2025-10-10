@@ -29,6 +29,16 @@ struct GraphSpec {
     float rampMs = 0.0f;
   };
   std::vector<CommandSpec> commands;
+
+  struct TransportPattern { std::string nodeId; std::string steps; };
+  struct Transport {
+    float bpm = 120.0f;
+    uint32_t lengthBars = 1;   // number of bars
+    uint32_t resolution = 16;  // steps per bar
+    std::vector<TransportPattern> patterns;
+  };
+  bool hasTransport = false;
+  Transport transport;
 };
 
 // Parse file into GraphSpec using nlohmann/json
