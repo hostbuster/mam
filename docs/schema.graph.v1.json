@@ -1,0 +1,89 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/mam/graph.schema.json",
+  "title": "MAM Graph v1",
+  "type": "object",
+  "properties": {
+    "version": { "type": "integer", "const": 1 },
+    "sampleRate": { "type": "number", "minimum": 8000 },
+    "channels": { "type": "integer", "minimum": 1 },
+    "nodes": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": { "type": "string", "minLength": 1 },
+          "type": { "type": "string", "enum": ["kick", "clap"] },
+          "params": { "type": "object" }
+        }
+      }
+    },
+    "mixer": {
+      "type": "object",
+      "properties": {
+        "masterPercent": { "type": "number", "minimum": 0, "maximum": 200 },
+        "softClip": { "type": "boolean" },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "gainPercent"],
+            "properties": {
+              "id": { "type": "string" },
+              "gainPercent": { "type": "number", "minimum": 0, "maximum": 200 }
+            }
+          }
+        }
+      }
+    },
+    "transport": {
+      "type": "object",
+      "properties": {
+        "bpm": { "type": "number", "minimum": 0 },
+        "lengthBars": { "type": "integer", "minimum": 1 },
+        "resolution": { "type": "integer", "minimum": 1 },
+        "swingPercent": { "type": "number", "minimum": 0, "maximum": 100 },
+        "tempoRamps": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["bar", "bpm"],
+            "properties": {
+              "bar": { "type": "integer", "minimum": 0 },
+              "bpm": { "type": "number", "minimum": 1 }
+            }
+          }
+        },
+        "patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["nodeId", "steps"],
+            "properties": {
+              "nodeId": { "type": "string" },
+              "steps": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "commands": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["sampleTime", "nodeId", "type"],
+        "properties": {
+          "sampleTime": { "type": "integer", "minimum": 0 },
+          "nodeId": { "type": "string" },
+          "type": { "type": "string", "enum": ["Trigger", "SetParam", "SetParamRamp"] },
+          "paramId": { "type": "integer", "minimum": 0 },
+          "param": { "type": "string" },
+          "value": { "type": "number" },
+          "rampMs": { "type": "number", "minimum": 0 }
+        }
+      }
+    }
+  },
+  "required": ["version", "nodes"]
+}

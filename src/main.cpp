@@ -248,26 +248,6 @@ int main(int argc, char** argv) {
     } else if (std::strcmp(a, "--list-params") == 0) {
       need(1); listParamsType = argv[++i];
     } else {
-  if (!listParamsType.empty()) {
-    if (listParamsType == "kick") {
-      std::printf("kick params:\n");
-      for (size_t idx = 0; idx < kKickParamMap.count; ++idx) {
-        const auto& d = kKickParamMap.defs[idx];
-        std::printf("%u %s [%g..%g] def=%g %s\n", d.id, d.name, d.minValue, d.maxValue, d.defaultValue, d.smoothing);
-      }
-      return 0;
-    } else if (listParamsType == "clap") {
-      std::printf("clap params:\n");
-      for (size_t idx = 0; idx < kClapParamMap.count; ++idx) {
-        const auto& d = kClapParamMap.defs[idx];
-        std::printf("%u %s [%g..%g] def=%g %s\n", d.id, d.name, d.minValue, d.maxValue, d.defaultValue, d.smoothing);
-      }
-      return 0;
-    } else {
-      std::fprintf(stderr, "Unknown node type for --list-params: %s\n", listParamsType.c_str());
-      return 1;
-    }
-  }
       std::fprintf(stderr, "Unknown option: %s\n", a);
       printUsage(argv[0]);
       return 1;
@@ -283,6 +263,26 @@ int main(int argc, char** argv) {
   // Utilities
   if (!validatePath.empty()) return validateGraphJson(validatePath);
   if (!listNodesPath.empty()) return listNodesGraphJson(listNodesPath);
+  if (!listParamsType.empty()) {
+    if (listParamsType == std::string("kick")) {
+      std::printf("kick params:\n");
+      for (size_t idx = 0; idx < kKickParamMap.count; ++idx) {
+        const auto& d = kKickParamMap.defs[idx];
+        std::printf("%u %s [%g..%g] def=%g %s\n", d.id, d.name, d.minValue, d.maxValue, d.defaultValue, d.smoothing);
+      }
+      return 0;
+    } else if (listParamsType == std::string("clap")) {
+      std::printf("clap params:\n");
+      for (size_t idx = 0; idx < kClapParamMap.count; ++idx) {
+        const auto& d = kClapParamMap.defs[idx];
+        std::printf("%u %s [%g..%g] def=%g %s\n", d.id, d.name, d.minValue, d.maxValue, d.defaultValue, d.smoothing);
+      }
+      return 0;
+    } else {
+      std::fprintf(stderr, "Unknown node type for --list-params: %s\n", listParamsType.c_str());
+      return 1;
+    }
+  }
 
   std::signal(SIGINT, onSigInt);
 

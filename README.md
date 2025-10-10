@@ -94,6 +94,7 @@ Timed realtime exit:
 You can define instruments and their parameters using a JSON graph file and pass it with `--graph path.json`.
 
 ### Schema (v1)
+See `docs/schema.graph.v1.json` for a machine-readable schema.
 
 - `version` (number): schema version (current: 1)
 - `sampleRate` (number, optional): desired sample rate (realtime may override)
