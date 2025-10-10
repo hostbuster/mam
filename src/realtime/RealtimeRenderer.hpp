@@ -71,7 +71,7 @@ public:
   }
 
 private:
-  static OSStatus render(void* inRefCon, AudioUnitRenderActionFlags*, const AudioTimeStamp*, UInt32, UInt32 inNumberFrames, AudioBufferList* ioData) {
+  static OSStatus render(void* inRefCon, AudioUnitRenderActionFlags*, const AudioTimeStamp*, UInt32, UInt32 inNumberFrames, AudioBufferList* ioData) noexcept {
     auto* self = static_cast<RealtimeRenderer*>(inRefCon);
     float* ch0 = static_cast<float*>(ioData->mBuffers[0].mData);
     float* ch1 = static_cast<float*>(ioData->mBuffers[1].mData);

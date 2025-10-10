@@ -77,7 +77,7 @@ public:
   }
 
 private:
-  static OSStatus render(void* inRefCon, AudioUnitRenderActionFlags*, const AudioTimeStamp*, UInt32, UInt32 inNumberFrames, AudioBufferList* ioData) {
+  static OSStatus render(void* inRefCon, AudioUnitRenderActionFlags*, const AudioTimeStamp*, UInt32, UInt32 inNumberFrames, AudioBufferList* ioData) noexcept {
     auto* self = static_cast<RealtimeGraphRenderer*>(inRefCon);
     // Interleaved: single buffer expected
     float* interleaved = static_cast<float*>(ioData->mBuffers[0].mData);
