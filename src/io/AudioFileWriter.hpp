@@ -28,6 +28,14 @@ inline OSType toFileType(FileFormat f) {
 }
 
 inline void writeWithExtAudioFile(const std::string& path, const AudioFileSpec& spec, const std::vector<float>& interleaved) {
+  struct ScopedExtAudioFile {
+    ExtAudioFileRef file = nullptr;
+    ~ScopedExtAudioFile() { if (file) ExtAudioFileDispose(file); }
+    ScopedExtAudioFile() = default;
+    ScopedExtAudioFile(const ScopedExtAudioFile&) = delete;
+    ScopedExtAudioFile& operator=(const ScopedExtAudioFile&) = delete;
+  };
+
   AudioStreamBasicDescription src{};
   src.mSampleRate = spec.sampleRate;
   src.mFormatID = kAudioFormatLinearPCM;
@@ -63,15 +71,15 @@ inline void writeWithExtAudioFile(const std::string& path, const AudioFileSpec& 
   if (!url) {
     throw std::runtime_error("CFURLCreateFromFileSystemRepresentation failed");
   }
-  OSStatus err = ExtAudioFileCreateWithURL(url, toFileType(spec.format), &dst, nullptr, kAudioFileFlags_EraseFile, &file);
+  ScopedExtAudioFile scoped;
+  OSStatus err = ExtAudioFileCreateWithURL(url, toFileType(spec.format), &dst, nullptr, kAudioFileFlags_EraseFile, &scoped.file);
   CFRelease(url);
   if (err != noErr) {
     throw std::runtime_error("ExtAudioFileCreateWithURL failed");
   }
 
-  err = ExtAudioFileSetProperty(file, kExtAudioFileProperty_ClientDataFormat, sizeof(src), &src);
+  err = ExtAudioFileSetProperty(scoped.file, kExtAudioFileProperty_ClientDataFormat, sizeof(src), &src);
   if (err != noErr) {
-    ExtAudioFileDispose(file);
     throw std::runtime_error("ExtAudioFileSetProperty(ClientDataFormat) failed");
   }
 
@@ -82,8 +90,7 @@ inline void writeWithExtAudioFile(const std::string& path, const AudioFileSpec& 
   buf.mBuffers[0].mData = const_cast<float*>(interleaved.data());
 
   UInt32 frames = static_cast<UInt32>(interleaved.size() / spec.channels);
-  err = ExtAudioFileWrite(file, frames, &buf);
-  ExtAudioFileDispose(file);
+  err = ExtAudioFileWrite(scoped.file, frames, &buf);
   if (err != noErr) {
     throw std::runtime_error("ExtAudioFileWrite failed");
   }
