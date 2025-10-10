@@ -9,6 +9,7 @@
 #include "../core/Graph.hpp"
 #include "../core/ScopedAudioUnit.hpp"
 #include "../core/OsStatusUtils.hpp"
+#include "../core/Command.hpp"
 
 class RealtimeGraphRenderer {
 public:
@@ -82,6 +83,7 @@ private:
     ProcessContext ctx{};
     ctx.sampleRate = self->sampleRate_;
     ctx.frames = inNumberFrames;
+    // Future: drain commands to sample-accurate events per node using SpscCommandQueue
     self->graph_->process(ctx, interleaved, self->channels_);
     return noErr;
   }
