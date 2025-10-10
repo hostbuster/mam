@@ -13,11 +13,13 @@ public:
     synth_.setSampleRate(sampleRate);
     params_.prepare(sampleRate);
     params_.ensureParam(ClapParam::GAIN, nodeGain_);
+    params_.ensureParam(ClapParam::AMP_DECAY_MS, synth_.params().ampDecayMs);
   }
   void reset() override { synth_.reset(); }
   void process(ProcessContext ctx, float* interleavedOut, uint32_t channels) override {
     for (uint32_t i = 0; i < ctx.frames; ++i) {
       nodeGain_ = params_.next(ClapParam::GAIN);
+      synth_.params().ampDecayMs = params_.next(ClapParam::AMP_DECAY_MS);
       const float s = synth_.process();
       for (uint32_t ch = 0; ch < channels; ++ch) interleavedOut[i * channels + ch] = s * nodeGain_;
     }
@@ -30,7 +32,7 @@ public:
     }
     if (cmd.type == CommandType::SetParam) {
       switch (cmd.paramId) {
-        case ClapParam::AMP_DECAY_MS: synth_.params().ampDecayMs = cmd.value; break;
+        case ClapParam::AMP_DECAY_MS: params_.setImmediate(ClapParam::AMP_DECAY_MS, cmd.value); break;
         case ClapParam::GAIN: params_.setImmediate(ClapParam::GAIN, cmd.value); nodeGain_ = cmd.value; break;
         case ClapParam::BPM: synth_.params().bpm = cmd.value; synth_.params().loop = (cmd.value > 0.0f); break;
         case ClapParam::LOOP: synth_.params().loop = (cmd.value >= 0.5f); break;
@@ -38,6 +40,7 @@ public:
       }
     } else if (cmd.type == CommandType::SetParamRamp) {
       if (cmd.paramId == ClapParam::GAIN) params_.rampTo(ClapParam::GAIN, cmd.value, cmd.rampMs);
+      else if (cmd.paramId == ClapParam::AMP_DECAY_MS) params_.rampTo(ClapParam::AMP_DECAY_MS, cmd.value, cmd.rampMs);
     }
   }
 private:

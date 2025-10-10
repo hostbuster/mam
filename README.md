@@ -16,6 +16,13 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
  - **Realtime + Offline**: CoreAudio streaming and high-quality file rendering (WAV/AIFF/CAF)
  - **Concurrency scaffolding**: Command queue for sample-accurate control, offline job pool
 
+### What's new (core evolution)
+
+- Sample-accurate event timing in realtime via sub-block processing
+- JSON commands are honored in offline renders (timeline renderer)
+- Parallel offline renderer (`--offline-threads N`) for faster exports
+- Parameter smoothing scaffold (node gain) via `ParameterRegistry`
+
 ## Build (macOS)
 
 ```bash

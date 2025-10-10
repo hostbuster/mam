@@ -23,6 +23,7 @@
 #include "offline/OfflineRenderer.hpp"
 #include "offline/OfflineGraphRenderer.hpp"
 #include "offline/OfflineParallelGraphRenderer.hpp"
+#include "offline/OfflineTimelineRenderer.hpp"
 #include "io/AudioFileWriter.hpp"
 #include "realtime/RealtimeRenderer.hpp"
 #include "realtime/RealtimeGraphRenderer.hpp"
@@ -198,10 +199,17 @@ int main(int argc, char** argv) {
       graph.addNode("kick_default", std::make_unique<KickNode>(p));
     }
     std::vector<float> interleaved;
-    if (offlineThreads > 1) {
-      interleaved = renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads);
+    if (!graphPath.empty()) {
+      try {
+        GraphSpec spec2 = loadGraphSpecFromJsonFile(graphPath);
+        interleaved = renderGraphWithCommands(graph, spec2.commands, sr, channels, totalFrames);
+      } catch (...) {
+        interleaved = (offlineThreads > 1) ? renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads)
+                                           : renderGraphInterleaved(graph, sr, channels, totalFrames);
+      }
     } else {
-      interleaved = renderGraphInterleaved(graph, sr, channels, totalFrames);
+      interleaved = (offlineThreads > 1) ? renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads)
+                                         : renderGraphInterleaved(graph, sr, channels, totalFrames);
     }
 
     AudioFileSpec spec;

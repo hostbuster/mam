@@ -14,12 +14,21 @@ public:
     synth_.setSampleRate(sampleRate);
     params_.prepare(sampleRate);
     params_.ensureParam(KickParam::GAIN, nodeGain_);
+    params_.ensureParam(KickParam::F0, synth_.params().startFreqHz);
+    params_.ensureParam(KickParam::FEND, synth_.params().endFreqHz);
+    params_.ensureParam(KickParam::PITCH_DECAY_MS, synth_.params().pitchDecayMs);
+    params_.ensureParam(KickParam::AMP_DECAY_MS, synth_.params().ampDecayMs);
   }
   void reset() override { synth_.reset(); }
   void process(ProcessContext ctx, float* interleavedOut, uint32_t channels) override {
     // Simple: mono -> copy to all channels
     for (uint32_t i = 0; i < ctx.frames; ++i) {
+      // Smooth params
       nodeGain_ = params_.next(KickParam::GAIN);
+      synth_.params().startFreqHz = params_.next(KickParam::F0);
+      synth_.params().endFreqHz = params_.next(KickParam::FEND);
+      synth_.params().pitchDecayMs = params_.next(KickParam::PITCH_DECAY_MS);
+      synth_.params().ampDecayMs = params_.next(KickParam::AMP_DECAY_MS);
       const float s = synth_.process();
       for (uint32_t ch = 0; ch < channels; ++ch) {
         interleavedOut[i * channels + ch] = s * nodeGain_;
@@ -34,10 +43,10 @@ public:
     }
     if (cmd.type == CommandType::SetParam) {
       switch (cmd.paramId) {
-        case KickParam::F0: synth_.params().startFreqHz = cmd.value; break;
-        case KickParam::FEND: synth_.params().endFreqHz = cmd.value; break;
-        case KickParam::PITCH_DECAY_MS: synth_.params().pitchDecayMs = cmd.value; break;
-        case KickParam::AMP_DECAY_MS: synth_.params().ampDecayMs = cmd.value; break;
+        case KickParam::F0: params_.setImmediate(KickParam::F0, cmd.value); break;
+        case KickParam::FEND: params_.setImmediate(KickParam::FEND, cmd.value); break;
+        case KickParam::PITCH_DECAY_MS: params_.setImmediate(KickParam::PITCH_DECAY_MS, cmd.value); break;
+        case KickParam::AMP_DECAY_MS: params_.setImmediate(KickParam::AMP_DECAY_MS, cmd.value); break;
         case KickParam::GAIN: params_.setImmediate(KickParam::GAIN, cmd.value); nodeGain_ = cmd.value; break;
         case KickParam::CLICK: synth_.params().click = cmd.value; break;
         case KickParam::BPM: synth_.params().bpm = cmd.value; synth_.params().loop = (cmd.value > 0.0f); break;
@@ -45,7 +54,14 @@ public:
         default: break;
       }
     } else if (cmd.type == CommandType::SetParamRamp) {
-      if (cmd.paramId == KickParam::GAIN) params_.rampTo(KickParam::GAIN, cmd.value, cmd.rampMs);
+      switch (cmd.paramId) {
+        case KickParam::GAIN: params_.rampTo(KickParam::GAIN, cmd.value, cmd.rampMs); break;
+        case KickParam::F0: params_.rampTo(KickParam::F0, cmd.value, cmd.rampMs); break;
+        case KickParam::FEND: params_.rampTo(KickParam::FEND, cmd.value, cmd.rampMs); break;
+        case KickParam::PITCH_DECAY_MS: params_.rampTo(KickParam::PITCH_DECAY_MS, cmd.value, cmd.rampMs); break;
+        case KickParam::AMP_DECAY_MS: params_.rampTo(KickParam::AMP_DECAY_MS, cmd.value, cmd.rampMs); break;
+        default: break;
+      }
     }
   }
 
