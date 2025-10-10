@@ -195,6 +195,14 @@ Notes:
 - **Offline Path**: `OfflineRenderer` calls the same synthesis into an interleaved buffer; `AudioFileWriter` uses ExtAudioFile to emit WAV/AIFF/CAF at 16/24-bit PCM or 32f.
 - **Control & Concurrency**: `SpscCommandQueue` for sample-accurate commands; `JobPool` for parallel offline renders; mixer stage with soft clip.
 
+### Why this architecture is future‑proof
+
+- **Node graph with strict RT boundaries**: DSP nodes are side-effect-free and allocation-free in the audio thread, making realtime safe and portable to plugin targets.
+- **Event-first control plane**: All control is expressed as timestamped commands. This decouples UI/transport/MIDI from DSP, enabling deterministic offline renders and headless batch.
+- **Param registry + maps**: Strongly-typed params with ranges, names, and smoothing unify validation, documentation, and automation—one source of truth.
+- **Dual-path parity**: Realtime (TransportNode + rolling horizon) and offline (timeline renderer) use the same command semantics, ensuring identical musical outcomes.
+- **Modular build**: Split libraries (`mam_core`, `mam_dsp`, `mam_io`, `mam_render`) allow independent evolution, faster builds, and clean integration points.
+
 ## Development Path
 - See also `PLAN.md` for the modular upgrade roadmap.
 
@@ -387,6 +395,16 @@ Examples:
 # Oldschool breakbeat (~16s) with evolving params and parallel render
 ./build/mam --graph breakbeat.json --wav breakbeat.wav --sr 48000 --duration 16 --offline-threads 4
 ```
+
+### Realtime Transport (TransportNode)
+
+In realtime, a `transport` node can emit sample-accurate triggers at segment boundaries without blocking the audio thread:
+
+- A lightweight `TransportNode` advances a musical step clock and emits `Trigger` events for matching steps.
+- `RealtimeGraphRenderer` delivers these events to the targeted nodes at the exact sample offset; rendering then proceeds for the sub-block.
+- For stability, the app also maintains a rolling pre-enqueue horizon (seconds or `--quit-after`) so longer patterns continue seamlessly.
+
+Current limitations: a single inline pattern per `transport` node (scaffold). The JSON `transport` section still generates triggers for offline parity.
 
 Command param addressing:
 
