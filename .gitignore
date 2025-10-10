@@ -1,0 +1,19 @@
+# Build directories
+build/
+build-*/
+
+# macOS
+.DS_Store
+
+# Audio renders
+*.wav
+*.aiff
+*.aif
+*.caf
+
+# Xcode
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+
+

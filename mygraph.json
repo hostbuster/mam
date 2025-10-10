@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "nodes": [
+    {
+      "id": "kick1",
+      "type": "kick",
+      "params": {
+        "f0": 120,
+        "fend": 35,
+        "pitchDecayMs": 50,
+        "ampDecayMs": 180,
+        "gain": 0.9,
+        "click": 0.1,
+        "bpm": 120,
+        "loop": true
+      }
+    }
+  ],
+  "connections": []
+}
+
+

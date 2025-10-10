@@ -1,0 +1,57 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "nodes": [
+    {
+      "id": "kick_fast",
+      "type": "kick",
+      "params": {
+        "f0": 120,
+        "fend": 35,
+        "pitchDecayMs": 50,
+        "ampDecayMs": 180,
+        "gain": 0.9,
+        "click": 0.1,
+        "bpm": 120,
+        "loop": true
+      }
+    },
+    {
+      "id": "clap1",
+      "type": "clap",
+      "params": {
+        "ampDecayMs": 180,
+        "gain": 0.8,
+        "bpm": 60,
+        "loop": true
+      }
+    },
+    {
+      "id": "kick_slow",
+      "type": "kick",
+      "params": {
+        "f0": 90,
+        "fend": 30,
+        "pitchDecayMs": 70,
+        "ampDecayMs": 220,
+        "gain": 0.9,
+        "click": 0.05,
+        "bpm": 60,
+        "loop": true
+      }
+    }
+  ],
+  "mixer": {
+    "masterPercent": 90,
+    "softClip": true,
+    "inputs": [
+      { "id": "kick_fast", "gainPercent": 80 },
+      { "id": "clap1", "gainPercent": 5 },
+      { "id": "kick_slow", "gainPercent": 85 }
+    ]
+  },
+  "connections": []
+}
+
+
