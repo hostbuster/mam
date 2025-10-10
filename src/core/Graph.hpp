@@ -26,7 +26,7 @@ public:
     // Zero output
     for (size_t i = 0; i < total; ++i) interleavedOut[i] = 0.0f;
     // Mix all nodes
-    temp_.assign(total, 0.0f);
+    if (temp_.size() != total) temp_.resize(total);
     for (auto& e : nodes_) {
       // Clear temp
       std::fill(temp_.begin(), temp_.end(), 0.0f);

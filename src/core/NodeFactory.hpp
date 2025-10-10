@@ -14,6 +14,8 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
   if (spec.type == "clap") {
     return makeClapNodeFromParamsJson(spec.paramsJson);
   }
+  // Unknown node type
+  std::fprintf(stderr, "Warning: Unknown node type '%s' (id='%s')\n", spec.type.c_str(), spec.id.c_str());
   return nullptr;
 }
 
