@@ -12,6 +12,9 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - **Safe defaults**: Float32, non-interleaved stereo; uses actual device sample rate
 - **Portable C++17**: Straightforward, clean code with minimal dependencies
  - **Modular architecture**: Separated DSP, realtime, offline, and file I/O modules
+ - **JSON graphs**: Define instruments, mixer, and settings in a portable file
+ - **Realtime + Offline**: CoreAudio streaming and high-quality file rendering (WAV/AIFF/CAF)
+ - **Concurrency scaffolding**: Command queue for sample-accurate control, offline job pool
 
 ## Build (macOS)
 
@@ -68,6 +71,12 @@ Render without using CoreAudio to an uncompressed audio file. Defaults to 48 kHz
 ./build/mam --wav out.wav --sr 44100 --pcm16                 # 44.1 kHz 16-bit PCM WAV (compat)
 ./build/mam --wav out.aiff --format aiff --bitdepth 24       # AIFF 24-bit PCM
 ./build/mam --wav out.caf --format caf --bitdepth 32f        # CAF float32
+```
+
+Timed realtime exit:
+
+```bash
+./build/mam --graph two_kicks.json --quit-after 10
 ```
 
 ## Graph configuration (JSON)
@@ -146,6 +155,8 @@ Notes:
 | `--pcm16` | flag | float32 | Write 16-bit PCM instead of float32 when offline |
 | `--format` | enum | wav | One of: `wav`, `aiff`, `caf` |
 | `--bitdepth` | enum | 32f | One of: `16`, `24`, `32f` (float32) |
+| `--graph` | path | — | Load a JSON graph file to build instruments/mixer |
+| `--quit-after` | float (sec) | 0 | Realtime: auto-stop after given seconds (0 = disabled) |
 | `--help`, `-h` | flag | — | Print usage |
 
 Notes:
@@ -163,11 +174,27 @@ Notes:
 
 ## Architecture Overview
 
-- **Realtime**: `RealtimeRenderer` opens the Default Output Audio Unit and installs a render callback. The callback pulls samples from `KickSynth`.
+- **Realtime**: `RealtimeRenderer`/`RealtimeGraphRenderer` open the Default Output AU and install a render callback. The callback pulls samples from the graph.
 - **Render Callback**: Lives inside `RealtimeRenderer`. Pure synthesis (no I/O), non-blocking, no heap allocation, no locks.
 - **Synthesis**: Exponential amplitude and pitch envelopes, sine oscillator, optional onset click. Left and right receive the same mono signal for now.
 - **Timing**: In loop mode, retriggering is based on `BPM` → `framesPerBeat`; one-shot mode just plays for `--duration` seconds.
-- **Offline Path**: `OfflineRenderer` calls the same synthesis per-sample into an interleaved buffer; `AudioFileWriter` uses ExtAudioFile to emit WAV/AIFF/CAF at 16/24-bit PCM or 32f.
+- **Offline Path**: `OfflineRenderer` calls the same synthesis into an interleaved buffer; `AudioFileWriter` uses ExtAudioFile to emit WAV/AIFF/CAF at 16/24-bit PCM or 32f.
+- **Control & Concurrency**: `SpscCommandQueue` for sample-accurate commands; `JobPool` for parallel offline renders; mixer stage with soft clip.
+
+## Development Path
+
+- Short-term
+  - Event bucketing: drain commands each block, group by node, and apply `Trigger`/`SetParam`/`SetParamRamp` with sample accuracy.
+  - Parameter registry: consistent `paramId` mapping per node type; ramp smoothing.
+  - Block scheduler (offline): parallelize graph levels using `JobPool`.
+  - More instruments: snare, hat, bass; more mixer controls.
+- Mid-term
+  - Transport node (tempo, swing, patterns) driving triggers per node; host sync options.
+  - Preset schema for instruments and graphs; versioned upgrades.
+  - CI with sanitizer presets; clang-tidy gate; format checks.
+- Long-term
+  - Cross-platform audio backends; plugin targets (AUv3, VST3).
+  - GUI editor for node graphs and live performance controls.
 
 ## Development Guidelines
 
