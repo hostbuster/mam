@@ -344,6 +344,31 @@ Auto-generated tables:
 
 See `docs/ParamTables.md` for an always-up-to-date table generated from the source-of-truth `ParamMap.hpp`.
 
+## Transport (patterns)
+
+You can define patterns and tempo in `transport`. Supports optional swing and tempo ramps.
+
+Schema:
+
+```json
+{
+  "transport": {
+    "bpm": 130,
+    "lengthBars": 4,
+    "resolution": 16,
+    "swingPercent": 10,
+    "tempoRamps": [ { "bar": 2, "bpm": 140 } ],
+    "patterns": [
+      { "nodeId": "kick1", "steps": "x...x..x..x..." },
+      { "nodeId": "snr1",  "steps": "..x...x...x..." },
+      { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x." }
+    ]
+  }
+}
+```
+
+In offline mode, transport generates triggers merged with explicit `commands`. In realtime, a short horizon is pre-enqueued at startup.
+
 ### Offline command timeline
 
 Offline renders now honor JSON `commands` with sample-accurate timing using the timeline renderer.

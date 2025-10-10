@@ -85,6 +85,15 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
     spec.transport.bpm = t.value("bpm", 120.0f);
     spec.transport.lengthBars = t.value("lengthBars", 1u);
     spec.transport.resolution = t.value("resolution", 16u);
+    spec.transport.swingPercent = t.value("swingPercent", 0.0f);
+    if (t.contains("tempoRamps")) {
+      for (const auto& tp : t.at("tempoRamps")) {
+        GraphSpec::Transport::TempoPoint pnt;
+        pnt.bar = tp.value("bar", 0u);
+        pnt.bpm = tp.value("bpm", spec.transport.bpm);
+        spec.transport.tempoRamps.push_back(pnt);
+      }
+    }
     if (t.contains("patterns")) {
       for (const auto& p : t.at("patterns")) {
         GraphSpec::TransportPattern tp;

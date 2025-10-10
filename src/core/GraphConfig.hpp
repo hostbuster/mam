@@ -36,6 +36,9 @@ struct GraphSpec {
     float bpm = 120.0f;
     uint32_t lengthBars = 1;   // number of bars
     uint32_t resolution = 16;  // steps per bar
+    float swingPercent = 0.0f; // 0..100, applied to odd steps
+    struct TempoPoint { uint32_t bar = 0; float bpm = 120.0f; };
+    std::vector<TempoPoint> tempoRamps; // stepwise bpm at given bar indices
     std::vector<TransportPattern> patterns;
   };
   bool hasTransport = false;
