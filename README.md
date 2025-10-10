@@ -155,6 +155,7 @@ Notes:
 | `--pcm16` | flag | float32 | Write 16-bit PCM instead of float32 when offline |
 | `--format` | enum | wav | One of: `wav`, `aiff`, `caf` |
 | `--bitdepth` | enum | 32f | One of: `16`, `24`, `32f` (float32) |
+| `--offline-threads` | int | 0 | Use parallel offline renderer with N threads (0=single-thread) |
 | `--graph` | path | — | Load a JSON graph file to build instruments/mixer |
 | `--quit-after` | float (sec) | 0 | Realtime: auto-stop after given seconds (0 = disabled) |
 | `--help`, `-h` | flag | — | Print usage |

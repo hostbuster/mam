@@ -22,6 +22,7 @@
 #include "instruments/kick/KickSynth.hpp"
 #include "offline/OfflineRenderer.hpp"
 #include "offline/OfflineGraphRenderer.hpp"
+#include "offline/OfflineParallelGraphRenderer.hpp"
 #include "io/AudioFileWriter.hpp"
 #include "realtime/RealtimeRenderer.hpp"
 #include "realtime/RealtimeGraphRenderer.hpp"
@@ -74,6 +75,7 @@ static void printUsage(const char* exe) {
                "Usage: %s [--f0 Hz] [--fend Hz] [--pitch-decay ms] [--amp-decay ms]\n"
                "          [--gain 0..1] [--bpm N] [--duration sec] [--click 0..1]\n"
                "          [--wav path] [--sr Hz] [--pcm16] [--format wav|aiff|caf] [--bitdepth 16|24|32f]\n"
+               "          [--offline-threads N]\n"
                "          [--graph path.json] [--quit-after sec]\n"
                "\n"
                "Examples:\n"
@@ -92,6 +94,7 @@ int main(int argc, char** argv) {
   double offlineSr = 48000.0;
   bool pcm16 = false;
   double quitAfterSec = 0.0;
+  uint32_t offlineThreads = 0; // 0=auto (fallback to single-thread renderer if 0)
 
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
@@ -141,6 +144,8 @@ int main(int argc, char** argv) {
       }
     } else if (std::strcmp(a, "--pcm16") == 0) {
       pcm16 = true;
+    } else if (std::strcmp(a, "--offline-threads") == 0) {
+      need(1); offlineThreads = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--quit-after") == 0) {
       need(1); quitAfterSec = std::atof(argv[++i]);
     } else if (std::strcmp(a, "--graph") == 0) {
@@ -192,7 +197,12 @@ int main(int argc, char** argv) {
       p.loop = false;
       graph.addNode("kick_default", std::make_unique<KickNode>(p));
     }
-    auto interleaved = renderGraphInterleaved(graph, sr, channels, totalFrames);
+    std::vector<float> interleaved;
+    if (offlineThreads > 1) {
+      interleaved = renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads);
+    } else {
+      interleaved = renderGraphInterleaved(graph, sr, channels, totalFrames);
+    }
 
     AudioFileSpec spec;
     spec.format = outFormat;

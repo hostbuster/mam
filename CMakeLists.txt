@@ -36,6 +36,7 @@ add_executable(mam
     src/instruments/clap/ClapFactory.hpp
     src/offline/OfflineRenderer.hpp
     src/offline/OfflineGraphRenderer.hpp
+    src/offline/OfflineParallelGraphRenderer.hpp
     src/io/AudioFileWriter.hpp
     src/io/AudioFileWriter.cpp
     src/realtime/RealtimeRenderer.hpp
