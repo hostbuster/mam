@@ -7,6 +7,7 @@
 struct ProcessContext {
   double sampleRate = 48000.0;
   uint32_t frames = 0;
+  SampleTime blockStart = 0; // absolute sample start of this block
 };
 
 class Node {

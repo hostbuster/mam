@@ -87,6 +87,7 @@ private:
     ProcessContext ctx{};
     ctx.sampleRate = self->sampleRate_;
     ctx.frames = inNumberFrames;
+    ctx.blockStart = self->sampleCounter_;
     // Future: drain commands to sample-accurate events per node using SpscCommandQueue
     if (self->cmdQueue_) {
       self->drained_.clear();
