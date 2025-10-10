@@ -33,6 +33,7 @@
 #include "core/NodeFactory.hpp"
 #include "core/MixerNode.hpp"
 #include "instruments/kick/KickNode.hpp"
+#include "core/ParamMap.hpp"
 
 // Use KickSynth (from dsp/) for both realtime and offline paths
 
@@ -79,6 +80,7 @@ static void printUsage(const char* exe) {
                "          [--wav path] [--sr Hz] [--pcm16] [--format wav|aiff|caf] [--bitdepth 16|24|32f]\n"
                "          [--offline-threads N]\n"
                "          [--graph path.json] [--quit-after sec]\n"
+               "          [--validate path.json] [--list-nodes path.json] [--list-params kick|clap]\n"
                "\n"
                "Examples:\n"
                "  %s                       # one-shot, defaults (real-time)\n"
@@ -87,12 +89,99 @@ static void printUsage(const char* exe) {
                exe, exe, exe, exe);
 }
 
+static int listNodesGraphJson(const std::string& path) {
+  try {
+    GraphSpec spec = loadGraphSpecFromJsonFile(path);
+    std::printf("Nodes (%zu):\n", spec.nodes.size());
+    for (const auto& n : spec.nodes) {
+      std::printf("- id=%s type=%s\n", n.id.c_str(), n.type.c_str());
+    }
+    if (spec.hasMixer) {
+      std::printf("Mixer: master=%g%% softClip=%s inputs=%zu\n",
+                  spec.mixer.masterPercent, spec.mixer.softClip ? "true" : "false", spec.mixer.inputs.size());
+    }
+    if (spec.hasTransport) {
+      std::printf("Transport: bpm=%.2f bars=%u res=%u swing=%.1f%% patterns=%zu ramps=%zu\n",
+                  spec.transport.bpm, spec.transport.lengthBars, spec.transport.resolution,
+                  spec.transport.swingPercent, spec.transport.patterns.size(), spec.transport.tempoRamps.size());
+    }
+    return 0;
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
+    return 1;
+  }
+}
+
+static int validateGraphJson(const std::string& path) {
+  try {
+    GraphSpec spec = loadGraphSpecFromJsonFile(path);
+    int errors = 0;
+    std::vector<std::string> nodeIds;
+    nodeIds.reserve(spec.nodes.size());
+    for (const auto& n : spec.nodes) nodeIds.push_back(n.id);
+    auto hasNode = [&](const std::string& id) {
+      return std::find(nodeIds.begin(), nodeIds.end(), id) != nodeIds.end();
+    };
+    // Check unique node ids
+    {
+      auto tmp = nodeIds; std::sort(tmp.begin(), tmp.end());
+      for (size_t i = 1; i < tmp.size(); ++i) {
+        if (tmp[i] == tmp[i-1]) { std::fprintf(stderr, "Duplicate node id: %s\n", tmp[i].c_str()); errors++; }
+      }
+    }
+    // Known node types
+    for (const auto& n : spec.nodes) {
+      if (!(n.type == "kick" || n.type == "clap")) {
+        std::fprintf(stderr, "Unknown node type '%s' (id=%s)\n", n.type.c_str(), n.id.c_str());
+      }
+    }
+    // Mixer inputs exist
+    if (spec.hasMixer) {
+      for (const auto& mi : spec.mixer.inputs) {
+        if (!hasNode(mi.id)) { std::fprintf(stderr, "Mixer references unknown node '%s'\n", mi.id.c_str()); errors++; }
+      }
+    }
+    // Commands
+    for (const auto& c : spec.commands) {
+      if (!hasNode(c.nodeId)) { std::fprintf(stderr, "Command references unknown node '%s'\n", c.nodeId.c_str()); errors++; continue; }
+      if (c.type == "SetParam" || c.type == "SetParamRamp") {
+        uint16_t pid = c.paramId;
+        if (pid == 0 && !c.paramName.empty()) {
+          // resolve by name
+          std::string nodeType;
+          for (const auto& n : spec.nodes) if (n.id == c.nodeId) { nodeType = n.type; break; }
+          if (nodeType == "kick") pid = resolveParamIdByName(kKickParamMap, c.paramName);
+          else if (nodeType == "clap") pid = resolveParamIdByName(kClapParamMap, c.paramName);
+        }
+        if (pid == 0) { std::fprintf(stderr, "Command missing/unknown param (node=%s)\n", c.nodeId.c_str()); errors++; }
+      }
+    }
+    // Transport patterns
+    if (spec.hasTransport) {
+      for (const auto& p : spec.transport.patterns) {
+        if (!hasNode(p.nodeId)) { std::fprintf(stderr, "Pattern references unknown node '%s'\n", p.nodeId.c_str()); errors++; }
+      }
+    }
+    if (errors == 0) {
+      std::printf("%s: OK\n", path.c_str());
+      return 0;
+    }
+    return 2;
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
+    return 1;
+  }
+}
+
 int main(int argc, char** argv) {
   KickParams params;
   std::string wavPath;
   FileFormat outFormat = FileFormat::Wav;
   BitDepth outDepth = BitDepth::Float32;
   std::string graphPath;
+  std::string validatePath;
+  std::string listNodesPath;
+  std::string listParamsType;
   double offlineSr = 48000.0;
   bool pcm16 = false;
   double quitAfterSec = 0.0;
@@ -152,7 +241,33 @@ int main(int argc, char** argv) {
       need(1); quitAfterSec = std::atof(argv[++i]);
     } else if (std::strcmp(a, "--graph") == 0) {
       need(1); graphPath = argv[++i];
+    } else if (std::strcmp(a, "--validate") == 0) {
+      need(1); validatePath = argv[++i];
+    } else if (std::strcmp(a, "--list-nodes") == 0) {
+      need(1); listNodesPath = argv[++i];
+    } else if (std::strcmp(a, "--list-params") == 0) {
+      need(1); listParamsType = argv[++i];
     } else {
+  if (!listParamsType.empty()) {
+    if (listParamsType == "kick") {
+      std::printf("kick params:\n");
+      for (size_t idx = 0; idx < kKickParamMap.count; ++idx) {
+        const auto& d = kKickParamMap.defs[idx];
+        std::printf("%u %s [%g..%g] def=%g %s\n", d.id, d.name, d.minValue, d.maxValue, d.defaultValue, d.smoothing);
+      }
+      return 0;
+    } else if (listParamsType == "clap") {
+      std::printf("clap params:\n");
+      for (size_t idx = 0; idx < kClapParamMap.count; ++idx) {
+        const auto& d = kClapParamMap.defs[idx];
+        std::printf("%u %s [%g..%g] def=%g %s\n", d.id, d.name, d.minValue, d.maxValue, d.defaultValue, d.smoothing);
+      }
+      return 0;
+    } else {
+      std::fprintf(stderr, "Unknown node type for --list-params: %s\n", listParamsType.c_str());
+      return 1;
+    }
+  }
       std::fprintf(stderr, "Unknown option: %s\n", a);
       printUsage(argv[0]);
       return 1;
@@ -164,6 +279,10 @@ int main(int argc, char** argv) {
   if (params.gain > 1.5f) params.gain = 1.5f;
   if (params.click < 0.0f) params.click = 0.0f;
   if (params.click > 1.0f) params.click = 1.0f;
+
+  // Utilities
+  if (!validatePath.empty()) return validateGraphJson(validatePath);
+  if (!listNodesPath.empty()) return listNodesGraphJson(listNodesPath);
 
   std::signal(SIGINT, onSigInt);
 

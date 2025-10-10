@@ -67,6 +67,9 @@ open build-xcode/kickdrum.xcodeproj
 
 ```bash
 ./build/mam --help
+./build/mam --validate breakbeat.json
+./build/mam --list-nodes two_kicks.json
+./build/mam --list-params kick
 ```
 
 ### Offline rendering

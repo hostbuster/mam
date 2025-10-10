@@ -207,8 +207,8 @@
     { "sampleTime": 736000,  "nodeId": "kick1", "type": "SetParamRamp", "param": "FEND",          "value": 25.0,  "rampMs": 400.0 },
     { "sampleTime": 744000,  "nodeId": "kick1", "type": "SetParamRamp", "param": "PITCH_DECAY_MS", "value": 80.0,  "rampMs": 300.0 },
     { "sampleTime": 752000,  "nodeId": "kick1", "type": "SetParamRamp", "param": "AMP_DECAY_MS",  "value": 240.0, "rampMs": 300.0 },
-    { "sampleTime": 760000,  "nodeId": "clap1", "type": "SetParamRamp", "param": "AMP_DECAY_MS",  "value": 220.0, "rampMs": 200.0 },
-    { "sampleTime": 768000,  "nodeId": "clap1", "type": "SetParam",     "param": "GAIN",          "value": 0.50 }
+    { "sampleTime": 760000,  "nodeId": "snr1",  "type": "SetParamRamp", "param": "AMP_DECAY_MS",  "value": 220.0, "rampMs": 200.0 },
+    { "sampleTime": 768000,  "nodeId": "snr1",  "type": "SetParam",     "param": "GAIN",          "value": 0.50 }
   ],
   "connections": []
 }
