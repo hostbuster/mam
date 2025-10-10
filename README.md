@@ -262,7 +262,7 @@ TBD. Until specified, treat the code as All Rights Reserved.
 ## Commands and realtime control
 
 - Command types (scaffolded): `Trigger`, `SetParam`, `SetParamRamp`
-- Transport: events are drained per audio block and will be applied at the exact sample offset as we add per-node bucketing
+- Transport: events are drained per audio block and applied at exact sample offsets via sub-block processing
 - Implementation notes:
   - `SpscCommandQueue` (lock-free, bounded) from control → audio thread
   - `ProcessContext.blockStart` contains the absolute sample start of the current block
@@ -305,3 +305,70 @@ Parameter IDs for realtime `SetParam` commands (for developers):
 - Realtime: single CoreAudio callback as conductor; future: optional worker threads via Audio Workgroup
 - Offline: `JobPool` threads for parallel graph level execution (to be enabled)
 - No allocation or locks on audio thread; preallocate all buffers/queues
+
+## Future
+
+- State model
+  - Single source of truth: immutable “ProjectState” (graph, nodes, params, connections, transport) with versioned schema and migrations.
+  - Unidirectional flow: UI produces Commands → validated → RT-safe CommandQueue → audio thread applies at sample offsets.
+  - Deterministic snapshots: serialize/deserialize entire state (JSON/CBOR) for recall, undo/redo, and headless batch.
+
+- Parameter system
+  - Strongly-typed parameters with ranges, units, and smoothing strategies (per-parameter ramp modes, slew/one-pole/exponential).
+  - Modulation matrix: sources (LFO, env, MIDI, MPE, sidechain) to destinations (params) with depth, summing, and clamping.
+  - Namespaced param IDs; registry per node type; host automation mapping.
+
+- Timing and transport
+  - Central clock with sample-time, musical-time, tempo map, and time signature; support tempo ramps and bar/beat markers.
+  - Sample-accurate event bucketing; split processing at event boundaries (sub-blocks).
+  - Latency compensation (per node), offline pre-roll, click-free parameter transitions.
+
+- Graph engine
+  - DAG with validated topology; topological levels; block scheduler for offline parallel render; optional realtime workgroup fan-out.
+  - Ports with types (audio/control/event/MIDI), explicit channel layouts, and per-edge latency.
+  - Zero-copy buffer routing with alias analysis; per-node scratch pools; interleaved/planar adapters.
+
+- Realtime safety
+  - No dynamic allocation or locks in callback; preallocated arenas; fixed-capacity queues.
+  - RT-logging via lock-free ring and deferred flushing; OSStatus/error breadcrumbs outside audio thread.
+  - Denormal handling (FTZ/DAZ), predictable soft-clip/limiter at master.
+
+- DSP quality
+  - Oversampling framework per node with polyphase filters; consistent phase and latency reporting.
+  - SIMD-first primitives (SSE/NEON/AVX2/AVX512) with scalar fallback; vector-friendly memory layout.
+  - Dither/TPDF on PCM output; noise-shaped options; safe headroom policies.
+
+- Concurrency and performance
+  - Offline JobPool with work-stealing; block tiling; NUMA-aware affinity (future).
+  - AudioWorkGroup (macOS) integration for multi-thread RT when needed; deadline monitoring with telemetry markers.
+  - Hot paths profiled; microbench harness; perf counters per node.
+
+- File and IO
+  - Unified render API (WAV/AIFF/CAF/FLAC) with streaming writer; capture taps at any edge for debugging (“wiretap”).
+  - Async disk IO for sample-based instruments; prefetch and pre-decode caches.
+
+- Extensibility
+  - Stable Node ABI with factory registry; dynamic module loading (hot-reload in dev).
+  - Plugin hosting (AUv3/VST3) nodes; sandboxing, time-info bridging, parameter proxying.
+
+- Testing and CI
+  - Golden-render tests (sample-accurate comparisons with tolerances); property tests (fuzz events/params).
+  - Stress: command-rates, max graph depth/width, CPU throttling, denormal storms.
+  - CI presets (asan/ubsan/tsan), clang-tidy gates, formatting checks.
+
+- Observability
+  - Trace spans (block start/end, node process, enqueue/dequeue) via lightweight markers; export to JSON trace viewer.
+  - Metrics: xruns, max block time, avg per node; on-demand perf dump.
+
+- UI integration path
+  - Thin UI layer talks to a Command API (no direct state mutation), observes State snapshots over a read-only channel.
+  - Reactive view-model with diff patches; background validation (graph changes) before RT adoption (double-buffered state swap).
+
+- Persistence
+  - Versioned project/graph schemas; migration registry; preset banks with dependencies.
+  - Content-addressable assets (samples, wavetables) with caching and hashing.
+
+If helpful, I can start by:
+- Implementing per-node event sub-block processing (sample-accurate).
+- Adding a ParameterRegistry with ramp/smoothing and modulation slots.
+- Introducing latency reporting and block-level parallel scheduler for offline.

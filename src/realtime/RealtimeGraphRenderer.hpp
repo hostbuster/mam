@@ -11,6 +11,7 @@
 #include "../core/OsStatusUtils.hpp"
 #include "../core/Command.hpp"
 #include <vector>
+#include <algorithm>
 
 class RealtimeGraphRenderer {
 public:
@@ -84,30 +85,56 @@ private:
     auto* self = static_cast<RealtimeGraphRenderer*>(inRefCon);
     // Interleaved: single buffer expected
     float* interleaved = static_cast<float*>(ioData->mBuffers[0].mData);
-    ProcessContext ctx{};
-    ctx.sampleRate = self->sampleRate_;
-    ctx.frames = inNumberFrames;
-    ctx.blockStart = self->sampleCounter_;
-    // Future: drain commands to sample-accurate events per node using SpscCommandQueue
+
+    // Compute split points for sample-accurate event application
+    const SampleTime blockStartAbs = self->sampleCounter_;
+    const SampleTime cutoff = blockStartAbs + static_cast<SampleTime>(inNumberFrames);
+    std::vector<uint32_t> splitOffsets;
+    splitOffsets.reserve(8);
+    splitOffsets.push_back(0);
     if (self->cmdQueue_) {
       self->drained_.clear();
-      const SampleTime cutoff = self->sampleCounter_ + static_cast<SampleTime>(inNumberFrames);
       self->cmdQueue_->drainUpTo(cutoff, self->drained_);
-      self->sampleCounter_ = cutoff;
-      // Simple delivery: call handleEvent on all nodes for now (block-accurate)
-      // Future: maintain id->node mapping instead of broadcasting
-      if (!self->drained_.empty()) {
-        // Very simple per-node delivery by id string match (optimize later)
-        for (const Command& c : self->drained_) {
-          self->graph_->forEachNode([&](const std::string& id, Node& n){
-            if (c.nodeId && id == c.nodeId) n.handleEvent(c);
-          });
+      for (const Command& c : self->drained_) {
+        if (c.sampleTime >= blockStartAbs && c.sampleTime < cutoff) {
+          const uint32_t off = static_cast<uint32_t>(c.sampleTime - blockStartAbs);
+          splitOffsets.push_back(off);
         }
       }
+      self->sampleCounter_ = cutoff;
     } else {
-      self->sampleCounter_ += static_cast<SampleTime>(inNumberFrames);
+      self->sampleCounter_ = cutoff;
     }
-    self->graph_->process(ctx, interleaved, self->channels_);
+    splitOffsets.push_back(inNumberFrames);
+    std::sort(splitOffsets.begin(), splitOffsets.end());
+    splitOffsets.erase(std::unique(splitOffsets.begin(), splitOffsets.end()), splitOffsets.end());
+
+    // Render each segment and apply events at boundaries
+    for (size_t si = 0; si + 1 < splitOffsets.size(); ++si) {
+      const uint32_t segStart = splitOffsets[si];
+      const uint32_t segEnd = splitOffsets[si + 1];
+      const uint32_t segFrames = segEnd - segStart;
+      if (segFrames == 0) continue;
+
+      // Deliver events that occur exactly at this segment start
+      if (self->cmdQueue_ && !self->drained_.empty()) {
+        const SampleTime segAbsStart = blockStartAbs + static_cast<SampleTime>(segStart);
+        for (const Command& c : self->drained_) {
+          if (c.sampleTime == segAbsStart && c.nodeId) {
+            self->graph_->forEachNode([&](const std::string& id, Node& n){
+              if (id == c.nodeId) n.handleEvent(c);
+            });
+          }
+        }
+      }
+
+      ProcessContext ctx{};
+      ctx.sampleRate = self->sampleRate_;
+      ctx.frames = segFrames;
+      ctx.blockStart = blockStartAbs + static_cast<SampleTime>(segStart);
+      float* outPtr = interleaved + static_cast<size_t>(segStart) * self->channels_;
+      self->graph_->process(ctx, outPtr, self->channels_);
+    }
     return noErr;
   }
 
