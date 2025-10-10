@@ -12,8 +12,8 @@ option(MAM_ENABLE_LTO "Enable Link-Time Optimization" OFF)
 
 include_directories(third_party)
 
-add_executable(mam
-    src/main.cpp
+
+add_library(mam_core STATIC
     src/core/Instrument.hpp
     src/core/Node.hpp
     src/core/NodeFactory.hpp
@@ -26,26 +26,32 @@ add_executable(mam
     src/core/JobPool.hpp
     src/core/ParamIds.hpp
     src/core/ParameterRegistry.hpp
+    src/core/ParamMap.hpp
+)
+
+add_library(mam_dsp STATIC
     src/instruments/kick/KickSynth.hpp
     src/instruments/kick/KickSynth.cpp
-    src/instruments/kick/KickNode.hpp
-    src/instruments/kick/KickFactory.hpp
     src/instruments/clap/ClapSynth.hpp
     src/instruments/clap/ClapSynth.cpp
-    src/instruments/clap/ClapNode.hpp
-    src/instruments/clap/ClapFactory.hpp
-    src/offline/OfflineRenderer.hpp
-    src/offline/OfflineGraphRenderer.hpp
-    src/offline/OfflineParallelGraphRenderer.hpp
+)
+
+add_library(mam_io STATIC
     src/io/AudioFileWriter.hpp
     src/io/AudioFileWriter.cpp
-    src/realtime/RealtimeRenderer.hpp
-    src/realtime/RealtimeGraphRenderer.hpp
 )
+
+add_library(mam_render INTERFACE)
+add_executable(mam
+    src/main.cpp
+)
+
+target_link_libraries(mam_render INTERFACE mam_core mam_dsp mam_io)
+target_link_libraries(mam PUBLIC mam_render)
 
 if(APPLE)
     target_compile_definitions(mam PRIVATE MACOSX)
-    target_link_libraries(mam
+    target_link_libraries(mam PRIVATE
         "-framework AudioToolbox"
         "-framework AudioUnit"
         "-framework CoreAudio"
@@ -53,26 +59,32 @@ if(APPLE)
     )
 endif()
 
-if (MSVC)
-    target_compile_options(mam PRIVATE /W4)
-else()
-    target_compile_options(mam PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
-    if (MAM_WARNINGS_AS_ERRORS)
-        target_compile_options(mam PRIVATE -Werror)
+foreach(tgt IN ITEMS mam_core mam_dsp mam_io mam)
+    if (MSVC)
+        target_compile_options(${tgt} PRIVATE /W4)
+    else()
+        target_compile_options(${tgt} PRIVATE -Wall -Wextra -Wpedantic -Wconversion -Wshadow)
+        if (MAM_WARNINGS_AS_ERRORS)
+            target_compile_options(${tgt} PRIVATE -Werror)
+        endif()
     endif()
-endif()
+endforeach()
 
 if (MAM_ENABLE_ASAN)
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
-        target_compile_options(mam PRIVATE -fsanitize=address)
-        target_link_options(mam PRIVATE -fsanitize=address)
+        foreach(tgt IN ITEMS mam_core mam_dsp mam_io mam)
+            target_compile_options(${tgt} PRIVATE -fsanitize=address)
+            target_link_options(${tgt} PRIVATE -fsanitize=address)
+        endforeach()
     endif()
 endif()
 
 if (MAM_ENABLE_UBSAN)
     if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
-        target_compile_options(mam PRIVATE -fsanitize=undefined)
-        target_link_options(mam PRIVATE -fsanitize=undefined)
+        foreach(tgt IN ITEMS mam_core mam_dsp mam_io mam)
+            target_compile_options(${tgt} PRIVATE -fsanitize=undefined)
+            target_link_options(${tgt} PRIVATE -fsanitize=undefined)
+        endforeach()
     endif()
 endif()
 
@@ -80,7 +92,9 @@ if (MAM_ENABLE_LTO)
     include(CheckIPOSupported)
     check_ipo_supported(RESULT ipo_supported OUTPUT ipo_error)
     if(ipo_supported)
-        set_property(TARGET mam PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+        foreach(tgt IN ITEMS mam_core mam_dsp mam_io mam)
+            set_property(TARGET ${tgt} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+        endforeach()
     endif()
 endif()
 

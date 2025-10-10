@@ -3,6 +3,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
+#include "ParamMap.hpp"
 #include <nlohmann/json.hpp>
 
 using nlohmann::json;
@@ -68,23 +69,8 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
         auto it = nodeIdToType.find(cs.nodeId);
         const std::string nodeType = (it != nodeIdToType.end()) ? it->second : std::string();
         auto mapParam = [](const std::string& type, const std::string& name) -> uint16_t {
-          // Normalize to upper
-          std::string n = name; for (auto& ch : n) ch = static_cast<char>(::toupper(ch));
-          if (type == "kick") {
-            if (n == "F0") return 1;
-            if (n == "FEND") return 2;
-            if (n == "PITCH_DECAY_MS") return 3;
-            if (n == "AMP_DECAY_MS") return 4;
-            if (n == "GAIN") return 5;
-            if (n == "CLICK") return 6;
-            if (n == "BPM") return 7;
-            if (n == "LOOP") return 8;
-          } else if (type == "clap") {
-            if (n == "AMP_DECAY_MS") return 1;
-            if (n == "GAIN") return 2;
-            if (n == "BPM") return 3;
-            if (n == "LOOP") return 4;
-          }
+          if (type == "kick") return resolveParamIdByName(kKickParamMap, name);
+          if (type == "clap") return resolveParamIdByName(kClapParamMap, name);
           return 0;
         };
         cs.paramId = mapParam(nodeType, cs.paramName);
