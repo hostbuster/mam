@@ -24,21 +24,27 @@ inline std::vector<GraphSpec::CommandSpec> generateCommandsFromTransport(const G
     return stepsPerBar ? (framesPerBar / stepsPerBar) : framesPerBar;
   };
 
-  for (const auto& pat : tr.patterns) {
-    for (uint64_t step = 0; step < totalSteps; ++step) {
-      const size_t idx = pat.steps.empty() ? 0u : static_cast<size_t>(step % pat.steps.size());
-      if (!pat.steps.empty() && idx < pat.steps.size() && pat.steps[idx] == 'x') {
-        const uint32_t barIndex = static_cast<uint32_t>(step / stepsPerBar);
-        const uint64_t baseFramesPerStep = framesPerStepAtBar(barIndex);
-        uint64_t stepStart = 0;
-        // accumulate frames up to this step considering ramps
-        for (uint32_t b = 0; b < barIndex; ++b) stepStart += framesPerStepAtBar(b) * stepsPerBar;
-        const uint32_t withinBar = static_cast<uint32_t>(step % stepsPerBar);
-        // swing: delay odd steps by swingPercent of half-step
-        const bool isOdd = (withinBar % 2) == 1;
-        const double swingFrames = isOdd ? (static_cast<double>(baseFramesPerStep) * (tr.swingPercent / 100.0) * 0.5) : 0.0;
-        stepStart += static_cast<uint64_t>(withinBar) * baseFramesPerStep + static_cast<uint64_t>(swingFrames + 0.5);
+  // For parity with realtime, compute absolute sample position by cumulatively
+  // summing frames per step and adding swing on odd steps within each bar.
+  for (uint64_t step = 0; step < totalSteps; ++step) {
+    const uint32_t barIndex = static_cast<uint32_t>(step / stepsPerBar);
+    const uint32_t withinBar = static_cast<uint32_t>(step % stepsPerBar);
+    const uint64_t baseFramesPerStep = framesPerStepAtBar(barIndex);
 
+    // Accumulate all previous bars
+    uint64_t stepStart = 0;
+    for (uint32_t b = 0; b < barIndex; ++b) stepStart += framesPerStepAtBar(b) * stepsPerBar;
+    // Within current bar, accumulate previous steps with swing on their odd indices
+    for (uint32_t s = 0; s < withinBar; ++s) {
+      const bool prevOdd = (s % 2) == 1;
+      const double swingFramesPrev = prevOdd ? (static_cast<double>(baseFramesPerStep) * (tr.swingPercent / 100.0) * 0.5) : 0.0;
+      stepStart += baseFramesPerStep + static_cast<uint64_t>(swingFramesPrev + 0.5);
+    }
+    // Now at this step's start time; emit triggers for all patterns with 'x'
+    for (const auto& pat : tr.patterns) {
+      if (pat.steps.empty()) continue;
+      const size_t idx = static_cast<size_t>(withinBar % static_cast<uint32_t>(pat.steps.size()));
+      if (idx < pat.steps.size() && pat.steps[idx] == 'x') {
         GraphSpec::CommandSpec c;
         c.sampleTime = stepStart;
         c.nodeId = pat.nodeId;
