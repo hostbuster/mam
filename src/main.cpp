@@ -555,6 +555,10 @@ int main(int argc, char** argv) {
       printConnectionsSummary(spec);
       printPortsSummary(spec);
     } catch (...) {}
+    // If only inspecting topology, exit early to avoid entering realtime
+    if (wavPath.empty() && validatePath.empty() && listNodesPath.empty() && listParamsType.empty()) {
+      return 0;
+    }
   }
   if (!validatePath.empty()) return validateGraphJson(validatePath);
   if (!listNodesPath.empty()) return listNodesGraphJson(listNodesPath);
