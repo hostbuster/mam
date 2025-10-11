@@ -217,12 +217,29 @@ static int validateGraphJson(const std::string& path) {
     // Transport patterns and locks
     if (spec.hasTransport) {
       const uint32_t stepsPerBar = spec.transport.resolution ? spec.transport.resolution : 16u;
+      // Build nodeId->type for param name validation
+      std::unordered_map<std::string, std::string> nodeIdToType;
+      for (const auto& ns : spec.nodes) nodeIdToType.emplace(ns.id, ns.type);
+      auto mapParam = [](const std::string& type, const std::string& name) -> uint16_t {
+        if (type == std::string("kick")) return resolveParamIdByName(kKickParamMap, name);
+        if (type == std::string("clap")) return resolveParamIdByName(kClapParamMap, name);
+        return 0;
+      };
       for (const auto& p : spec.transport.patterns) {
         if (!hasNode(p.nodeId)) { std::fprintf(stderr, "Pattern references unknown node '%s'\n", p.nodeId.c_str()); errors++; }
         if (p.steps.empty()) { std::fprintf(stderr, "Pattern for node '%s' has empty steps\n", p.nodeId.c_str()); errors++; }
+        if (!p.steps.empty() && p.steps.size() != stepsPerBar) {
+          std::fprintf(stderr, "Pattern for node '%s' has %zu steps but resolution is %u\n", p.nodeId.c_str(), p.steps.size(), stepsPerBar);
+        }
         for (const auto& L : p.locks) {
           if (L.step >= stepsPerBar) { std::fprintf(stderr, "Lock step %u out of range for node '%s' (res=%u)\n", L.step, p.nodeId.c_str(), stepsPerBar); errors++; }
           if (L.paramId == 0 && L.paramName.empty()) { std::fprintf(stderr, "Lock missing param for node '%s'\n", p.nodeId.c_str()); errors++; }
+          if (L.paramId == 0 && !L.paramName.empty()) {
+            uint16_t pid = 0;
+            auto it = nodeIdToType.find(p.nodeId);
+            if (it != nodeIdToType.end()) pid = mapParam(it->second, L.paramName);
+            if (pid == 0) { std::fprintf(stderr, "Lock has unknown param '%s' for node '%s'\n", L.paramName.c_str(), p.nodeId.c_str()); errors++; }
+          }
         }
       }
     }
