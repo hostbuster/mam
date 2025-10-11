@@ -29,8 +29,16 @@
       "type": "transport",
       "params": {
         "bpm": 130,
+        "lengthBars": 8,
         "resolution": 16,
-        "pattern": { "nodeId": "hat1", "steps": "x.x.x.x.x.x.x.x." }
+        "swingPercent": 12,
+        "tempoRamps": [ { "bar": 4, "bpm": 138 } ],
+        "patterns": [
+          { "nodeId": "kick1", "steps": "x...x...x...x..." },
+          { "nodeId": "snr1",  "steps": "....x.......x..." },
+          { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x." },
+          { "nodeId": "hat2",  "steps": "..x.x..x.x..x.x" }
+        ]
       }
     }
   ],
@@ -53,8 +61,8 @@
     "swingPercent": 12,
     "tempoRamps": [ { "bar": 4, "bpm": 138 } ],
     "patterns": [
-      { "nodeId": "kick1", "steps": "x...x..x..x..." },
-      { "nodeId": "snr1",  "steps": "..x...x...x..." },
+      { "nodeId": "kick1", "steps": "x...x...x...x..." },
+      { "nodeId": "snr1",  "steps": "....x.......x..." },
       { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x." },
       { "nodeId": "hat2",  "steps": "..x.x..x.x..x.x" }
     ]
