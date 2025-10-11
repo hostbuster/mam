@@ -23,21 +23,6 @@
       "id": "hat2",
       "type": "clap",
       "params": { "ampDecayMs": 25, "gain": 0.45, "bpm": 0, "loop": false }
-    },
-    {
-      "id": "transport1",
-      "type": "transport",
-      "params": {
-        "bpm": 130,
-        "lengthBars": 16,
-        "resolution": 16,
-        "swingPercent": 8,
-        "patterns": [
-          { "nodeId": "kick1", "steps": "x...x...x..x...." },
-          { "nodeId": "snr1",  "steps": "....x.......x..." },
-          { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x." }
-        ]
-      }
     }
   ],
 
