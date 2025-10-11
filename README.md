@@ -164,6 +164,24 @@ Examples:
 - `--peak-target dB`: normalize peak to a specific target (e.g., `-0.3`).
 - The exporter prints both pre-/post-peak and applied gain in dB. Normalization is applied prior to file write and never clips.
 
+#### Topology and meters
+
+- `--print-topo`: print a simple topological order derived from `connections` (MVP). Helpful to validate routing intent.
+- `--meters`: after export, print a concise line with peak and RMS in dBFS.
+
+Examples:
+
+```bash
+# Print topo order without exporting (dry inspection)
+./build/mam --graph demo.json --print-topo --validate demo.json
+
+# Export and show meters
+./build/mam --graph demo.json --wav demo.wav --meters
+
+# Export, show topo order and meters together
+./build/mam --graph demo.json --wav demo.wav --print-topo --meters
+```
+
 Timed realtime exit:
 
 ```bash
