@@ -161,9 +161,30 @@ Render offline to WAV:
 ./build/mam --graph mygraph.json --wav out.wav --sr 48000 --duration 2.0
 ```
 
+### Transport (multi-patterns, swing, ramps)
+
+Example:
+
+```json
+{
+  "transport": {
+    "bpm": 130,
+    "lengthBars": 4,
+    "resolution": 16,
+    "swingPercent": 12,
+    "tempoRamps": [ { "bar": 2, "bpm": 138 } ],
+    "patterns": [
+      { "nodeId": "kick1", "steps": "x...x...x...x..." },
+      { "nodeId": "snr1",  "steps": "....x.......x..." },
+      { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x." }
+    ]
+  }
+}
+```
+
 Notes:
-- Unknown node types or params are ignored with a warning (to be expanded later).
-- Future versions will allow multi-node routing via `connections`.
+- Unknown node types or params are warned (to be expanded later).
+- Multi-node routing via `connections` is reserved for future versions.
 
 ## Parameters
 
@@ -197,7 +218,7 @@ Notes:
 - `src/main.cpp` — CLI/argument parsing, dispatch to realtime or offline
 - `src/instruments/...` — DSP implementations (kick, clap)
 - `src/core/...` — Graph, Node, ParameterRegistry, ParamMap, config
-- `src/core/TransportNode.hpp` — scaffold for future realtime transport-driven triggering
+- `src/core/TransportNode.hpp` — realtime transport (multi-patterns, swing, tempo ramps)
 - `src/realtime/...` — CoreAudio output and renderers
 - `src/offline/...` — offline renderers and helpers
 - `src/io/...` — audio file writers
