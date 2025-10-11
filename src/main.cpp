@@ -199,6 +199,16 @@ static int validateGraphJson(const std::string& path) {
     }
     // Mixer inputs exist
     if (spec.hasMixer) {
+      // dup check
+      {
+        std::vector<std::string> ids;
+        ids.reserve(spec.mixer.inputs.size());
+        for (const auto& mi : spec.mixer.inputs) ids.push_back(mi.id);
+        auto tmp = ids; std::sort(tmp.begin(), tmp.end());
+        for (size_t i = 1; i < tmp.size(); ++i) if (tmp[i] == tmp[i-1]) {
+          std::fprintf(stderr, "Duplicate mixer input '%s'\n", tmp[i].c_str()); errors++;
+        }
+      }
       for (const auto& mi : spec.mixer.inputs) {
         if (!hasNode(mi.id)) { std::fprintf(stderr, "Mixer references unknown node '%s'\n", mi.id.c_str()); errors++; }
       }
@@ -284,6 +294,17 @@ static int validateGraphJson(const std::string& path) {
           std::fprintf(stderr, "Connection %s->%s dryPercent out of range: %g\n", c.from.c_str(), c.to.c_str(), c.dryPercent); errors++;
         }
       }
+      // warn if dry tap and also mixed directly (double-count risk)
+      if (spec.hasMixer) {
+        std::unordered_set<std::string> mixed;
+        for (const auto& mi : spec.mixer.inputs) mixed.insert(mi.id);
+        for (const auto& c : spec.connections) {
+          if (c.dryPercent > 0.0f && mixed.count(c.from)) {
+            std::fprintf(stderr, "Warning: %s is in mixer inputs and has dryPercent>0 on edge %s->%s (double-count).\n",
+                         c.from.c_str(), c.from.c_str(), c.to.c_str());
+          }
+        }
+      }
       // fromPort/toPort basic checks (non-negative already via schema; warn only for now)
       for (const auto& c : spec.connections) {
         if (c.fromPort != 0u) {
@@ -291,6 +312,35 @@ static int validateGraphJson(const std::string& path) {
         }
         if (c.toPort != 0u) {
           std::fprintf(stderr, "Warning: toPort %u on %s->%s is not implemented yet (treated as 0)\n", c.toPort, c.from.c_str(), c.to.c_str());
+        }
+      }
+    }
+
+    // Type-specific param sanity checks
+    for (const auto& n : spec.nodes) {
+      if (n.type == std::string("delay")) {
+        try {
+          nlohmann::json pj = nlohmann::json::parse(n.paramsJson);
+          const double mix = pj.value("mix", 1.0);
+          const double fb = pj.value("feedback", 0.0);
+          if (mix < 0.0 || mix > 1.0) {
+            std::fprintf(stderr, "Delay '%s' mix out of range [0..1]: %g\n", n.id.c_str(), mix); errors++;
+          }
+          if (fb < 0.0 || fb >= 0.98) {
+            std::fprintf(stderr, "Delay '%s' feedback suspicious (>=0.98 may blow up): %g\n", n.id.c_str(), fb);
+          }
+        } catch (...) {
+          std::fprintf(stderr, "Delay '%s' params parse failed\n", n.id.c_str()); errors++;
+        }
+      } else if (n.type == std::string("meter")) {
+        try {
+          nlohmann::json pj = nlohmann::json::parse(n.paramsJson);
+          const std::string target = pj.value("target", std::string());
+          if (target.empty() || !hasNode(target)) {
+            std::fprintf(stderr, "Meter '%s' target unknown node '%s'\n", n.id.c_str(), target.c_str()); errors++;
+          }
+        } catch (...) {
+          std::fprintf(stderr, "Meter '%s' params parse failed\n", n.id.c_str()); errors++;
         }
       }
     }
