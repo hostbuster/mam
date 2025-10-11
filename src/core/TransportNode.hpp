@@ -10,7 +10,8 @@
 // This node is a scaffold for future integration with realtime event routing.
 class TransportNode final : public Node {
 public:
-  struct Pattern { std::string nodeId; std::string steps; };
+  struct PatternLock { uint32_t step = 0; uint16_t paramId = 0; float value = 0.0f; float rampMs = 0.0f; };
+  struct Pattern { std::string nodeId; std::string steps; std::vector<PatternLock> locks; };
   struct TempoPoint { uint32_t bar = 0; float bpm = 120.0f; };
 
   TransportNode() = default;
@@ -61,6 +62,14 @@ public:
       if (idx < pat.steps.size() && pat.steps[idx] == 'x' && !pat.nodeId.empty()) {
         Command c{}; c.sampleTime = absStart; c.nodeId = pat.nodeId.c_str(); c.type = CommandType::Trigger;
         emit(c);
+      }
+      // Emit parameter locks scheduled for this step (paramId-based)
+      for (const auto& L : pat.locks) {
+        if (L.step != withinBar || L.paramId == 0) continue;
+        Command lc{}; lc.sampleTime = absStart; lc.nodeId = pat.nodeId.c_str();
+        lc.type = (L.rampMs > 0.0f) ? CommandType::SetParamRamp : CommandType::SetParam;
+        lc.paramId = L.paramId; lc.value = L.value; lc.rampMs = L.rampMs;
+        emit(lc);
       }
     }
 

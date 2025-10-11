@@ -37,6 +37,17 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
           TransportNode::Pattern p{};
           p.nodeId = pj.value("nodeId", "");
           p.steps = pj.value("steps", "");
+          // optional inline locks using paramId for realtime path
+          if (pj.contains("locks")) {
+            for (const auto& lk : pj.at("locks")) {
+              TransportNode::PatternLock L{};
+              L.step = lk.value("step", 0u);
+              L.paramId = static_cast<uint16_t>(lk.value("paramId", 0));
+              L.value = lk.value("value", 0.0f);
+              L.rampMs = lk.value("rampMs", 0.0f);
+              p.locks.push_back(L);
+            }
+          }
           t->patterns.push_back(p);
         }
       } else if (j.contains("pattern")) { // backwards-compat
