@@ -23,6 +23,7 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
   if (j.contains("version")) spec.version = j.at("version").get<int>();
   if (j.contains("sampleRate")) spec.sampleRate = j.at("sampleRate").get<uint32_t>();
   if (j.contains("channels")) spec.channels = j.at("channels").get<uint32_t>();
+  if (j.contains("randomSeed")) spec.randomSeed = j.at("randomSeed").get<uint32_t>();
 
   if (j.contains("nodes")) {
     for (const auto& n : j.at("nodes")) {

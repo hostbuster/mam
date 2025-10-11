@@ -34,6 +34,7 @@
 #include "core/MixerNode.hpp"
 #include "instruments/kick/KickNode.hpp"
 #include "core/ParamMap.hpp"
+#include "core/Random.hpp"
 
 // Use KickSynth (from dsp/) for both realtime and offline paths
 
@@ -317,6 +318,7 @@ int main(int argc, char** argv) {
     if (!graphPath.empty()) {
       try {
         GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
+        if (spec.randomSeed != 0) setGlobalSeed(spec.randomSeed);
         for (const auto& ns : spec.nodes) {
           auto node = createNodeFromSpec(ns);
           if (node) graph.addNode(ns.id, std::move(node));
@@ -341,8 +343,9 @@ int main(int argc, char** argv) {
     }
     std::vector<float> interleaved;
     if (!graphPath.empty()) {
-      try {
+    try {
         GraphSpec spec2 = loadGraphSpecFromJsonFile(graphPath);
+      if (spec2.randomSeed != 0) setGlobalSeed(spec2.randomSeed);
         // Synthesize commands from transport, if present
         std::vector<GraphSpec::CommandSpec> cmds = spec2.commands;
         if (spec2.hasTransport) {

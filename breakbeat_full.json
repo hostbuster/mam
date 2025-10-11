@@ -39,7 +39,7 @@
 
   "transport": {
     "bpm": 130,
-    "lengthBars": 16,
+    "lengthBars": 1,
     "resolution": 16,
     "swingPercent": 8,
     "patterns": [

@@ -7,6 +7,7 @@
     "version": { "type": "integer", "const": 1 },
     "sampleRate": { "type": "number", "minimum": 8000 },
     "channels": { "type": "integer", "minimum": 1 },
+    "randomSeed": { "type": "integer", "minimum": 0 },
     "nodes": {
       "type": "array",
       "items": {

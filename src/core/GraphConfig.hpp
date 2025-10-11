@@ -15,6 +15,7 @@ struct GraphSpec {
   int version = 1;
   uint32_t sampleRate = 48000;
   uint32_t channels = 2;
+  uint32_t randomSeed = 0; // 0 means unspecified
   std::vector<NodeSpec> nodes;
   struct MixerInput { std::string id; float gainPercent = 100.0f; };
   struct Mixer { std::vector<MixerInput> inputs; float masterPercent = 100.0f; bool softClip = true; };
