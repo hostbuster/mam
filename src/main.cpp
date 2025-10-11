@@ -109,16 +109,20 @@ static const char* toStr(BitDepth d) {
 static void printUsage(const char* exe) {
   std::fprintf(stderr,
                "Usage: %s [--f0 Hz] [--fend Hz] [--pitch-decay ms] [--amp-decay ms]\n"
-               "          [--gain 0..1] [--bpm N] [--duration sec] [--click 0..1]\n"
-               "          [--wav path] [--sr Hz] [--pcm16] [--format wav|aiff|caf] [--bitdepth 16|24|32f]\n"
-               "          [--offline-threads N]\n"
-               "          [--graph path.json] [--quit-after sec]\n"
+               "          [--gain 0..1] [--bpm N] [--click 0..1]\n"
+               "          [--wav path] [--sr Hz] [--pcm16] [--format wav|aiff|caf] [--bitdepth 16|24|32f] [--offline-threads N]\n"
+               "          [--graph path.json] [--quit-after sec]\\\n\n"
+               "\nOffline export controls (auto-duration by default):\n"
+               "  --duration SEC     Hard duration (overrides auto)\n"
+               "  --bars N           Force N bars from transport (if present)\n"
+               "  --loop-count N     Repeat transport sequence N times (default 1)\n"
+               "  --tail-ms MS       Decay tail appended (default 250)\n"
                "          [--validate path.json] [--list-nodes path.json] [--list-params kick|clap]\n"
                "\n"
                "Examples:\n"
                "  %s                       # one-shot, defaults (real-time)\n"
                "  %s --bpm 120            # 120 BPM continuous till Ctrl-C (real-time)\n"
-                "  %s --wav out.wav --sr 44100 --duration 2.0  # offline render to WAV\n",
+               "  %s --graph demo.json --wav demo.wav         # export using auto-duration\n",
                exe, exe, exe, exe);
 }
 

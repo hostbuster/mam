@@ -15,6 +15,7 @@
 - Realtime: `RealtimeGraphRenderer` sub-block command processing; `TransportNode` integrated for live pattern emission
 - Transport param-locks implemented in realtime and offline (pattern `locks`)
 - Offline: graph/timeline/parallel renderers; `--offline-threads` CLI
+- Export UX: auto-duration (transport bars/ramps or last command) with tail; flags `--duration`, `--bars`, `--loop-count`, `--tail-ms`
 - Mixer: per-input gains + master gain with optional soft clip
 - CLI: `--graph`, `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
 - Validation: named-param resolution; transport pattern target/steps checks
