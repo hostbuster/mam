@@ -15,16 +15,9 @@
       "type": "clap",
       "params": { "ampDecayMs": 180, "gain": 0.85, "bpm": 0, "loop": false }
     },
-    {
-      "id": "hat1",
-      "type": "clap",
-      "params": { "ampDecayMs": 40, "gain": 0.55, "bpm": 0, "loop": false }
-    },
-    {
-      "id": "hat2",
-      "type": "clap",
-      "params": { "ampDecayMs": 25, "gain": 0.45, "bpm": 0, "loop": false }
-    }
+    { "id": "delay1", "type": "delay", "params": { "delayMs": 350, "feedback": 0.35, "mix": 0.25 } },
+    { "id": "delay2", "type": "delay", "params": { "delayMs": 190, "feedback": 0.25, "mix": 0.18 } },
+    { "id": "meter1", "type": "meter", "params": { "target": "delay1" } }
   ],
 
   "mixer": {
@@ -33,43 +26,25 @@
     "inputs": [
       { "id": "kick1", "gainPercent": 85 },
       { "id": "snr1",  "gainPercent": 75 },
-      { "id": "hat1",  "gainPercent": 75 },
-      { "id": "hat2",  "gainPercent": 65 }
+      { "id": "delay1",  "gainPercent": 100 }
     ]
   },
 
   "transport": {
-    "bpm": 130,
-    "lengthBars": 1,
+    "bpm": 126,
+    "lengthBars": 8,
     "resolution": 16,
-    "swingPercent": 8,
     "patterns": [
-      { "nodeId": "kick1", "steps": "x...x...x..x....",
-        "locks": [
-          { "step": 8,  "param": "GAIN", "value": 1.00, "rampMs": 40 },
-          { "step": 12, "param": "F0",   "value": 140.0, "rampMs": 80 }
-        ]
-      },
-      { "nodeId": "snr1",  "steps": "....x.......x...",
-        "locks": [
-          { "step": 4,  "param": "GAIN", "value": 0.90 },
-          { "step": 12, "param": "GAIN", "value": 0.80 }
-        ]
-      },
-      { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x.",
-        "locks": [
-          { "step": 2,  "param": "AMP_DECAY_MS", "value": 50.0, "rampMs": 60 },
-          { "step": 10, "param": "AMP_DECAY_MS", "value": 40.0, "rampMs": 60 }
-        ]
-      }
+      { "nodeId": "kick1", "steps": "x...x...x...x..." },
+      { "nodeId": "snr1",  "steps": "....x.......x..." }
     ]
   },
 
-  "commands": [
-    { "sampleTime": 0, "nodeId": "kick1", "type": "SetParam", "param": "GAIN", "value": 0.95 },
-    { "sampleTime": 0, "nodeId": "snr1",  "type": "SetParam", "param": "GAIN", "value": 0.85 },
-    { "sampleTime": 0, "nodeId": "hat1",  "type": "SetParam", "param": "GAIN", "value": 0.65 }
+  "connections": [
+    { "from": "kick1", "to": "delay1" },
+    { "from": "snr1",  "to": "delay1" },
+    { "from": "delay1", "to": "delay2" }
   ],
 
-  "connections": []
+  "commands": []
 }

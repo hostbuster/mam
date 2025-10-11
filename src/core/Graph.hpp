@@ -6,6 +6,8 @@
 #include <string>
 #include "Node.hpp"
 #include "MixerNode.hpp"
+#include "DelayNode.hpp"
+#include "MeterNode.hpp"
 
 class Graph {
 public:
@@ -38,6 +40,10 @@ public:
       // Clear temp
       std::fill(temp_.begin(), temp_.end(), 0.0f);
       e.node->process(ctx, temp_.data(), channels);
+      // Effects are applied globally as inserts in this MVP; skip adding their own buffer
+      if (dynamic_cast<DelayNode*>(e.node.get()) != nullptr) {
+        continue;
+      }
       float gain = 1.0f;
       if (mixer_) {
         for (const auto& ch : mixer_->channels()) {
@@ -48,6 +54,18 @@ public:
         for (size_t i = 0; i < total; ++i) interleavedOut[i] += temp_[i] * gain;
       } else {
         for (size_t i = 0; i < total; ++i) interleavedOut[i] += temp_[i];
+      }
+    }
+    // Apply global effects (MVP)
+    for (auto& e : nodes_) {
+      if (auto* d = dynamic_cast<DelayNode*>(e.node.get())) {
+        e.node->processInPlace(ctx, interleavedOut, channels);
+      }
+    }
+    // Update meters (MVP)
+    for (auto& e : nodes_) {
+      if (auto* m = dynamic_cast<MeterNode*>(e.node.get())) {
+        m->updateFromBuffer(interleavedOut, ctx.frames, channels);
       }
     }
     if (mixer_) mixer_->process(ctx, interleavedOut, channels);

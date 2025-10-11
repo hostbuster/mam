@@ -6,6 +6,8 @@
 #include "../instruments/kick/KickFactory.hpp"
 #include "../instruments/clap/ClapFactory.hpp"
 #include "TransportNode.hpp"
+#include "DelayNode.hpp"
+#include "MeterNode.hpp"
 // Mixer is not created via NodeFactory; it is set on Graph from GraphSpec.mixer
 
 inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
@@ -58,6 +60,20 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
       }
     } catch (...) {}
     return t;
+  }
+  if (spec.type == "delay") {
+    auto d = std::make_unique<DelayNode>();
+    try {
+      nlohmann::json j = nlohmann::json::parse(spec.paramsJson);
+      if (j.contains("delayMs")) d->setDelayMs(static_cast<float>(j.value("delayMs", 350.0)));
+      if (j.contains("feedback")) d->feedback = static_cast<float>(j.value("feedback", 0.35));
+      if (j.contains("mix")) d->mix = static_cast<float>(j.value("mix", 0.25));
+    } catch (...) {}
+    return d;
+  }
+  if (spec.type == "meter") {
+    // Meter is an effect-style node; creation from params only stores target for documentation.
+    return std::make_unique<MeterNode>(spec.id);
   }
   // Unknown node type
   std::fprintf(stderr, "Warning: Unknown node type '%s' (id='%s')\n", spec.type.c_str(), spec.id.c_str());

@@ -24,6 +24,9 @@ public:
   double peak() const { return peak_.load(); }
   double rms() const { return rms_.load(); }
   const std::string& targetId() const { return targetId_; }
+  void updateFromBuffer(const float* interleaved, uint32_t frames, uint32_t channels) {
+    double p = 0.0, r = 0.0; measurePeakRms(interleaved, frames, channels, p, r); peak_.store(p); rms_.store(r);
+  }
 
 private:
   std::string targetId_;

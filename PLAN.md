@@ -23,11 +23,14 @@
 - Scaffolds: `BufferPool` and `OfflineTopoScheduler` for future topo/latency work
 
 ### Next up
-- Transport: finalize swing timing nuances and ramp shapes; ensure realtime/offline parity
-- Parameters: complete name→id auto-generation and stricter load-time validation/clamping across all nodes
-- Offline scheduler: add topological levels (when edges exist), buffer aliasing, per-node latency reporting and preroll; integrate scheduler path
-- Observability: Meter/Wiretap nodes, lightweight JSON trace, per-node perf counters
-- Validation & tooling: JSON Schema validation in `mam --validate`, golden renders, fuzzed command streams, CI presets; integrate clang-tidy checks
+- Routing engine (Phase 4 MVP → full):
+  - Add explicit audio ports and per-edge gains; execute graph strictly by topological order from `connections` (both offline and realtime).
+  - Replace global-insert effects with per-connection processing; maintain `MixerNode` as a terminal node.
+  - Report per-node latency; add preroll and optional compensation (offline first).
+- Transport timing: finalize swing nuances and ramp curves; add seek and loop ranges.
+- Parameters: complete name→id auto-generation; stricter load-time validation/clamping across all nodes.
+- Observability: expand Meter/Wiretap nodes; JSON perf trace; per-node counters.
+- Validation & tooling: JSON Schema validation in `mam --validate`; golden renders; CI with sanitizers and clang-tidy.
 
 ### Design notes
 
@@ -71,9 +74,10 @@
 - Introduce TransportNode emitting triggers/param-locks; support tempo ramps, swing
 - Keep offline generator as fallback; unify JSON schema
 
-### Phase 4: Offline scheduler
-- Topological levels and buffer pool with aliasing
-- Per-node latency reporting and preroll
+### Phase 4: Routing and scheduler
+- Ports, per-edge gains, and validated DAG `connections`
+- Topological execution order and buffer reuse/aliasing
+- Per-node latency reporting and preroll; offline compensation first
 
 ### Phase 5: Observability
 - Wiretap/Meter nodes; lightweight tracing (JSON trace), perf counters per node

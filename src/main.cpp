@@ -56,6 +56,36 @@ static bool isStdinReady() {
   return (rv > 0) && FD_ISSET(STDIN_FILENO, &readfds);
 }
 
+static void printTopoOrderFromSpec(const GraphSpec& spec) {
+  if (spec.connections.empty()) {
+    // Fallback: print insertion order as topo
+    std::fprintf(stderr, "Topo order (insertion, %zu): ", spec.nodes.size());
+    for (size_t i = 0; i < spec.nodes.size(); ++i) {
+      std::fprintf(stderr, "%s%s", spec.nodes[i].id.c_str(), (i + 1 < spec.nodes.size() ? " -> " : "\n"));
+    }
+    return;
+  }
+  std::unordered_map<std::string,int> indeg;
+  for (const auto& n : spec.nodes) indeg[n.id] = 0;
+  for (const auto& e : spec.connections) if (indeg.find(e.to)!=indeg.end()) indeg[e.to]++;
+  std::unordered_multimap<std::string,std::string> adj;
+  for (const auto& e : spec.connections) adj.emplace(e.from, e.to);
+  std::vector<std::string> q; q.reserve(indeg.size());
+  for (const auto& kv : indeg) if (kv.second==0) q.push_back(kv.first);
+  std::vector<std::string> order; order.reserve(indeg.size());
+  for (size_t qi=0; qi<q.size(); ++qi) {
+    const auto u = q[qi]; order.push_back(u);
+    auto range = adj.equal_range(u);
+    for (auto it = range.first; it != range.second; ++it) {
+      auto& v = it->second; if (--indeg[v]==0) q.push_back(v);
+    }
+  }
+  if (!order.empty()) {
+    std::fprintf(stderr, "Topo order (%zu): ", order.size());
+    for (size_t i=0;i<order.size();++i) std::fprintf(stderr, "%s%s", order[i].c_str(), (i+1<order.size()?" -> ":"\n"));
+  }
+}
+
 static std::string formatDuration(double seconds) {
   if (seconds < 0.0) seconds = 0.0;
   const int64_t totalMs = static_cast<int64_t>(seconds * 1000.0 + 0.5);
@@ -175,7 +205,7 @@ static int validateGraphJson(const std::string& path) {
     }
     // Known node types + minimal transport check
     for (const auto& n : spec.nodes) {
-      if (!(n.type == "kick" || n.type == "clap" || n.type == "transport")) {
+      if (!(n.type == "kick" || n.type == "clap" || n.type == "transport" || n.type == "delay" || n.type == "meter")) {
         std::fprintf(stderr, "Unknown node type '%s' (id=%s)\n", n.type.c_str(), n.id.c_str());
       }
       if (n.type == "transport") {
@@ -365,6 +395,9 @@ int main(int argc, char** argv) {
   if (params.click > 1.0f) params.click = 1.0f;
 
   // Utilities
+  if (printTopo && !graphPath.empty()) {
+    try { GraphSpec spec = loadGraphSpecFromJsonFile(graphPath); printTopoOrderFromSpec(spec); } catch (...) {}
+  }
   if (!validatePath.empty()) return validateGraphJson(validatePath);
   if (!listNodesPath.empty()) return listNodesGraphJson(listNodesPath);
   if (!listParamsType.empty()) {
@@ -414,26 +447,7 @@ int main(int argc, char** argv) {
           const float master = spec.mixer.masterPercent * (1.0f/100.0f);
           graph.setMixer(std::make_unique<MixerNode>(std::move(chans), master, spec.mixer.softClip));
         }
-        // Optional: print topo order derived from connections (MVP)
-        if (printTopo && !spec.connections.empty()) {
-          std::unordered_map<std::string,int> indeg;
-          for (const auto& n : spec.nodes) indeg[n.id] = 0;
-          for (const auto& e : spec.connections) if (indeg.find(e.to)!=indeg.end()) indeg[e.to]++;
-          std::vector<std::string> q; q.reserve(indeg.size());
-          for (const auto& kv : indeg) if (kv.second==0) q.push_back(kv.first);
-          std::vector<std::string> order;
-          auto adj = std::unordered_multimap<std::string,std::string>();
-          for (const auto& e : spec.connections) adj.emplace(e.from, e.to);
-          for (size_t qi = 0; qi < q.size(); ++qi) {
-            auto u = q[qi]; order.push_back(u);
-            auto range = adj.equal_range(u);
-            for (auto it = range.first; it != range.second; ++it) {
-              auto& v = it->second; if (--indeg[v] == 0) q.push_back(v);
-            }
-          }
-          std::fprintf(stderr, "Topo order (%zu): ", order.size());
-          for (size_t i2=0;i2<order.size();++i2) std::fprintf(stderr, "%s%s", order[i2].c_str(), (i2+1<order.size()?" -> ":"\n"));
-        }
+        if (printTopo) printTopoOrderFromSpec(spec);
       } catch (const std::exception& e) {
         std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
         return 1;

@@ -17,6 +17,8 @@ public:
   virtual void prepare(double sampleRate, uint32_t maxBlock) = 0;
   virtual void reset() = 0;
   virtual void process(ProcessContext ctx, float* interleavedOut, uint32_t channels) = 0;
+  // Optional insert-style processing (for effects) defaults to no-op
+  virtual void processInPlace(ProcessContext ctx, float* interleaved, uint32_t channels) { (void)ctx; (void)interleaved; (void)channels; }
   // Optional: handle control events prior to processing a block (currently block-accurate)
   virtual void handleEvent(const Command&) {}
 };
