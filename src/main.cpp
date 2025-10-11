@@ -35,6 +35,7 @@
 #include "instruments/kick/KickNode.hpp"
 #include "core/ParamMap.hpp"
 #include "core/Random.hpp"
+#include "core/GraphUtils.hpp"
 
 // Use KickSynth (from dsp/) for both realtime and offline paths
 
@@ -56,71 +57,7 @@ static bool isStdinReady() {
   return (rv > 0) && FD_ISSET(STDIN_FILENO, &readfds);
 }
 
-static void printTopoOrderFromSpec(const GraphSpec& spec) {
-  if (spec.connections.empty()) {
-    // Fallback: print insertion order as topo
-    std::fprintf(stderr, "Topo order (insertion, %zu): ", spec.nodes.size());
-    for (size_t i = 0; i < spec.nodes.size(); ++i) {
-      std::fprintf(stderr, "%s%s", spec.nodes[i].id.c_str(), (i + 1 < spec.nodes.size() ? " -> " : "\n"));
-    }
-    return;
-  }
-  std::unordered_map<std::string,int> indeg;
-  for (const auto& n : spec.nodes) indeg[n.id] = 0;
-  for (const auto& e : spec.connections) if (indeg.find(e.to)!=indeg.end()) indeg[e.to]++;
-  std::unordered_multimap<std::string,std::string> adj;
-  for (const auto& e : spec.connections) adj.emplace(e.from, e.to);
-  std::vector<std::string> q; q.reserve(indeg.size());
-  for (const auto& kv : indeg) if (kv.second==0) q.push_back(kv.first);
-  std::vector<std::string> order; order.reserve(indeg.size());
-  for (size_t qi=0; qi<q.size(); ++qi) {
-    const auto u = q[qi]; order.push_back(u);
-    auto range = adj.equal_range(u);
-    for (auto it = range.first; it != range.second; ++it) {
-      auto& v = it->second; if (--indeg[v]==0) q.push_back(v);
-    }
-  }
-  if (!order.empty()) {
-    std::fprintf(stderr, "Topo order (%zu): ", order.size());
-    for (size_t i=0;i<order.size();++i) std::fprintf(stderr, "%s%s", order[i].c_str(), (i+1<order.size()?" -> ":"\n"));
-  }
-}
-
-static uint64_t computeGraphPrerollSamples(const GraphSpec& spec, uint32_t sampleRate) {
-  // Node latency in samples (parse params for known types)
-  std::unordered_map<std::string, uint32_t> nodeLatency;
-  for (const auto& n : spec.nodes) {
-    uint32_t lat = 0;
-    if (n.type == std::string("delay")) {
-      try {
-        nlohmann::json j = nlohmann::json::parse(n.paramsJson);
-        const double ms = j.value("delayMs", 0.0);
-        lat = static_cast<uint32_t>(ms * static_cast<double>(sampleRate) * 0.001 + 0.5);
-      } catch (...) {}
-    }
-    nodeLatency[n.id] = lat;
-  }
-  // Accumulate along DAG (max path sum)
-  std::unordered_map<std::string, double> acc;
-  std::unordered_map<std::string, int> indeg;
-  std::unordered_multimap<std::string, std::string> adj;
-  for (const auto& n : spec.nodes) { indeg[n.id] = 0; acc[n.id] = static_cast<double>(nodeLatency[n.id]); }
-  for (const auto& e : spec.connections) { if (indeg.count(e.to)) indeg[e.to]++; adj.emplace(e.from, e.to); }
-  std::vector<std::string> q; q.reserve(indeg.size());
-  for (const auto& kv : indeg) if (kv.second == 0) q.push_back(kv.first);
-  for (size_t qi = 0; qi < q.size(); ++qi) {
-    const auto u = q[qi];
-    auto range = adj.equal_range(u);
-    for (auto it = range.first; it != range.second; ++it) {
-      const auto& v = it->second;
-      const double cand = acc[u] + static_cast<double>(nodeLatency[v]);
-      if (cand > acc[v]) acc[v] = cand;
-      if (--indeg[v] == 0) q.push_back(v);
-    }
-  }
-  double maxS = 0.0; for (const auto& kv : acc) if (kv.second > maxS) maxS = kv.second;
-  return static_cast<uint64_t>(maxS + 0.5);
-}
+// printTopoOrderFromSpec and computeGraphPrerollSamples moved to core/GraphUtils.hpp
 
 static std::string formatDuration(double seconds) {
   if (seconds < 0.0) seconds = 0.0;
@@ -339,6 +276,12 @@ static int validateGraphJson(const std::string& path) {
       if (visited != indeg.size()) {
         std::fprintf(stderr, "Connections contain a cycle (visited %zu of %zu)\n", visited, indeg.size());
         errors++;
+      }
+      // dryPercent range
+      for (const auto& c : spec.connections) {
+        if (c.dryPercent < 0.0f || c.dryPercent > 200.0f) {
+          std::fprintf(stderr, "Connection %s->%s dryPercent out of range: %g\n", c.from.c_str(), c.to.c_str(), c.dryPercent); errors++;
+        }
       }
     }
     if (errors == 0) {

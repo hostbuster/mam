@@ -16,7 +16,8 @@
         "properties": {
           "from": { "type": "string" },
           "to": { "type": "string" },
-          "gainPercent": { "type": "number", "minimum": 0, "maximum": 200 }
+          "gainPercent": { "type": "number", "minimum": 0, "maximum": 200 },
+          "dryPercent":  { "type": "number", "minimum": 0, "maximum": 200 }
         }
       }
     },
