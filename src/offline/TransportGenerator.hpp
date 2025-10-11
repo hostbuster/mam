@@ -34,11 +34,12 @@ inline std::vector<GraphSpec::CommandSpec> generateCommandsFromTransport(const G
     // Accumulate all previous bars
     uint64_t stepStart = 0;
     for (uint32_t b = 0; b < barIndex; ++b) stepStart += framesPerStepAtBar(b) * stepsPerBar;
-    // Within current bar, accumulate previous steps with swing on their odd indices
+    // Within current bar, accumulate previous steps with symmetric swing (+ on even, - on odd)
     for (uint32_t s = 0; s < withinBar; ++s) {
-      const bool prevOdd = (s % 2) == 1;
-      const double swingFramesPrev = prevOdd ? (static_cast<double>(baseFramesPerStep) * (tr.swingPercent / 100.0) * 0.5) : 0.0;
-      stepStart += baseFramesPerStep + static_cast<uint64_t>(swingFramesPrev + 0.5);
+      const bool prevEven = (s % 2) == 0;
+      const double swingAmt = static_cast<double>(baseFramesPerStep) * (tr.swingPercent / 100.0) * 0.5;
+      const double delta = static_cast<double>(baseFramesPerStep) + (prevEven ? swingAmt : -swingAmt);
+      stepStart += static_cast<uint64_t>(delta + 0.5);
     }
     // Now at this step's start time; emit triggers and locks per pattern
     for (const auto& pat : tr.patterns) {

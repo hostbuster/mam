@@ -79,9 +79,12 @@ public:
     const double secPerBar = 4.0 * secPerBeat;
     const uint64_t framesPerBar = static_cast<uint64_t>(secPerBar * sampleRate_ + 0.5);
     const uint64_t baseFramesPerStep = stepsPerBar ? (framesPerBar / stepsPerBar) : framesPerBar;
-    const bool isOdd = (withinBar % 2u) == 1u;
-    const double swingFrames = isOdd ? (static_cast<double>(baseFramesPerStep) * (swingPercent / 100.0) * 0.5) : 0.0;
-    nextStepStartAbs_ += baseFramesPerStep + static_cast<uint64_t>(swingFrames + 0.5);
+    // Keep bar length constant: even→odd duration = base + swing, odd→even = base - swing
+    const bool isEven = (withinBar % 2u) == 0u;
+    const double swingAmt = static_cast<double>(baseFramesPerStep) * (swingPercent / 100.0) * 0.5;
+    double delta = static_cast<double>(baseFramesPerStep) + (isEven ? swingAmt : -swingAmt);
+    if (delta < 1.0) delta = 1.0; // guard
+    nextStepStartAbs_ += static_cast<uint64_t>(delta + 0.5);
 
     // Increment and wrap step index across total length
     stepIndex_ = (totalSteps > 0) ? ((stepIndex_ + 1) % static_cast<uint32_t>(totalSteps)) : (stepIndex_ + 1);
