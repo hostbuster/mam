@@ -133,6 +133,31 @@ Render without using CoreAudio to an uncompressed audio file. Defaults to 48 kHz
 ./build/mam --wav out.caf --format caf --bitdepth 32f        # CAF float32
 ```
 
+#### Auto-duration and export flags
+
+- By default, export length follows what you authored:
+  - If `transport` is present: renders exactly `lengthBars` (tempo ramps and swing respected), then adds a short tail (default 250 ms) so decays finish.
+  - Else if `commands` are present: renders until the last command time, plus the tail.
+  - Else: renders a sensible default (2.0 s) plus tail.
+- Override flags (CLI wins over JSON):
+  - `--duration SEC`: hard duration; bypasses auto logic.
+  - `--bars N`: force N bars from `transport` (if present).
+  - `--loop-count N`: repeat the transport sequence N times.
+  - `--tail-ms MS`: change the decay tail (default 250).
+
+Examples:
+
+```bash
+# Auto-duration from transport (bars + tail)
+./build/mam --graph demo.json --wav demo.wav
+
+# Force 8 bars with a shorter tail
+./build/mam --graph demo.json --wav demo.wav --bars 8 --tail-ms 100
+
+# Hard 10-second render (overrides everything)
+./build/mam --graph demo.json --wav demo.wav --duration 10
+```
+
 Timed realtime exit:
 
 ```bash
