@@ -32,6 +32,32 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
       ns.type = n.value("type", "");
       json p = n.value("params", json::object());
       ns.paramsJson = p.dump();
+      if (n.contains("ports")) {
+        const auto& pr = n.at("ports");
+        if (pr.contains("inputs")) {
+          for (const auto& ip : pr.at("inputs")) {
+            NodeSpec::PortDesc d;
+            d.index = ip.value("index", 0u);
+            d.name = ip.value("name", "");
+            d.type = ip.value("type", "");
+            d.channels = ip.value("channels", 0u);
+            d.role = ip.value("role", "");
+            ns.ports.inputs.push_back(d);
+          }
+        }
+        if (pr.contains("outputs")) {
+          for (const auto& op : pr.at("outputs")) {
+            NodeSpec::PortDesc d;
+            d.index = op.value("index", 0u);
+            d.name = op.value("name", "");
+            d.type = op.value("type", "");
+            d.channels = op.value("channels", 0u);
+            d.role = op.value("role", "");
+            ns.ports.outputs.push_back(d);
+          }
+        }
+        ns.ports.has = true;
+      }
       spec.nodes.push_back(std::move(ns));
     }
   }
@@ -43,6 +69,8 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
       cc.to = c.value("to", "");
       cc.gainPercent = c.value("gainPercent", 100.0f);
       cc.dryPercent = c.value("dryPercent", 0.0f);
+      cc.fromPort = c.value("fromPort", 0u);
+      cc.toPort = c.value("toPort", 0u);
       spec.connections.push_back(cc);
     }
   }

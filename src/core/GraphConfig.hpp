@@ -5,10 +5,24 @@
 #include <cstdint>
 
 struct NodeSpec {
+  struct PortDesc {
+    uint32_t index = 0;
+    std::string name;
+    std::string type;    // "audio" | "control" | "event" | "midi"
+    uint32_t channels = 0; // optional
+    std::string role;    // "main" | "sidechain" | "aux"
+  };
+  struct PortsSpec {
+    std::vector<PortDesc> inputs;
+    std::vector<PortDesc> outputs;
+    bool has = false;
+  };
+
   std::string id;
   std::string type;
   // raw JSON for params will be parsed per type in the factory
   std::string paramsJson;
+  PortsSpec ports;
 };
 
 struct GraphSpec {

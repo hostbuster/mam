@@ -362,6 +362,25 @@ static int validateGraphJson(const std::string& path) {
           }
         }
       }
+      // fromPort/toPort validation against declared ports (if provided)
+      {
+        std::unordered_map<std::string, std::unordered_set<uint32_t>> inPorts;
+        std::unordered_map<std::string, std::unordered_set<uint32_t>> outPorts;
+        for (const auto& n : spec.nodes) {
+          if (n.ports.has) {
+            for (const auto& ip : n.ports.inputs) inPorts[n.id].insert(ip.index);
+            for (const auto& op : n.ports.outputs) outPorts[n.id].insert(op.index);
+          }
+        }
+        for (const auto& c : spec.connections) {
+          if (outPorts.count(c.from) && !outPorts[c.from].count(c.fromPort)) {
+            std::fprintf(stderr, "Connection %s->%s references unknown fromPort %u\n", c.from.c_str(), c.to.c_str(), c.fromPort); errors++;
+          }
+          if (inPorts.count(c.to) && !inPorts[c.to].count(c.toPort)) {
+            std::fprintf(stderr, "Connection %s->%s references unknown toPort %u\n", c.from.c_str(), c.to.c_str(), c.toPort); errors++;
+          }
+        }
+      }
       // fromPort/toPort basic checks (non-negative already via schema; warn only for now)
       for (const auto& c : spec.connections) {
         if (c.fromPort != 0u) {
