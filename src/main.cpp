@@ -774,6 +774,9 @@ int main(int argc, char** argv) {
       if (!spec.connections.empty()) {
         graph.setConnections(spec.connections);
       }
+      // Provide port descriptors to graph (for future adapters)
+      graph.setPortDescriptors(spec.nodes);
+      graph.setPortDescriptors(spec.nodes);
     } catch (const std::exception& e) {
       std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
       return 1;

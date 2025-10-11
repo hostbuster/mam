@@ -23,6 +23,18 @@ public:
     connections_ = conns;
     topoDirty_ = true;
   }
+  // Optional: provide per-node port descriptors parsed from JSON for validation/adaptation
+  void setPortDescriptors(const std::vector<NodeSpec>& nodeSpecs) {
+    inPortChannels_.clear(); outPortChannels_.clear(); idToIndex_.clear();
+    for (size_t i = 0; i < nodes_.size(); ++i) idToIndex_[nodes_[i].id] = i;
+    for (const auto& ns : nodeSpecs) {
+      auto it = idToIndex_.find(ns.id);
+      if (it == idToIndex_.end()) continue;
+      const size_t idx = it->second;
+      for (const auto& ip : ns.ports.inputs) inPortChannels_[idx][ip.index] = ip.channels;
+      for (const auto& op : ns.ports.outputs) outPortChannels_[idx][op.index] = op.channels;
+    }
+  }
 
   // Iterate nodes with their ids (read-only access to Node&). Not realtime-safe to mutate graph.
   void forEachNode(const std::function<void(const std::string&, Node&)>& fn) {
@@ -141,6 +153,10 @@ private:
   std::vector<size_t> topoOrder_{};
   std::vector<size_t> insertionOrder_{};
   bool topoDirty_ = false;
+  // Port descriptors (channel counts); 0 means "match graph channels"
+  std::unordered_map<size_t, std::unordered_map<uint32_t, uint32_t>> inPortChannels_{};
+  std::unordered_map<size_t, std::unordered_map<uint32_t, uint32_t>> outPortChannels_{};
+  std::unordered_map<std::string, size_t> idToIndex_{};
 
   void rebuildTopology() {
     insertionOrder_.clear(); insertionOrder_.reserve(nodes_.size());
