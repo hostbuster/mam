@@ -679,3 +679,24 @@ If helpful, I can start by:
 - Implementing per-node event sub-block processing (sample-accurate).
 - Adding a ParameterRegistry with ramp/smoothing and modulation slots.
 - Introducing latency reporting and block-level parallel scheduler for offline.
+
+### Connections (routed processing)
+
+- Each connection mixes upstream audio into a downstream node, then the graph mixes sinks to the master output.
+- Per-edge fields:
+  - `gainPercent` (wet): level of the source signal into the destination node. 100 = unity (0 dB), 50 ≈ -6 dB, 200 ≈ +6 dB.
+  - `dryPercent` (dry tap): additional copy of the source mixed directly into the final output bus, bypassing the destination node. 0 = none, 100 = unity.
+  - `fromPort`/`toPort` (future): multi-port routing indices (0 = main).
+- Authoring caution: if you also include the same source in the mixer inputs, and/or set a non-zero `dryPercent` on one or more connections, those dry paths are summed. Be mindful of double-counting and headroom.
+
+Example:
+
+```json
+{
+  "connections": [
+    { "from": "kick1",  "to": "delay1", "gainPercent": 100, "dryPercent": 0 },
+    { "from": "snr1",   "to": "delay1", "gainPercent": 80,  "dryPercent": 20 },
+    { "from": "delay1", "to": "delay2", "gainPercent": 100, "dryPercent": 0 }
+  ]
+}
+```

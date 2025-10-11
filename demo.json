@@ -41,9 +41,9 @@
   },
 
   "connections": [
-    { "from": "kick1", "to": "delay1" },
-    { "from": "snr1",  "to": "delay1" },
-    { "from": "delay1", "to": "delay2" }
+    { "from": "kick1",  "to": "delay1", "gainPercent": 100, "dryPercent": 0, "fromPort": 0, "toPort": 0 },
+    { "from": "snr1",   "to": "delay1", "gainPercent": 100, "dryPercent": 0, "fromPort": 0, "toPort": 0 },
+    { "from": "delay1", "to": "delay2", "gainPercent": 100, "dryPercent": 0, "fromPort": 0, "toPort": 0 }
   ],
 
   "commands": []

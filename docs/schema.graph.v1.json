@@ -14,10 +14,12 @@
         "type": "object",
         "required": ["from", "to"],
         "properties": {
-          "from": { "type": "string" },
-          "to": { "type": "string" },
-          "gainPercent": { "type": "number", "minimum": 0, "maximum": 200 },
-          "dryPercent":  { "type": "number", "minimum": 0, "maximum": 200 }
+          "from": { "type": "string", "description": "Source node id (edge starts here)." },
+          "to":   { "type": "string", "description": "Destination node id (edge ends here)." },
+          "gainPercent": { "type": "number", "minimum": 0, "maximum": 200, "description": "Wet send from 'from' into 'to' input in percent. 100 = unity (0 dB), 50 ≈ -6 dB, 200 ≈ +6 dB." },
+          "dryPercent":  { "type": "number", "minimum": 0, "maximum": 200, "description": "Additional dry tap of the 'from' node mixed directly into the master output, bypassing 'to'. 0 = none, 100 = unity. Beware double-counting if the source is also in mixer inputs." },
+          "fromPort":    { "type": "integer", "minimum": 0, "description": "Future multi-port index on source node (0 = main)." },
+          "toPort":      { "type": "integer", "minimum": 0, "description": "Future multi-port index on destination node (0 = main)." }
         }
       }
     },

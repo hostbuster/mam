@@ -83,6 +83,20 @@ public:
 
     // Mix sinks to interleavedOut
     for (size_t i = 0; i < total; ++i) interleavedOut[i] = 0.0f;
+    // Apply dry sends from connections
+    if (!connections_.empty()) {
+      std::unordered_map<std::string,size_t> idToIdx;
+      idToIdx.reserve(nodes_.size());
+      for (size_t i = 0; i < nodes_.size(); ++i) idToIdx.emplace(nodes_[i].id, i);
+      for (const auto& e : connections_) {
+        auto itF = idToIdx.find(e.from);
+        if (itF == idToIdx.end()) continue;
+        const float dry = e.dryPercent * (1.0f/100.0f);
+        if (dry <= 0.0f) continue;
+        const auto& src = outBuffers_[itF->second];
+        for (size_t i = 0; i < total; ++i) interleavedOut[i] += src[i] * dry;
+      }
+    }
     for (size_t idx = 0; idx < nodes_.size(); ++idx) {
       const bool isSink = (downstream_.find(idx) == downstream_.end());
       float gain = 0.0f;
@@ -106,7 +120,7 @@ private:
   std::vector<std::vector<float>> outBuffers_{};
   std::vector<float> work_{};
 
-  struct UpEdge { size_t fromIndex; float gain; };
+  struct UpEdge { size_t fromIndex; float gain; uint32_t fromPort; uint32_t toPort; };
   std::unordered_map<size_t, std::vector<UpEdge>> upstream_{};
   std::unordered_map<size_t, std::vector<size_t>> downstream_{};
   std::vector<size_t> topoOrder_{};
@@ -125,7 +139,7 @@ private:
       auto itF = idToIdx.find(e.from), itT = idToIdx.find(e.to);
       if (itF == idToIdx.end() || itT == idToIdx.end()) continue;
       const float g = e.gainPercent * (1.0f/100.0f);
-      upstream_[itT->second].push_back(UpEdge{itF->second, g});
+      upstream_[itT->second].push_back(UpEdge{itF->second, g, e.fromPort, e.toPort});
       downstream_[itF->second].push_back(itT->second);
       indeg[itT->second]++;
     }

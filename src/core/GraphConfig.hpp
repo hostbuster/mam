@@ -22,6 +22,8 @@ struct GraphSpec {
     std::string to;
     float gainPercent = 100.0f; // wet level into downstream
     float dryPercent = 0.0f;    // optional dry send to output mix
+    uint32_t fromPort = 0;      // future: multi-port routing (audio/control)
+    uint32_t toPort = 0;
   };
   std::vector<Connection> connections; // MVP: order only
   struct MixerInput { std::string id; float gainPercent = 100.0f; };
