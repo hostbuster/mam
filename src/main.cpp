@@ -121,6 +121,7 @@ static void printUsage(const char* exe) {
                "  --loop-count N     Repeat transport sequence N times (default 1)\n"
                "  --tail-ms MS       Decay tail appended (default 250)\n"
                "  --verbose          Print realtime loop diagnostics (loop counter and elapsed time)\n"
+               "  --random-seed N    Override JSON randomSeed for deterministic randomness (0 to skip)\n"
                "          [--validate path.json] [--list-nodes path.json] [--list-params kick|clap]\n"
                "\n"
                "Examples:\n"
@@ -160,8 +161,54 @@ static int listNodesGraphJson(const std::string& path) {
   }
 }
 
+static int structuralCheckJson(const std::string& path) {
+  int errors = 0;
+  try {
+    nlohmann::json j;
+    {
+      std::ifstream f(path);
+      if (!f.good()) { std::fprintf(stderr, "Cannot open %s\n", path.c_str()); return 1; }
+      f >> j;
+    }
+    if (!j.is_object()) { std::fprintf(stderr, "%s: top-level must be object\n", path.c_str()); return 2; }
+    if (!j.contains("version") || !j["version"].is_number_integer()) {
+      std::fprintf(stderr, "Missing/integer 'version'\n"); errors++;
+    }
+    if (!j.contains("nodes") || !j["nodes"].is_array()) {
+      std::fprintf(stderr, "Missing/array 'nodes'\n"); errors++;
+    } else {
+      for (const auto& n : j["nodes"]) {
+        if (!n.is_object()) { std::fprintf(stderr, "Node entry is not object\n"); errors++; continue; }
+        if (!n.contains("id") || !n["id"].is_string()) { std::fprintf(stderr, "Node missing string 'id'\n"); errors++; }
+        if (!n.contains("type") || !n["type"].is_string()) { std::fprintf(stderr, "Node missing string 'type'\n"); errors++; }
+      }
+    }
+    if (j.contains("connections")) {
+      const auto& arr = j["connections"];
+      if (!arr.is_array()) { std::fprintf(stderr, "'connections' must be array\n"); errors++; }
+      else {
+        for (const auto& c : arr) {
+          if (!c.is_object()) { std::fprintf(stderr, "Connection entry is not object\n"); errors++; continue; }
+          if (!c.contains("from") || !c["from"].is_string()) { std::fprintf(stderr, "Connection missing string 'from'\n"); errors++; }
+          if (!c.contains("to") || !c["to"].is_string()) { std::fprintf(stderr, "Connection missing string 'to'\n"); errors++; }
+          if (c.contains("gainPercent") && !c["gainPercent"].is_number()) { std::fprintf(stderr, "Connection gainPercent must be number\n"); errors++; }
+          if (c.contains("dryPercent") && !c["dryPercent"].is_number()) { std::fprintf(stderr, "Connection dryPercent must be number\n"); errors++; }
+          if (c.contains("fromPort") && !c["fromPort"].is_number_integer()) { std::fprintf(stderr, "Connection fromPort must be integer\n"); errors++; }
+          if (c.contains("toPort") && !c["toPort"].is_number_integer()) { std::fprintf(stderr, "Connection toPort must be integer\n"); errors++; }
+        }
+      }
+    }
+    return (errors == 0) ? 0 : 2;
+  } catch (const std::exception& e) {
+    std::fprintf(stderr, "Schema structural check failed: %s\n", e.what());
+    return 1;
+  }
+}
+
 static int validateGraphJson(const std::string& path) {
   try {
+    // Structural sanity (schema-aligned, lightweight)
+    if (int s = structuralCheckJson(path); s == 1) return 1; else if (s == 2) { /* continue with detailed checks but mark */ }
     GraphSpec spec = loadGraphSpecFromJsonFile(path);
     int errors = 0;
     std::vector<std::string> nodeIds;
@@ -379,6 +426,7 @@ int main(int argc, char** argv) {
   bool printMeters = false;          // print meter summary explicitly
 
   bool verbose = false;
+  uint32_t randomSeedOverride = 0;
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
     auto need = [&](int remain) {
@@ -449,6 +497,8 @@ int main(int argc, char** argv) {
       printTopo = true;
     } else if (std::strcmp(a, "--meters") == 0) {
       printMeters = true;
+    } else if (std::strcmp(a, "--random-seed") == 0) {
+      need(1); randomSeedOverride = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--validate") == 0) {
       need(1); validatePath = argv[++i];
     } else if (std::strcmp(a, "--list-nodes") == 0) {
@@ -470,7 +520,11 @@ int main(int argc, char** argv) {
 
   // Utilities
   if (printTopo && !graphPath.empty()) {
-    try { GraphSpec spec = loadGraphSpecFromJsonFile(graphPath); printTopoOrderFromSpec(spec); } catch (...) {}
+    try {
+      GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
+      printTopoOrderFromSpec(spec);
+      printConnectionsSummary(spec);
+    } catch (...) {}
   }
   if (!validatePath.empty()) return validateGraphJson(validatePath);
   if (!listNodesPath.empty()) return listNodesGraphJson(listNodesPath);
@@ -507,7 +561,8 @@ int main(int argc, char** argv) {
     if (!graphPath.empty()) {
       try {
         GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
-        if (spec.randomSeed != 0) setGlobalSeed(spec.randomSeed);
+        if (randomSeedOverride != 0) setGlobalSeed(randomSeedOverride);
+        else if (spec.randomSeed != 0) setGlobalSeed(spec.randomSeed);
         for (const auto& ns : spec.nodes) {
           auto node = createNodeFromSpec(ns);
           if (node) graph.addNode(ns.id, std::move(node));
@@ -538,7 +593,8 @@ int main(int argc, char** argv) {
     if (!graphPath.empty()) {
       try {
         GraphSpec spec2 = loadGraphSpecFromJsonFile(graphPath);
-        if (spec2.randomSeed != 0) setGlobalSeed(spec2.randomSeed);
+        if (randomSeedOverride != 0) setGlobalSeed(randomSeedOverride);
+        else if (spec2.randomSeed != 0) setGlobalSeed(spec2.randomSeed);
         // Synthesize commands from transport, if present
         std::vector<GraphSpec::CommandSpec> cmds = spec2.commands;
         if (spec2.hasTransport) {
@@ -650,6 +706,8 @@ int main(int argc, char** argv) {
   if (!graphPath.empty()) {
     try {
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
+      if (randomSeedOverride != 0) setGlobalSeed(randomSeedOverride);
+      else if (spec.randomSeed != 0) setGlobalSeed(spec.randomSeed);
       for (const auto& ns : spec.nodes) {
         auto node = createNodeFromSpec(ns);
         if (node) graph.addNode(ns.id, std::move(node));

@@ -10,6 +10,7 @@
 
 inline void printTopoOrderFromSpec(const GraphSpec& spec);
 inline uint64_t computeGraphPrerollSamples(const GraphSpec& spec, uint32_t sampleRate);
+inline void printConnectionsSummary(const GraphSpec& spec);
 
 // Inline impls
 inline void printTopoOrderFromSpec(const GraphSpec& spec) {
@@ -72,6 +73,18 @@ inline uint64_t computeGraphPrerollSamples(const GraphSpec& spec, uint32_t sampl
   }
   double maxS = 0.0; for (const auto& kv : acc) if (kv.second > maxS) maxS = kv.second;
   return static_cast<uint64_t>(maxS + 0.5);
+}
+
+inline void printConnectionsSummary(const GraphSpec& spec) {
+  if (spec.connections.empty()) {
+    std::fprintf(stderr, "No connections defined.\n");
+    return;
+  }
+  std::fprintf(stderr, "Connections (%zu):\n", spec.connections.size());
+  for (const auto& c : spec.connections) {
+    std::fprintf(stderr, "  %s -> %s  wet=%g%% dry=%g%% ports %u->%u\n",
+                 c.from.c_str(), c.to.c_str(), c.gainPercent, c.dryPercent, c.fromPort, c.toPort);
+  }
 }
 
 
