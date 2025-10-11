@@ -26,6 +26,12 @@
 - Observability: Meter/Wiretap nodes, lightweight JSON trace, per-node perf counters
 - Validation & tooling: JSON Schema validation in `mam --validate`, golden renders, fuzzed command streams, CI presets; integrate clang-tidy checks
 
+### Proposed acceptance criteria
+- Transport param-locks: JSON allows `patterns[i].locks` with `{param|paramId, value|rampMs}`; both realtime and offline render identical automation.
+- Schema validation: `--validate` reports unknown node types/params, invalid ranges, and bad pattern targets/lengths; exits non-zero on failures.
+- Offline scheduler: rendering via scheduler matches baseline buffer within -120 dBFS; parallel mode does not deadlock; lints clean.
+- Param maps: all instrument params documented in `docs/ParamTables.md`; name→id mapping covers all used names in examples.
+
 ## Phased Roadmap
 
 ### Phase 1: Build and structure

@@ -272,10 +272,13 @@ Notes:
   - Parameter registry: consistent `paramId` mapping per node type; ramp smoothing.
   - Block scheduler (offline): parallelize graph levels using `JobPool`.
   - More instruments: snare, hat, bass; more mixer controls.
+  - Transport param-locks: allow per-step parameter sets/ramps via patterns.
+  - Validation: enforce schema on `--validate`; check pattern targets/lengths; clamp params from `ParamMap`.
 - Mid-term
   - Transport node (tempo, swing, patterns) driving triggers per node; host sync options. (Scaffold added)
   - Preset schema for instruments and graphs; versioned upgrades.
   - CI with sanitizer presets; clang-tidy gate; format checks.
+  - Offline scheduler integration: topo levels, buffer aliasing, per-node latency/preroll.
 - Long-term
   - Cross-platform audio backends; plugin targets (AUv3, VST3).
   - GUI editor for node graphs and live performance controls.
