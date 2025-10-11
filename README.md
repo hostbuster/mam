@@ -292,6 +292,47 @@ Notes:
   - Cross-platform audio backends; plugin targets (AUv3, VST3).
   - GUI editor for node graphs and live performance controls.
 
+### Planned: Transport param-locks (design)
+
+Goal: let patterns do more than triggers by attaching parameter changes at specific steps. Both realtime and offline must render identical automation.
+
+- JSON shape (proposal):
+
+```json
+{
+  "transport": {
+    "bpm": 128,
+    "resolution": 16,
+    "patterns": [
+      { "nodeId": "kick1", "steps": "x...x...x...x...",
+        "locks": [
+          { "step": 0,  "param": "GAIN", "value": 0.9 },
+          { "step": 8,  "param": "GAIN", "value": 1.0, "rampMs": 50 },
+          { "step": 12, "param": "F0",   "value": 140.0, "rampMs": 100 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- Semantics: at each `step` the engine emits `SetParam` or `SetParamRamp` before processing that sub-block. `param` may be a name or numeric `paramId`.
+- Realtime: locks are pre-enqueued into the command queue and/or emitted by `TransportNode` at sample-accurate step boundaries.
+- Offline: locks are generated alongside triggers in the timeline.
+
+### Planned: Offline topo scheduler (design)
+
+- DAG execution: process nodes by topological level (when connections land), mixing or routing buffers between levels.
+- Buffer management: reuse via `BufferPool`; alias analysis to avoid copies; interleaved/planar adapters.
+- Latency/preroll: nodes may report latency; timeline rendering inserts pre-roll so steady-state is aligned.
+- Parity: results must match non-parallel baseline within very low tolerance.
+
+### Planned: Validation & tooling
+
+- `--validate` enforces JSON Schema in `docs/schema.graph.v1.json`, warns on unknown nodes/params, and clamps out-of-range params (per `ParamMap`).
+- `--list-params <type>` prints parameter IDs/names/ranges/smoothing; used to author locks and commands.
+- Future: `mam --list-nodes` shows available node types and their key params.
+
 ## Development Guidelines
 
 - **Language level**: C++17. Prefer standard library facilities over custom code.

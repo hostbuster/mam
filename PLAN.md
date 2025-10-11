@@ -26,6 +26,22 @@
 - Observability: Meter/Wiretap nodes, lightweight JSON trace, per-node perf counters
 - Validation & tooling: JSON Schema validation in `mam --validate`, golden renders, fuzzed command streams, CI presets; integrate clang-tidy checks
 
+### Design notes
+
+1) Transport param-locks
+- JSON: `transport.patterns[i].locks[]` entries with `{ step, param|paramId, value, rampMs? }`.
+- Realtime: pre-enqueue locks or emit via `TransportNode` at step boundary; apply before processing the sub-block.
+- Offline: generate locks into the timeline alongside triggers; preserve sample-accurate order.
+
+2) Offline topo scheduler
+- Topological sort when connections exist; process levels in parallel using `JobPool`.
+- BufferPool for scratch; alias analysis to reuse buffers; optional interleaved/planar conversions.
+- Per-node latency API with preroll to align rendered audio; tests compare to baseline within -120 dBFS.
+
+3) Validation/tooling
+- JSON Schema enforced in `--validate`; include checks for pattern lengths, unknown nodes/params, and ParamMap clamping.
+- CLI printing for params/nodes; golden renders and fuzzed event streams in CI presets.
+
 ### Proposed acceptance criteria
 - Transport param-locks: JSON allows `patterns[i].locks` with `{param|paramId, value|rampMs}`; both realtime and offline render identical automation.
 - Schema validation: `--validate` reports unknown node types/params, invalid ranges, and bad pattern targets/lengths; exits non-zero on failures.
