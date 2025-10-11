@@ -17,16 +17,33 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
   }
   if (spec.type == "transport") {
     auto t = std::make_unique<TransportNode>();
-    // Minimal: parse pattern from paramsJson
+    // Parse transport params: bpm, resolution, swing, ramps, patterns
     try {
       nlohmann::json j = nlohmann::json::parse(spec.paramsJson);
       t->bpm = static_cast<float>(j.value("bpm", 120.0));
       t->lengthBars = j.value("lengthBars", 1u);
       t->resolution = j.value("resolution", 16u);
       t->swingPercent = static_cast<float>(j.value("swingPercent", 0.0));
-      if (j.contains("pattern")) {
-        t->pattern.nodeId = j["pattern"].value("nodeId", "");
-        t->pattern.steps = j["pattern"].value("steps", "");
+      if (j.contains("tempoRamps")) {
+        for (const auto& tp : j.at("tempoRamps")) {
+          TransportNode::TempoPoint p{};
+          p.bar = tp.value("bar", 0u);
+          p.bpm = static_cast<float>(tp.value("bpm", t->bpm));
+          t->tempoRamps.push_back(p);
+        }
+      }
+      if (j.contains("patterns")) {
+        for (const auto& pj : j.at("patterns")) {
+          TransportNode::Pattern p{};
+          p.nodeId = pj.value("nodeId", "");
+          p.steps = pj.value("steps", "");
+          t->patterns.push_back(p);
+        }
+      } else if (j.contains("pattern")) { // backwards-compat
+        TransportNode::Pattern p{};
+        p.nodeId = j["pattern"].value("nodeId", "");
+        p.steps = j["pattern"].value("steps", "");
+        t->patterns.push_back(p);
       }
     } catch (...) {}
     return t;
