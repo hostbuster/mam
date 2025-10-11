@@ -31,7 +31,41 @@
         "properties": {
           "id": { "type": "string", "minLength": 1 },
           "type": { "type": "string", "enum": ["kick", "clap", "transport", "delay", "meter"] },
-          "params": { "type": "object" }
+          "params": { "type": "object" },
+          "ports": {
+            "type": "object",
+            "description": "Optional port descriptors (MVP). Input and output ports with index/name/type/channels.",
+            "properties": {
+              "inputs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["index", "type"],
+                  "properties": {
+                    "index": { "type": "integer", "minimum": 0 },
+                    "name": { "type": "string" },
+                    "type": { "type": "string", "enum": ["audio", "control", "event", "midi"] },
+                    "channels": { "type": "integer", "minimum": 1 },
+                    "role": { "type": "string", "enum": ["main", "sidechain", "aux"] }
+                  }
+                }
+              },
+              "outputs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["index", "type"],
+                  "properties": {
+                    "index": { "type": "integer", "minimum": 0 },
+                    "name": { "type": "string" },
+                    "type": { "type": "string", "enum": ["audio", "control", "event", "midi"] },
+                    "channels": { "type": "integer", "minimum": 1 },
+                    "role": { "type": "string", "enum": ["main", "sidechain", "aux"] }
+                  }
+                }
+              }
+            }
+          }
         }
       }
     },

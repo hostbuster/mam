@@ -24,6 +24,16 @@
 - Validation: named-param resolution; transport pattern target/steps checks; duplicate mixer input detection; dry+mixed double-count warnings; type param sanity (delay, meter)
 - Scaffolds: `BufferPool` and `OfflineTopoScheduler` for future topo/latency work
 
+### Top priority (next)
+- Multi-port routing and port descriptors
+  - Declare per-node ports (inputs/outputs with index/name/type/channels/role) in schema and JSON.
+  - Enforce `fromPort`/`toPort` against node descriptors in validation.
+  - Implement per-port accumulation in `Graph` (MVP collapse done); expose hooks for port-aware nodes.
+  - Channel adapters (mono↔stereo) with validation warnings.
+- JSON Schema validation in CLI
+  - Integrate a draft 2020-12 validator and validate against `docs/schema.graph.v1.json` in `--validate`.
+  - Keep semantic checks (cycles, ranges, param maps) after schema pass.
+
 ### Next up
 - Routing engine (Phase 4 MVP → full):
   - Add explicit audio ports and per-edge gains; execute graph strictly by topological order from `connections` (both offline and realtime). Implement multi-port mixing.
