@@ -22,7 +22,7 @@
       "ports": { "inputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ],
                   "outputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ] } },
     { "id": "meter1", "type": "meter", "params": { "target": "delay1" } },
-    { "id": "comp1", "type": "compressor", "params": { "thresholdDb": -8, "ratio": 1.5, "attackMs": 15, "releaseMs": 120, "makeupDb": 0 },
+    { "id": "comp1", "type": "compressor", "params": { "thresholdDb": -2, "ratio": 1.2, "attackMs": 25, "releaseMs": 200, "makeupDb": 0 },
       "ports": { "inputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" }, { "index": 1, "type": "audio", "channels": 2, "role": "sidechain" } ],
                   "outputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ] } }
   ],
@@ -52,7 +52,7 @@
     { "from": "kick1",  "to": "delay1", "gainPercent": 70,  "dryPercent": 0, "fromPort": 0, "toPort": 0 },
     { "from": "snr1",   "to": "delay1", "gainPercent": 60,  "dryPercent": 0, "fromPort": 0, "toPort": 0 },
     { "from": "delay1", "to": "delay2", "gainPercent": 100, "dryPercent": 0, "fromPort": 0, "toPort": 0 },
-    { "from": "kick1",  "to": "comp1",  "gainPercent": 100, "dryPercent": 0, "fromPort": 0, "toPort": 1 }
+    { "from": "kick1",  "to": "comp1",  "gainPercent": 60,  "dryPercent": 0, "fromPort": 0, "toPort": 1 }
   ],
 
   "commands": []

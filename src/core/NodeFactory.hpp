@@ -80,10 +80,10 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
     auto c = std::make_unique<CompressorNode>();
     try {
       nlohmann::json j = nlohmann::json::parse(spec.paramsJson);
-      c->thresholdDb = static_cast<float>(j.value("thresholdDb", -18.0));
-      c->ratio = static_cast<float>(j.value("ratio", 2.0));
-      c->attackMs = static_cast<float>(j.value("attackMs", 10.0));
-      c->releaseMs = static_cast<float>(j.value("releaseMs", 100.0));
+      c->thresholdDb = static_cast<float>(j.value("thresholdDb", -2.0));
+      c->ratio = static_cast<float>(j.value("ratio", 1.2));
+      c->attackMs = static_cast<float>(j.value("attackMs", 25.0));
+      c->releaseMs = static_cast<float>(j.value("releaseMs", 200.0));
       c->makeupDb = static_cast<float>(j.value("makeupDb", 0.0));
     } catch (...) {}
     return c;
