@@ -8,6 +8,7 @@
 #include "TransportNode.hpp"
 #include "DelayNode.hpp"
 #include "MeterNode.hpp"
+#include "CompressorNode.hpp"
 // Mixer is not created via NodeFactory; it is set on Graph from GraphSpec.mixer
 
 inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
@@ -74,6 +75,18 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
   if (spec.type == "meter") {
     // Meter is an effect-style node; creation from params only stores target for documentation.
     return std::make_unique<MeterNode>(spec.id);
+  }
+  if (spec.type == "compressor") {
+    auto c = std::make_unique<CompressorNode>();
+    try {
+      nlohmann::json j = nlohmann::json::parse(spec.paramsJson);
+      c->thresholdDb = static_cast<float>(j.value("thresholdDb", -18.0));
+      c->ratio = static_cast<float>(j.value("ratio", 2.0));
+      c->attackMs = static_cast<float>(j.value("attackMs", 10.0));
+      c->releaseMs = static_cast<float>(j.value("releaseMs", 100.0));
+      c->makeupDb = static_cast<float>(j.value("makeupDb", 0.0));
+    } catch (...) {}
+    return c;
   }
   // Unknown node type
   std::fprintf(stderr, "Warning: Unknown node type '%s' (id='%s')\n", spec.type.c_str(), spec.id.c_str());
