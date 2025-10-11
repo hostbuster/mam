@@ -158,6 +158,12 @@ Examples:
 ./build/mam --graph demo.json --wav demo.wav --duration 10
 ```
 
+#### Normalization
+
+- `--normalize`: normalize output peak to -1.0 dBFS.
+- `--peak-target dB`: normalize peak to a specific target (e.g., `-0.3`).
+- The exporter prints both pre-/post-peak and applied gain in dB. Normalization is applied prior to file write and never clips.
+
 Timed realtime exit:
 
 ```bash

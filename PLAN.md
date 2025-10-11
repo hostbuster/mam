@@ -16,6 +16,7 @@
 - Transport param-locks implemented in realtime and offline (pattern `locks`)
 - Offline: graph/timeline/parallel renderers; `--offline-threads` CLI
 - Export UX: auto-duration (transport bars/ramps or last command) with tail; flags `--duration`, `--bars`, `--loop-count`, `--tail-ms`
+ - Export normalization: `--normalize` (-1 dBFS) and `--peak-target dB`, with printed pre-/post-peak and applied gain
 - Mixer: per-input gains + master gain with optional soft clip
 - CLI: `--graph`, `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
 - Validation: named-param resolution; transport pattern target/steps checks
