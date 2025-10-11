@@ -8,15 +8,15 @@
     {
       "id": "kick1",
       "type": "kick",
-      "params": { "f0": 120, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 190, "gain": 0.9, "click": 0.1, "bpm": 0, "loop": false }
+      "params": { "f0": 120, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 220, "gain": 0.9, "click": 0.1, "bpm": 0, "loop": false }
     },
     {
       "id": "snr1",
       "type": "clap",
       "params": { "ampDecayMs": 180, "gain": 0.85, "bpm": 0, "loop": false }
     },
-    { "id": "delay1", "type": "delay", "params": { "delayMs": 350, "feedback": 0.35, "mix": 0.25 } },
-    { "id": "delay2", "type": "delay", "params": { "delayMs": 190, "feedback": 0.25, "mix": 0.18 } },
+    { "id": "delay1", "type": "delay", "params": { "delayMs": 350, "feedback": 0.35, "mix": 1.0 } },
+    { "id": "delay2", "type": "delay", "params": { "delayMs": 70, "feedback": 0.25, "mix": 1.0 } },
     { "id": "meter1", "type": "meter", "params": { "target": "delay1" } }
   ],
 
@@ -24,9 +24,9 @@
     "masterPercent": 90,
     "softClip": true,
     "inputs": [
-      { "id": "kick1", "gainPercent": 85 },
-      { "id": "snr1",  "gainPercent": 75 },
-      { "id": "delay1",  "gainPercent": 100 }
+      { "id": "kick1", "gainPercent": 90 },
+      { "id": "snr1",  "gainPercent": 65 },
+      { "id": "delay2",  "gainPercent": 30 }
     ]
   },
 
@@ -41,8 +41,8 @@
   },
 
   "connections": [
-    { "from": "kick1",  "to": "delay1", "gainPercent": 100, "dryPercent": 0, "fromPort": 0, "toPort": 0 },
-    { "from": "snr1",   "to": "delay1", "gainPercent": 100, "dryPercent": 0, "fromPort": 0, "toPort": 0 },
+    { "from": "kick1",  "to": "delay1", "gainPercent": 70,  "dryPercent": 0, "fromPort": 0, "toPort": 0 },
+    { "from": "snr1",   "to": "delay1", "gainPercent": 60,  "dryPercent": 0, "fromPort": 0, "toPort": 0 },
     { "from": "delay1", "to": "delay2", "gainPercent": 100, "dryPercent": 0, "fromPort": 0, "toPort": 0 }
   ],
 

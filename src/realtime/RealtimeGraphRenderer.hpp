@@ -12,6 +12,7 @@
 #include "../core/Command.hpp"
 #include <vector>
 #include <algorithm>
+#include <atomic>
 #include "../core/TransportNode.hpp"
 
 class RealtimeGraphRenderer {
@@ -81,6 +82,9 @@ public:
     unit_.release();
   }
 
+  double sampleRate() const noexcept { return sampleRate_; }
+  SampleTime sampleCounter() const noexcept { return sampleCounter_.load(std::memory_order_relaxed); }
+
 private:
   static OSStatus render(void* inRefCon, AudioUnitRenderActionFlags*, const AudioTimeStamp*, UInt32, UInt32 inNumberFrames, AudioBufferList* ioData) noexcept {
     auto* self = static_cast<RealtimeGraphRenderer*>(inRefCon);
@@ -88,7 +92,7 @@ private:
     float* interleaved = static_cast<float*>(ioData->mBuffers[0].mData);
 
     // Compute split points for sample-accurate event application
-    const SampleTime blockStartAbs = self->sampleCounter_;
+    const SampleTime blockStartAbs = self->sampleCounter_.load(std::memory_order_relaxed);
     const SampleTime cutoff = blockStartAbs + static_cast<SampleTime>(inNumberFrames);
     std::vector<uint32_t> splitOffsets;
     splitOffsets.reserve(8);
@@ -102,9 +106,9 @@ private:
           splitOffsets.push_back(off);
         }
       }
-      self->sampleCounter_ = cutoff;
+      self->sampleCounter_.store(cutoff, std::memory_order_relaxed);
     } else {
-      self->sampleCounter_ = cutoff;
+      self->sampleCounter_.store(cutoff, std::memory_order_relaxed);
     }
     splitOffsets.push_back(inNumberFrames);
     std::sort(splitOffsets.begin(), splitOffsets.end());
@@ -159,7 +163,7 @@ private:
   Graph* graph_ = nullptr;
   uint32_t channels_ = 2;
   double sampleRate_ = 48000.0;
-  SampleTime sampleCounter_ = 0;
+  std::atomic<SampleTime> sampleCounter_{0};
   SpscCommandQueue<2048>* cmdQueue_ = nullptr;
   std::vector<Command> drained_;
 };

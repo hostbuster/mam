@@ -120,6 +120,7 @@ static void printUsage(const char* exe) {
                "  --bars N           Force N bars from transport (if present)\n"
                "  --loop-count N     Repeat transport sequence N times (default 1)\n"
                "  --tail-ms MS       Decay tail appended (default 250)\n"
+               "  --verbose          Print realtime loop diagnostics (loop counter and elapsed time)\n"
                "          [--validate path.json] [--list-nodes path.json] [--list-params kick|clap]\n"
                "\n"
                "Examples:\n"
@@ -283,6 +284,15 @@ static int validateGraphJson(const std::string& path) {
           std::fprintf(stderr, "Connection %s->%s dryPercent out of range: %g\n", c.from.c_str(), c.to.c_str(), c.dryPercent); errors++;
         }
       }
+      // fromPort/toPort basic checks (non-negative already via schema; warn only for now)
+      for (const auto& c : spec.connections) {
+        if (c.fromPort != 0u) {
+          std::fprintf(stderr, "Warning: fromPort %u on %s->%s is not implemented yet (treated as 0)\n", c.fromPort, c.from.c_str(), c.to.c_str());
+        }
+        if (c.toPort != 0u) {
+          std::fprintf(stderr, "Warning: toPort %u on %s->%s is not implemented yet (treated as 0)\n", c.toPort, c.from.c_str(), c.to.c_str());
+        }
+      }
     }
     if (errors == 0) {
       std::printf("%s: OK\n", path.c_str());
@@ -318,6 +328,7 @@ int main(int argc, char** argv) {
   bool printTopo = false;            // print topo order from connections
   bool printMeters = false;          // print meter summary explicitly
 
+  bool verbose = false;
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
     auto need = [&](int remain) {
@@ -380,6 +391,8 @@ int main(int argc, char** argv) {
       doNormalize = true; peakTargetDb = -1.0;
     } else if (std::strcmp(a, "--peak-target") == 0) {
       need(1); doNormalize = true; peakTargetDb = std::atof(argv[++i]);
+    } else if (std::strcmp(a, "--verbose") == 0 || std::strcmp(a, "-v") == 0) {
+      verbose = true;
     } else if (std::strcmp(a, "--graph") == 0) {
       need(1); graphPath = argv[++i];
     } else if (std::strcmp(a, "--print-topo") == 0) {
@@ -583,6 +596,7 @@ int main(int argc, char** argv) {
   // Realtime renderer path via graph
   Graph graph;
   std::thread transportFeeder;
+  uint64_t rtLoopLen = 0; // frames
   if (!graphPath.empty()) {
     try {
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
@@ -656,6 +670,7 @@ int main(int argc, char** argv) {
       if (loopLen == 0) loopLen = static_cast<uint64_t>(spec.transport.lengthBars * (4.0 * (60.0 / std::max(1.0f, spec.transport.bpm))) * 48000.0);
       const uint64_t safety = 128;
       loopLen += safety;
+      rtLoopLen = loopLen;
       std::vector<GraphSpec::CommandSpec> realtimeCmds;
       for (uint64_t offset = 0; offset < horizonFrames; offset += loopLen) {
         for (auto c : baseCmds) { c.sampleTime += offset; realtimeCmds.push_back(c); }
@@ -699,12 +714,23 @@ int main(int argc, char** argv) {
     } catch (...) {}
   }
   double elapsedSec = 0.0;
+  uint64_t lastPrintedLoop = 0;
   while (gRunning.load()) {
     if (isStdinReady()) {
       char buf[4];
       (void)read(STDIN_FILENO, buf, sizeof(buf));
       gRunning.store(false);
       break;
+    }
+    if (verbose && rtLoopLen > 0) {
+      const uint64_t frames = static_cast<uint64_t>(rt.sampleCounter());
+      const uint64_t loopIdx = frames / rtLoopLen;
+      if (loopIdx > lastPrintedLoop) {
+        const double seconds = static_cast<double>(frames) / rt.sampleRate();
+        std::fprintf(stderr, "Loop %llu at %s (%.3fs)\n",
+                     static_cast<unsigned long long>(loopIdx), formatDuration(seconds).c_str(), seconds);
+        lastPrintedLoop = loopIdx;
+      }
     }
     if (quitAfterSec > 0.0) {
       elapsedSec += 0.05;
