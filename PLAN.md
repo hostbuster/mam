@@ -18,21 +18,21 @@
 - Export UX: auto-duration (transport bars/ramps or last command) with tail; flags `--duration`, `--bars`, `--loop-count`, `--tail-ms`
  - Export normalization: `--normalize` (-1 dBFS) and `--peak-target dB`, with printed pre-/post-peak and applied gain
 - Mixer: per-input gains + master gain with optional soft clip
-- Routing: topological execution via `connections` with per-edge gains; cycle checks
+- Routing: topological execution via `connections` with per-edge gains; cycle checks; per-edge `dryPercent` tap to master; `fromPort`/`toPort` fields scaffolded
  - Latency & preroll: nodes report latency; offline export adds preroll automatically to capture full transients
 - CLI: `--graph`, `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
-- Validation: named-param resolution; transport pattern target/steps checks
+- Validation: named-param resolution; transport pattern target/steps checks; duplicate mixer input detection; dry+mixed double-count warnings; type param sanity (delay, meter)
 - Scaffolds: `BufferPool` and `OfflineTopoScheduler` for future topo/latency work
 
 ### Next up
 - Routing engine (Phase 4 MVP → full):
-  - Add explicit audio ports and per-edge gains; execute graph strictly by topological order from `connections` (both offline and realtime).
+  - Add explicit audio ports and per-edge gains; execute graph strictly by topological order from `connections` (both offline and realtime). Implement multi-port mixing.
   - Replace global-insert effects with per-connection processing; maintain `MixerNode` as a terminal node.
   - Report per-node latency; add preroll and optional compensation (offline first).
 - Transport timing: finalize swing nuances and ramp curves; add seek and loop ranges.
 - Parameters: complete name→id auto-generation; stricter load-time validation/clamping across all nodes.
 - Observability: expand Meter/Wiretap nodes; JSON perf trace; per-node counters.
-- Validation & tooling: JSON Schema validation in `mam --validate`; golden renders; CI with sanitizers and clang-tidy.
+- Validation & tooling: JSON Schema validation in `mam --validate` (integrate draft 2020-12); golden renders; CI with sanitizers and clang-tidy.
 
 ### Design notes
 

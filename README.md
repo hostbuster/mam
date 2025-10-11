@@ -48,7 +48,9 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - JSON commands are honored in offline renders (timeline renderer)
 - Parallel offline renderer (`--offline-threads N`) for faster exports
 - Parameter smoothing scaffold (node gain) via `ParameterRegistry`
- - Routed, topological graph execution with `connections` and per-edge gains (MVP)
+- Routed, topological graph execution with `connections` and per-edge gains (MVP)
+- Per-edge wet/dry semantics: `gainPercent` (wet into destination) and `dryPercent` (dry tap to master)
+- Realtime loop diagnostics gated by `--verbose`
 
 ## Build (macOS)
 
@@ -170,6 +172,7 @@ Examples:
 
 - `--print-topo`: print a simple topological order derived from `connections` (MVP). Helpful to validate routing intent.
 - `--meters`: after export, print a concise line with peak and RMS in dBFS.
+- `--verbose`: in realtime, print loop counter and elapsed time at loop boundaries.
 
 Examples:
 
@@ -350,7 +353,7 @@ Notes:
   - Block scheduler (offline): parallelize graph levels using `JobPool`.
   - More instruments: snare, hat, bass; more mixer controls.
   - Transport param-locks: allow per-step parameter sets/ramps via patterns.
-  - Validation: enforce schema on `--validate`; check pattern targets/lengths; clamp params from `ParamMap`.
+  - Validation: enforce schema on `--validate`; check pattern targets/lengths; clamp params from `ParamMap`; warn for duplicate mixer inputs and dry+mixed double-count scenarios; basic type param sanity for delay/meter.
 - Mid-term
   - Transport node (tempo, swing, patterns) driving triggers per node; host sync options. (Scaffold added)
   - Preset schema for instruments and graphs; versioned upgrades.
