@@ -8,6 +8,17 @@
     "sampleRate": { "type": "number", "minimum": 8000 },
     "channels": { "type": "integer", "minimum": 1 },
     "randomSeed": { "type": "integer", "minimum": 0 },
+    "connections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["from", "to"],
+        "properties": {
+          "from": { "type": "string" },
+          "to": { "type": "string" }
+        }
+      }
+    },
     "nodes": {
       "type": "array",
       "items": {

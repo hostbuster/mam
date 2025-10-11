@@ -36,6 +36,15 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
     }
   }
 
+  if (j.contains("connections")) {
+    for (const auto& c : j.at("connections")) {
+      GraphSpec::Connection cc;
+      cc.from = c.value("from", "");
+      cc.to = c.value("to", "");
+      spec.connections.push_back(cc);
+    }
+  }
+
   if (j.contains("mixer")) {
     spec.hasMixer = true;
     const auto& m = j.at("mixer");
