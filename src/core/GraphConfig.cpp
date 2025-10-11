@@ -41,6 +41,7 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
       GraphSpec::Connection cc;
       cc.from = c.value("from", "");
       cc.to = c.value("to", "");
+      cc.gainPercent = c.value("gainPercent", 100.0f);
       spec.connections.push_back(cc);
     }
   }

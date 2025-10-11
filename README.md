@@ -48,6 +48,7 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - JSON commands are honored in offline renders (timeline renderer)
 - Parallel offline renderer (`--offline-threads N`) for faster exports
 - Parameter smoothing scaffold (node gain) via `ParameterRegistry`
+ - Routed, topological graph execution with `connections` and per-edge gains (MVP)
 
 ## Build (macOS)
 
@@ -203,7 +204,9 @@ See `docs/schema.graph.v1.json` for a machine-readable schema.
   - `type` (string): e.g., `kick`
   - `params` (object): type-specific settings
     - kick params: `f0`, `fend`, `pitchDecayMs`, `ampDecayMs`, `gain`, `click`, `bpm`, `loop`
-- `connections` (array, optional): reserved for future routing
+- `connections` (array, optional): routed execution
+  - Each item: `{ "from": "nodeId", "to": "nodeId", "gainPercent": 100 }`
+  - The engine computes a topological order and executes nodes per block; per-edge gain is applied when summing upstream audio into a node’s input.
 
 ### Example (realtime, looping kick)
 

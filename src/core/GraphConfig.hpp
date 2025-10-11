@@ -17,7 +17,7 @@ struct GraphSpec {
   uint32_t channels = 2;
   uint32_t randomSeed = 0; // 0 means unspecified
   std::vector<NodeSpec> nodes;
-  struct Connection { std::string from; std::string to; };
+  struct Connection { std::string from; std::string to; float gainPercent = 100.0f; };
   std::vector<Connection> connections; // MVP: order only
   struct MixerInput { std::string id; float gainPercent = 100.0f; };
   struct Mixer { std::vector<MixerInput> inputs; float masterPercent = 100.0f; bool softClip = true; };

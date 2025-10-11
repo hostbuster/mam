@@ -273,6 +273,38 @@ static int validateGraphJson(const std::string& path) {
         }
       }
     }
+
+    // Connections validation and cycle check (Kahn)
+    if (!spec.connections.empty()) {
+      // endpoints exist
+      for (const auto& c : spec.connections) {
+        if (!hasNode(c.from)) { std::fprintf(stderr, "Connection 'from' unknown node '%s'\n", c.from.c_str()); errors++; }
+        if (!hasNode(c.to)) { std::fprintf(stderr, "Connection 'to' unknown node '%s'\n", c.to.c_str()); errors++; }
+        if (c.gainPercent < 0.0f || c.gainPercent > 200.0f) {
+          std::fprintf(stderr, "Connection %s->%s gainPercent out of range: %g\n", c.from.c_str(), c.to.c_str(), c.gainPercent); errors++;
+        }
+      }
+      // cycle detection
+      std::unordered_map<std::string,int> indeg;
+      for (const auto& n : spec.nodes) indeg[n.id] = 0;
+      for (const auto& e : spec.connections) if (indeg.find(e.to)!=indeg.end()) indeg[e.to]++;
+      std::unordered_multimap<std::string,std::string> adj;
+      for (const auto& e : spec.connections) adj.emplace(e.from, e.to);
+      std::vector<std::string> q; q.reserve(indeg.size());
+      for (const auto& kv : indeg) if (kv.second==0) q.push_back(kv.first);
+      size_t visited = 0;
+      for (size_t i = 0; i < q.size(); ++i) {
+        const auto u = q[i]; visited++;
+        auto range = adj.equal_range(u);
+        for (auto it = range.first; it != range.second; ++it) {
+          auto& v = it->second; if (--indeg[v]==0) q.push_back(v);
+        }
+      }
+      if (visited != indeg.size()) {
+        std::fprintf(stderr, "Connections contain a cycle (visited %zu of %zu)\n", visited, indeg.size());
+        errors++;
+      }
+    }
     if (errors == 0) {
       std::printf("%s: OK\n", path.c_str());
       return 0;
@@ -447,6 +479,9 @@ int main(int argc, char** argv) {
           const float master = spec.mixer.masterPercent * (1.0f/100.0f);
           graph.setMixer(std::make_unique<MixerNode>(std::move(chans), master, spec.mixer.softClip));
         }
+        if (!spec.connections.empty()) {
+          graph.setConnections(spec.connections);
+        }
         if (printTopo) printTopoOrderFromSpec(spec);
       } catch (const std::exception& e) {
         std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
@@ -583,6 +618,9 @@ int main(int argc, char** argv) {
         }
         const float master = spec.mixer.masterPercent * (1.0f/100.0f);
         graph.setMixer(std::make_unique<MixerNode>(std::move(chans), master, spec.mixer.softClip));
+      }
+      if (!spec.connections.empty()) {
+        graph.setConnections(spec.connections);
       }
     } catch (const std::exception& e) {
       std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
