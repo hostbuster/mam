@@ -43,7 +43,23 @@
     "lengthBars": 8,
     "resolution": 16,
     "patterns": [
-      { "nodeId": "kick1", "steps": "x...x...x...x..." },
+      { "nodeId": "kick1", "steps": "x...x...x...x...",
+        "locks": [
+          { "step": 0,  "param": "F0",            "value": 120 },
+          { "step": 4,  "param": "F0",            "value": 110, "rampMs": 30 },
+          { "step": 8,  "param": "F0",            "value": 100 },
+          { "step": 12, "param": "F0",            "value": 115, "rampMs": 30 },
+
+          { "step": 0,  "param": "AMP_DECAY_MS", "value": 220 },
+          { "step": 8,  "param": "AMP_DECAY_MS", "value": 180, "rampMs": 20 },
+
+          { "step": 0,  "param": "PITCH_DECAY_MS", "value": 55 },
+          { "step": 8,  "param": "PITCH_DECAY_MS", "value": 65 },
+
+          { "step": 0,  "param": "GAIN",          "value": 0.90 },
+          { "step": 12, "param": "GAIN",          "value": 1.00, "rampMs": 40 }
+        ]
+      },
       { "nodeId": "snr1",  "steps": "....x.......x..." }
     ]
   },

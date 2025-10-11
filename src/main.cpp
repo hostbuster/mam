@@ -657,7 +657,13 @@ int main(int argc, char** argv) {
         // Synthesize commands from transport, if present
         std::vector<GraphSpec::CommandSpec> cmds = spec2.commands;
         if (spec2.hasTransport) {
-          auto gen = generateCommandsFromTransport(spec2.transport, sr);
+          // Generate transport commands covering requested bars/loops
+          GraphSpec::Transport tgen = spec2.transport;
+          const uint32_t baseBars = spec2.transport.lengthBars ? spec2.transport.lengthBars : 1u;
+          const uint32_t useBars = overrideBars > 0 ? overrideBars : baseBars;
+          const uint32_t loops = overrideLoopCount > 0 ? overrideLoopCount : 1u;
+          tgen.lengthBars = useBars * loops;
+          auto gen = generateCommandsFromTransport(tgen, sr);
           cmds.insert(cmds.end(), gen.begin(), gen.end());
         }
         // Resolve named params to IDs based on node type
