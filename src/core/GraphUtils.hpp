@@ -98,7 +98,8 @@ inline void printPortsSummary(const GraphSpec& spec) {
       std::fprintf(stderr, "    inputs: ");
       for (size_t i=0;i<n.ports.inputs.size();++i) {
         const auto& p = n.ports.inputs[i];
-        std::fprintf(stderr, "%u:%s:%s%s", p.index, p.type.c_str(), p.role.empty()?"main":p.role.c_str(), (i+1<n.ports.inputs.size()?", ":""));
+        if (p.channels > 0) std::fprintf(stderr, "%u:%s:%s:ch%u%s", p.index, p.type.c_str(), p.role.empty()?"main":p.role.c_str(), p.channels, (i+1<n.ports.inputs.size()?", ":""));
+        else std::fprintf(stderr, "%u:%s:%s%s", p.index, p.type.c_str(), p.role.empty()?"main":p.role.c_str(), (i+1<n.ports.inputs.size()?", ":""));
       }
       std::fprintf(stderr, "\n");
     }
@@ -106,7 +107,8 @@ inline void printPortsSummary(const GraphSpec& spec) {
       std::fprintf(stderr, "    outputs: ");
       for (size_t i=0;i<n.ports.outputs.size();++i) {
         const auto& p = n.ports.outputs[i];
-        std::fprintf(stderr, "%u:%s:%s%s", p.index, p.type.c_str(), p.role.empty()?"main":p.role.c_str(), (i+1<n.ports.outputs.size()?", ":""));
+        if (p.channels > 0) std::fprintf(stderr, "%u:%s:%s:ch%u%s", p.index, p.type.c_str(), p.role.empty()?"main":p.role.c_str(), p.channels, (i+1<n.ports.outputs.size()?", ":""));
+        else std::fprintf(stderr, "%u:%s:%s%s", p.index, p.type.c_str(), p.role.empty()?"main":p.role.c_str(), (i+1<n.ports.outputs.size()?", ":""));
       }
       std::fprintf(stderr, "\n");
     }
