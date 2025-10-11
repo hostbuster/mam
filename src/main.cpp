@@ -274,6 +274,8 @@ int main(int argc, char** argv) {
   double tailMs = 250.0;             // default decay tail
   bool doNormalize = false;          // normalize to peak target if true
   double peakTargetDb = -1.0;        // default peak target when normalizing
+  bool printTopo = false;            // print topo order from connections
+  bool printMeters = false;          // print meter summary explicitly
 
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
@@ -339,6 +341,10 @@ int main(int argc, char** argv) {
       need(1); doNormalize = true; peakTargetDb = std::atof(argv[++i]);
     } else if (std::strcmp(a, "--graph") == 0) {
       need(1); graphPath = argv[++i];
+    } else if (std::strcmp(a, "--print-topo") == 0) {
+      printTopo = true;
+    } else if (std::strcmp(a, "--meters") == 0) {
+      printMeters = true;
     } else if (std::strcmp(a, "--validate") == 0) {
       need(1); validatePath = argv[++i];
     } else if (std::strcmp(a, "--list-nodes") == 0) {
@@ -407,6 +413,26 @@ int main(int argc, char** argv) {
           }
           const float master = spec.mixer.masterPercent * (1.0f/100.0f);
           graph.setMixer(std::make_unique<MixerNode>(std::move(chans), master, spec.mixer.softClip));
+        }
+        // Optional: print topo order derived from connections (MVP)
+        if (printTopo && !spec.connections.empty()) {
+          std::unordered_map<std::string,int> indeg;
+          for (const auto& n : spec.nodes) indeg[n.id] = 0;
+          for (const auto& e : spec.connections) if (indeg.find(e.to)!=indeg.end()) indeg[e.to]++;
+          std::vector<std::string> q; q.reserve(indeg.size());
+          for (const auto& kv : indeg) if (kv.second==0) q.push_back(kv.first);
+          std::vector<std::string> order;
+          auto adj = std::unordered_multimap<std::string,std::string>();
+          for (const auto& e : spec.connections) adj.emplace(e.from, e.to);
+          for (size_t qi = 0; qi < q.size(); ++qi) {
+            auto u = q[qi]; order.push_back(u);
+            auto range = adj.equal_range(u);
+            for (auto it = range.first; it != range.second; ++it) {
+              auto& v = it->second; if (--indeg[v] == 0) q.push_back(v);
+            }
+          }
+          std::fprintf(stderr, "Topo order (%zu): ", order.size());
+          for (size_t i2=0;i2<order.size();++i2) std::fprintf(stderr, "%s%s", order[i2].c_str(), (i2+1<order.size()?" -> ":"\n"));
         }
       } catch (const std::exception& e) {
         std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
@@ -514,6 +540,10 @@ int main(int argc, char** argv) {
                    "Exported %s\n  Frames: %llu\n  Duration: %s (%.3fs)\n  Sample rate: %u Hz (Nyquist %.1f Hz)\n  Channels: %u\n  Format: %s / %s\n  Peak: %.2f dBFS (pre: %.2f dBFS, gain: %+0.2f dB)\n  RMS: %.2f dBFS\n",
                    wavPath.c_str(), static_cast<unsigned long long>(totalFrames), hhmmss.c_str(), seconds,
                    sr, nyquist, channels, toStr(spec.format), toStr(spec.bitDepth), peakDb, prePeakDb, appliedGainDb, rmsDb);
+      if (printMeters) {
+        // duplicate a concise meters line for easy parsing
+        std::fprintf(stderr, "Meters: peak_dBFS=%.2f rms_dBFS=%.2f\n", peakDb, rmsDb);
+      }
     } catch (const std::exception& e) {
       std::fprintf(stderr, "Audio file write failed: %s\n", e.what());
       return 1;
