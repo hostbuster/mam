@@ -308,9 +308,19 @@ static int validateGraphJson(const std::string& path) {
     // Connections validation and cycle check (Kahn)
     if (!spec.connections.empty()) {
       // endpoints exist
+      {
+        std::unordered_set<std::string> edgeSet;
+        for (const auto& c : spec.connections) {
+          const std::string key = c.from + std::string("->") + c.to;
+          if (!edgeSet.insert(key).second) {
+            std::fprintf(stderr, "Duplicate connection %s\n", key.c_str()); errors++;
+          }
+        }
+      }
       for (const auto& c : spec.connections) {
         if (!hasNode(c.from)) { std::fprintf(stderr, "Connection 'from' unknown node '%s'\n", c.from.c_str()); errors++; }
         if (!hasNode(c.to)) { std::fprintf(stderr, "Connection 'to' unknown node '%s'\n", c.to.c_str()); errors++; }
+        if (c.from == c.to) { std::fprintf(stderr, "Connection self-edge not allowed: %s->%s\n", c.from.c_str(), c.to.c_str()); errors++; }
         if (c.gainPercent < 0.0f || c.gainPercent > 200.0f) {
           std::fprintf(stderr, "Connection %s->%s gainPercent out of range: %g\n", c.from.c_str(), c.to.c_str(), c.gainPercent); errors++;
         }

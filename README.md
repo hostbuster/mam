@@ -109,12 +109,15 @@ Use `demo.json` to try multi-pattern transport with swing and tempo ramps:
 
 ```bash
 ./build/mam --graph demo.json
+./build/mam --graph demo.json --verbose                 # loop diagnostics
+./build/mam --graph demo.json --random-seed 42          # deterministic randomness override
 ```
 
 - Offline render to WAV (48 kHz float32), with optional parallelism:
 
 ```bash
 ./build/mam --graph demo.json --wav out.wav --sr 48000
+./build/mam --graph demo.json --wav out.wav --random-seed 123  # deterministic export
 # Parallel offline rendering (e.g., 4 worker threads):
 ./build/mam --graph demo.json --wav out.wav --sr 48000 --offline-threads 4
 ```
