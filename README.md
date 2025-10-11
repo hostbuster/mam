@@ -220,6 +220,20 @@ Notes:
 - Unknown node types or params are warned (to be expanded later).
 - Multi-node routing via `connections` is reserved for future versions.
 
+### Deterministic random seed
+
+You can make random-driven nodes deterministic by setting a project-level seed:
+
+```json
+{
+  "version": 1,
+  "randomSeed": 123456,
+  "nodes": [ /* ... */ ]
+}
+```
+
+The engine seeds its global RNG once at load; use non-zero seeds for repeatable results across realtime and offline.
+
 ## Parameters
 
 | Option | Type | Default | Description |
