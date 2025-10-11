@@ -372,6 +372,22 @@ static int validateGraphJson(const std::string& path) {
             for (const auto& op : n.ports.outputs) outPorts[n.id].insert(op.index);
           }
         }
+        // Warn if audio port channel count mismatches graph channels (simple MVP policy)
+        for (const auto& n : spec.nodes) {
+          if (!n.ports.has) continue;
+          for (const auto& ip : n.ports.inputs) {
+            if (ip.type == std::string("audio") && ip.channels != 0u && ip.channels != spec.channels) {
+              std::fprintf(stderr, "Warning: node %s input port %u channels=%u != graph channels=%u (adapter not yet implemented)\n",
+                           n.id.c_str(), ip.index, ip.channels, spec.channels);
+            }
+          }
+          for (const auto& op : n.ports.outputs) {
+            if (op.type == std::string("audio") && op.channels != 0u && op.channels != spec.channels) {
+              std::fprintf(stderr, "Warning: node %s output port %u channels=%u != graph channels=%u (adapter not yet implemented)\n",
+                           n.id.c_str(), op.index, op.channels, spec.channels);
+            }
+          }
+        }
         for (const auto& c : spec.connections) {
           if (outPorts.count(c.from) && !outPorts[c.from].count(c.fromPort)) {
             std::fprintf(stderr, "Connection %s->%s references unknown fromPort %u\n", c.from.c_str(), c.to.c_str(), c.fromPort); errors++;
