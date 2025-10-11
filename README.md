@@ -16,6 +16,22 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
  - **Realtime + Offline**: CoreAudio streaming and high-quality file rendering (WAV/AIFF/CAF)
  - **Concurrency scaffolding**: Command queue for sample-accurate control, offline job pool
 
+### Done
+
+- Modularized build: `mam_core`, `mam_dsp`, `mam_io`, `mam_render` (INTERFACE)
+- Executable renamed to `mam`; CMake presets and sanitizers supported
+- JSON graph loader with commands and transport support; schema in `docs/`
+- Realtime graph renderer with sample-accurate sub-block command processing
+- `TransportNode` integrated for realtime pattern emission (BPM, swing scaffold, ramps scaffold)
+- Offline renderers: graph, timeline, and parallel variants; `--offline-threads`
+- Parameter system with registry, smoothing types (step/linear/exp), and named params via `ParamMap`
+- Mixer with per-input gains and master with optional soft clip
+- CLI: `--graph`, `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
+- IO: `ExtAudioFile` writer (WAV/AIFF/CAF) with 16/24/32f
+- Docs: auto-generated `docs/ParamTables.md` from `ParamMap.hpp`; expanded README
+- Tools: `gen_params` for docs; JSON examples `two_kicks.json`, `breakbeat.json`, `breakbeat_full.json`
+- Offline scaffolds: `BufferPool` and `OfflineTopoScheduler`
+
 ### What's new (core evolution)
 
 - Sample-accurate event timing in realtime via sub-block processing
