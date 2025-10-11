@@ -246,6 +246,11 @@ int main(int argc, char** argv) {
   bool pcm16 = false;
   double quitAfterSec = 0.0;
   uint32_t offlineThreads = 0; // 0=auto (fallback to single-thread renderer if 0)
+  // Export behavior controls
+  double overrideDurationSec = -1.0; // < 0 means auto
+  uint32_t overrideBars = 0;         // 0 means use transport length
+  uint32_t overrideLoopCount = 0;    // 0 means single pass
+  double tailMs = 250.0;             // default decay tail
 
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
@@ -271,7 +276,7 @@ int main(int argc, char** argv) {
     } else if (std::strcmp(a, "--bpm") == 0) {
       need(1); params.bpm = static_cast<float>(std::atof(argv[++i]));
     } else if (std::strcmp(a, "--duration") == 0) {
-      need(1); params.durationSec = static_cast<float>(std::atof(argv[++i]));
+      need(1); overrideDurationSec = std::atof(argv[++i]);
     } else if (std::strcmp(a, "--click") == 0) {
       need(1); params.click = static_cast<float>(std::atof(argv[++i]));
     } else if (std::strcmp(a, "--wav") == 0) {
@@ -299,6 +304,12 @@ int main(int argc, char** argv) {
       need(1); offlineThreads = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--quit-after") == 0) {
       need(1); quitAfterSec = std::atof(argv[++i]);
+    } else if (std::strcmp(a, "--bars") == 0) {
+      need(1); overrideBars = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--loop-count") == 0) {
+      need(1); overrideLoopCount = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--tail-ms") == 0) {
+      need(1); tailMs = std::max(0.0, std::atof(argv[++i]));
     } else if (std::strcmp(a, "--graph") == 0) {
       need(1); graphPath = argv[++i];
     } else if (std::strcmp(a, "--validate") == 0) {
@@ -350,7 +361,7 @@ int main(int argc, char** argv) {
   if (!wavPath.empty()) {
     const uint32_t channels = 2;
     const uint32_t sr = static_cast<uint32_t>(offlineSr + 0.5);
-    const uint64_t totalFrames = static_cast<uint64_t>(std::max(0.0f, params.durationSec) * static_cast<float>(sr) + 0.5);
+    uint64_t totalFrames = 0;
 
     Graph graph;
     if (!graphPath.empty()) {
@@ -381,9 +392,9 @@ int main(int argc, char** argv) {
     }
     std::vector<float> interleaved;
     if (!graphPath.empty()) {
-    try {
+      try {
         GraphSpec spec2 = loadGraphSpecFromJsonFile(graphPath);
-      if (spec2.randomSeed != 0) setGlobalSeed(spec2.randomSeed);
+        if (spec2.randomSeed != 0) setGlobalSeed(spec2.randomSeed);
         // Synthesize commands from transport, if present
         std::vector<GraphSpec::CommandSpec> cmds = spec2.commands;
         if (spec2.hasTransport) {
@@ -407,12 +418,45 @@ int main(int argc, char** argv) {
             }
           }
         }
+        // Determine totalFrames (auto unless overridden)
+        if (overrideDurationSec >= 0.0) {
+          totalFrames = static_cast<uint64_t>(overrideDurationSec * static_cast<double>(sr) + 0.5);
+        } else if (spec2.hasTransport) {
+          auto bpmAtBar = [&](uint32_t barIndex) -> double {
+            double bpm = spec2.transport.bpm;
+            for (const auto& p : spec2.transport.tempoRamps) { if (p.bar <= barIndex) bpm = p.bpm; }
+            return bpm;
+          };
+          auto framesPerBarAt = [&](uint32_t barIndex) -> uint64_t {
+            const double secPerBeat = 60.0 / bpmAtBar(barIndex);
+            const double secPerBar = 4.0 * secPerBeat;
+            return static_cast<uint64_t>(secPerBar * static_cast<double>(sr) + 0.5);
+          };
+          const uint32_t baseBars = spec2.transport.lengthBars ? spec2.transport.lengthBars : 1u;
+          const uint32_t useBars = overrideBars > 0 ? overrideBars : baseBars;
+          const uint32_t loops = overrideLoopCount > 0 ? overrideLoopCount : 1u;
+          const uint64_t totalBars = static_cast<uint64_t>(useBars) * static_cast<uint64_t>(loops);
+          totalFrames = 0;
+          for (uint64_t b = 0; b < totalBars; ++b) totalFrames += framesPerBarAt(static_cast<uint32_t>(b));
+        } else if (!cmds.empty()) {
+          uint64_t last = 0; for (const auto& c : cmds) if (c.sampleTime > last) last = c.sampleTime;
+          totalFrames = last;
+        } else {
+          totalFrames = static_cast<uint64_t>(2.0 * static_cast<double>(sr) + 0.5);
+        }
+        // Add tail
+        totalFrames += static_cast<uint64_t>((tailMs / 1000.0) * static_cast<double>(sr) + 0.5);
         interleaved = renderGraphWithCommands(graph, cmds, sr, channels, totalFrames);
       } catch (...) {
+        if (totalFrames == 0) totalFrames = static_cast<uint64_t>(2.0 * static_cast<double>(sr) + 0.5);
         interleaved = (offlineThreads > 1) ? renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads)
                                            : renderGraphInterleaved(graph, sr, channels, totalFrames);
       }
     } else {
+      // No graph file: use duration override or default + tail
+      if (overrideDurationSec >= 0.0) totalFrames = static_cast<uint64_t>(overrideDurationSec * static_cast<double>(sr) + 0.5);
+      else totalFrames = static_cast<uint64_t>(2.0 * static_cast<double>(sr) + 0.5);
+      totalFrames += static_cast<uint64_t>((tailMs / 1000.0) * static_cast<double>(sr) + 0.5);
       interleaved = (offlineThreads > 1) ? renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads)
                                          : renderGraphInterleaved(graph, sr, channels, totalFrames);
     }
