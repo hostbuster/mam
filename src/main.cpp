@@ -178,10 +178,16 @@ static int validateGraphJson(const std::string& path) {
         if (pid == 0) { std::fprintf(stderr, "Command missing/unknown param (node=%s)\n", c.nodeId.c_str()); errors++; }
       }
     }
-    // Transport patterns
+    // Transport patterns and locks
     if (spec.hasTransport) {
+      const uint32_t stepsPerBar = spec.transport.resolution ? spec.transport.resolution : 16u;
       for (const auto& p : spec.transport.patterns) {
         if (!hasNode(p.nodeId)) { std::fprintf(stderr, "Pattern references unknown node '%s'\n", p.nodeId.c_str()); errors++; }
+        if (p.steps.empty()) { std::fprintf(stderr, "Pattern for node '%s' has empty steps\n", p.nodeId.c_str()); errors++; }
+        for (const auto& L : p.locks) {
+          if (L.step >= stepsPerBar) { std::fprintf(stderr, "Lock step %u out of range for node '%s' (res=%u)\n", L.step, p.nodeId.c_str(), stepsPerBar); errors++; }
+          if (L.paramId == 0 && L.paramName.empty()) { std::fprintf(stderr, "Lock missing param for node '%s'\n", p.nodeId.c_str()); errors++; }
+        }
       }
     }
     if (errors == 0) {
