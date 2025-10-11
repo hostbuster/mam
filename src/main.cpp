@@ -366,10 +366,12 @@ static int validateGraphJson(const std::string& path) {
       {
         std::unordered_map<std::string, std::unordered_set<uint32_t>> inPorts;
         std::unordered_map<std::string, std::unordered_set<uint32_t>> outPorts;
+        std::unordered_map<std::string, std::unordered_map<uint32_t, std::string>> inTypes;
+        std::unordered_map<std::string, std::unordered_map<uint32_t, std::string>> outTypes;
         for (const auto& n : spec.nodes) {
           if (n.ports.has) {
-            for (const auto& ip : n.ports.inputs) inPorts[n.id].insert(ip.index);
-            for (const auto& op : n.ports.outputs) outPorts[n.id].insert(op.index);
+            for (const auto& ip : n.ports.inputs) { inPorts[n.id].insert(ip.index); inTypes[n.id][ip.index] = ip.type; }
+            for (const auto& op : n.ports.outputs) { outPorts[n.id].insert(op.index); outTypes[n.id][op.index] = op.type; }
           }
         }
         // Warn if audio port channel count mismatches graph channels (simple MVP policy)
@@ -393,7 +395,14 @@ static int validateGraphJson(const std::string& path) {
             std::fprintf(stderr, "Connection %s->%s references unknown fromPort %u\n", c.from.c_str(), c.to.c_str(), c.fromPort); errors++;
           }
           if (inPorts.count(c.to) && !inPorts[c.to].count(c.toPort)) {
-            std::fprintf(stderr, "Connection %s->%s references unknown toPort %u\n", c.from.c_str(), c.to.c_str(), c.toPort); errors++;
+            std::fprintf(stderr, "Connection %s->%s references unknown toPort %u\n", c.from.c_str(), c.to.c_str(), c.toPort); errors++; }
+          // Type compatibility (audio->audio only for now)
+          if (outTypes.count(c.from) && outTypes[c.from].count(c.fromPort) && inTypes.count(c.to) && inTypes[c.to].count(c.toPort)) {
+            const std::string& ft = outTypes[c.from][c.fromPort];
+            const std::string& tt = inTypes[c.to][c.toPort];
+            if (!(ft == std::string("audio") && tt == std::string("audio"))) {
+              std::fprintf(stderr, "Connection %s(%s)->%s(%s) port types incompatible\n", c.from.c_str(), ft.c_str(), c.to.c_str(), tt.c_str()); errors++;
+            }
           }
         }
       }
