@@ -31,7 +31,8 @@ struct GraphSpec {
   };
   std::vector<CommandSpec> commands;
 
-  struct TransportPattern { std::string nodeId; std::string steps; };
+  struct TransportLock { uint32_t step = 0; std::string paramName; uint16_t paramId = 0; float value = 0.0f; float rampMs = 0.0f; };
+  struct TransportPattern { std::string nodeId; std::string steps; std::vector<TransportLock> locks; };
   struct Transport {
     float bpm = 120.0f;
     uint32_t lengthBars = 1;   // number of bars

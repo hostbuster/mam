@@ -99,6 +99,17 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
         GraphSpec::TransportPattern tp;
         tp.nodeId = p.value("nodeId", "");
         tp.steps = p.value("steps", "");
+        if (p.contains("locks")) {
+          for (const auto& lk : p.at("locks")) {
+            GraphSpec::TransportLock L;
+            L.step = lk.value("step", 0u);
+            L.paramName = lk.value("param", "");
+            L.paramId = static_cast<uint16_t>(lk.value("paramId", 0));
+            L.value = lk.value("value", 0.0f);
+            L.rampMs = lk.value("rampMs", 0.0f);
+            tp.locks.push_back(L);
+          }
+        }
         spec.transport.patterns.push_back(tp);
       }
     }

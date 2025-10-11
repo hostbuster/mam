@@ -62,7 +62,21 @@
             "required": ["nodeId", "steps"],
             "properties": {
               "nodeId": { "type": "string" },
-              "steps": { "type": "string" }
+              "steps": { "type": "string" },
+              "locks": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": ["step", "value"],
+                  "properties": {
+                    "step": { "type": "integer", "minimum": 0 },
+                    "paramId": { "type": "integer", "minimum": 0 },
+                    "param": { "type": "string" },
+                    "value": { "type": "number" },
+                    "rampMs": { "type": "number", "minimum": 0 }
+                  }
+                }
+              }
             }
           }
         }

@@ -349,6 +349,23 @@ int main(int argc, char** argv) {
           auto gen = generateCommandsFromTransport(spec2.transport, sr);
           cmds.insert(cmds.end(), gen.begin(), gen.end());
         }
+        // Resolve named params to IDs based on node type
+        {
+          std::unordered_map<std::string, std::string> nodeIdToType;
+          for (const auto& ns : spec2.nodes) nodeIdToType.emplace(ns.id, ns.type);
+          auto mapParam = [](const std::string& type, const std::string& name) -> uint16_t {
+            if (type == std::string("kick")) return resolveParamIdByName(kKickParamMap, name);
+            if (type == std::string("clap")) return resolveParamIdByName(kClapParamMap, name);
+            return 0;
+          };
+          for (auto& c : cmds) {
+            if (c.paramId == 0 && !c.paramName.empty()) {
+              auto it = nodeIdToType.find(c.nodeId);
+              const std::string nodeType = (it != nodeIdToType.end()) ? it->second : std::string();
+              c.paramId = mapParam(nodeType, c.paramName);
+            }
+          }
+        }
         interleaved = renderGraphWithCommands(graph, cmds, sr, channels, totalFrames);
       } catch (...) {
         interleaved = (offlineThreads > 1) ? renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads)
@@ -423,6 +440,23 @@ int main(int argc, char** argv) {
       if (spec.hasTransport) {
         auto gen = generateCommandsFromTransport(spec.transport, 48000);
         baseCmds.insert(baseCmds.end(), gen.begin(), gen.end());
+      }
+      // Resolve named params to IDs based on node type
+      {
+        std::unordered_map<std::string, std::string> nodeIdToType;
+        for (const auto& ns : spec.nodes) nodeIdToType.emplace(ns.id, ns.type);
+        auto mapParam = [](const std::string& type, const std::string& name) -> uint16_t {
+          if (type == std::string("kick")) return resolveParamIdByName(kKickParamMap, name);
+          if (type == std::string("clap")) return resolveParamIdByName(kClapParamMap, name);
+          return 0;
+        };
+        for (auto& c : baseCmds) {
+          if (c.paramId == 0 && !c.paramName.empty()) {
+            auto it = nodeIdToType.find(c.nodeId);
+            const std::string nodeType = (it != nodeIdToType.end()) ? it->second : std::string();
+            c.paramId = mapParam(nodeType, c.paramName);
+          }
+        }
       }
       // Sort by time to preserve draining order in the SPSC queue
       std::sort(baseCmds.begin(), baseCmds.end(), [](const auto& a, const auto& b){ return a.sampleTime < b.sampleTime; });

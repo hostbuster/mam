@@ -40,7 +40,7 @@ inline std::vector<GraphSpec::CommandSpec> generateCommandsFromTransport(const G
       const double swingFramesPrev = prevOdd ? (static_cast<double>(baseFramesPerStep) * (tr.swingPercent / 100.0) * 0.5) : 0.0;
       stepStart += baseFramesPerStep + static_cast<uint64_t>(swingFramesPrev + 0.5);
     }
-    // Now at this step's start time; emit triggers for all patterns with 'x'
+    // Now at this step's start time; emit triggers and locks per pattern
     for (const auto& pat : tr.patterns) {
       if (pat.steps.empty()) continue;
       const size_t idx = static_cast<size_t>(withinBar % static_cast<uint32_t>(pat.steps.size()));
@@ -50,6 +50,19 @@ inline std::vector<GraphSpec::CommandSpec> generateCommandsFromTransport(const G
         c.nodeId = pat.nodeId;
         c.type = "Trigger";
         out.push_back(c);
+      }
+      // Locks for this step
+      for (const auto& L : pat.locks) {
+        if (L.step != withinBar) continue;
+        GraphSpec::CommandSpec lc;
+        lc.sampleTime = stepStart;
+        lc.nodeId = pat.nodeId;
+        lc.type = (L.rampMs > 0.0f) ? std::string("SetParamRamp") : std::string("SetParam");
+        lc.paramName = L.paramName;
+        lc.paramId = L.paramId;
+        lc.value = L.value;
+        lc.rampMs = L.rampMs;
+        out.push_back(lc);
       }
     }
   }
