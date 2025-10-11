@@ -15,8 +15,12 @@
       "type": "clap",
       "params": { "ampDecayMs": 180, "gain": 0.85, "bpm": 0, "loop": false }
     },
-    { "id": "delay1", "type": "delay", "params": { "delayMs": 350, "feedback": 0.35, "mix": 1.0 } },
-    { "id": "delay2", "type": "delay", "params": { "delayMs": 70, "feedback": 0.25, "mix": 1.0 } },
+    { "id": "delay1", "type": "delay", "params": { "delayMs": 350, "feedback": 0.35, "mix": 1.0 },
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ],
+                  "outputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ] } },
+    { "id": "delay2", "type": "delay", "params": { "delayMs": 70, "feedback": 0.25, "mix": 1.0 },
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ],
+                  "outputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ] } },
     { "id": "meter1", "type": "meter", "params": { "target": "delay1" } }
   ],
 
