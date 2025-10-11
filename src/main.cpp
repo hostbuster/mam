@@ -56,6 +56,38 @@ static bool isStdinReady() {
   return (rv > 0) && FD_ISSET(STDIN_FILENO, &readfds);
 }
 
+static std::string formatDuration(double seconds) {
+  if (seconds < 0.0) seconds = 0.0;
+  const int64_t totalMs = static_cast<int64_t>(seconds * 1000.0 + 0.5);
+  const int64_t hrs = totalMs / (3600 * 1000);
+  const int64_t rem1 = totalMs % (3600 * 1000);
+  const int64_t mins = rem1 / (60 * 1000);
+  const int64_t rem2 = rem1 % (60 * 1000);
+  const int64_t secs = rem2 / 1000;
+  const int64_t ms = rem2 % 1000;
+  char buf[64];
+  std::snprintf(buf, sizeof(buf), "%02lld:%02lld:%02lld.%03lld",
+                static_cast<long long>(hrs), static_cast<long long>(mins),
+                static_cast<long long>(secs), static_cast<long long>(ms));
+  return std::string(buf);
+}
+
+static void computePeakAndRms(const std::vector<float>& interleaved, uint32_t /*channels*/, double& outPeakDb, double& outRmsDb) {
+  double peak = 0.0;
+  long double sumSq = 0.0L;
+  const size_t n = interleaved.size();
+  for (size_t i = 0; i < n; ++i) {
+    const double s = static_cast<double>(interleaved[i]);
+    const double a = std::fabs(s);
+    if (a > peak) peak = a;
+    sumSq += static_cast<long double>(s * s);
+  }
+  const double rms = (n > 0) ? std::sqrt(static_cast<double>(sumSq / static_cast<long double>(n))) : 0.0;
+  auto toDb = [](double x) -> double { return (x > 0.0) ? (20.0 * std::log10(x)) : -std::numeric_limits<double>::infinity(); };
+  outPeakDb = toDb(peak);
+  outRmsDb = toDb(rms);
+}
+
 static const char* toStr(FileFormat f) {
   switch (f) {
     case FileFormat::Wav: return "wav";
@@ -393,9 +425,15 @@ int main(int argc, char** argv) {
 
     try {
       writeWithExtAudioFile(wavPath, spec, interleaved);
-      std::fprintf(stderr, "Wrote %llu frames at %u Hz to %s (%s/%s)\n",
-                   static_cast<unsigned long long>(totalFrames), sr, wavPath.c_str(),
-                   toStr(spec.format), toStr(spec.bitDepth));
+      double peakDb = 0.0, rmsDb = 0.0;
+      computePeakAndRms(interleaved, channels, peakDb, rmsDb);
+      const double seconds = static_cast<double>(totalFrames) / static_cast<double>(sr);
+      const std::string hhmmss = formatDuration(seconds);
+      const double nyquist = static_cast<double>(sr) * 0.5;
+      std::fprintf(stderr,
+                   "Exported %s\n  Frames: %llu\n  Duration: %s (%.3fs)\n  Sample rate: %u Hz (Nyquist %.1f Hz)\n  Channels: %u\n  Format: %s / %s\n  Peak: %.2f dBFS\n  RMS: %.2f dBFS\n",
+                   wavPath.c_str(), static_cast<unsigned long long>(totalFrames), hhmmss.c_str(), seconds,
+                   sr, nyquist, channels, toStr(spec.format), toStr(spec.bitDepth), peakDb, rmsDb);
     } catch (const std::exception& e) {
       std::fprintf(stderr, "Audio file write failed: %s\n", e.what());
       return 1;
