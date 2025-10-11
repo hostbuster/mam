@@ -319,6 +319,7 @@ Goal: let patterns do more than triggers by attaching parameter changes at speci
 - Semantics: at each `step` the engine emits `SetParam` or `SetParamRamp` before processing that sub-block. `param` may be a name or numeric `paramId`.
 - Realtime: locks are pre-enqueued into the command queue and/or emitted by `TransportNode` at sample-accurate step boundaries.
 - Offline: locks are generated alongside triggers in the timeline.
+ - Behavior: locks are latched. After a lock (or ramp) applies, the resulting parameter value stays in effect until another command changes it. For temporary bumps, schedule a follow-up lock to restore the previous value.
 
 ### Planned: Offline topo scheduler (design)
 
