@@ -76,7 +76,23 @@ public:
           const float g = u.gain;
           auto& buf = portSums[u.toPort];
           if (buf.size() != total) buf.assign(total, 0.0f);
-          for (size_t i = 0; i < total; ++i) buf[i] += src[i] * g;
+          // Channel adapters (MVP): handle mono<->stereo by simple averaging/duplication
+          const uint32_t srcDeclared = (outPortChannels_.count(u.fromIndex) && outPortChannels_[u.fromIndex].count(u.fromPort))
+                                        ? outPortChannels_[u.fromIndex][u.fromPort] : 0u;
+          const uint32_t dstDeclared = (inPortChannels_.count(ni) && inPortChannels_[ni].count(u.toPort))
+                                        ? inPortChannels_[ni][u.toPort] : 0u;
+          if (channels == 2 && (srcDeclared == 1u || dstDeclared == 1u)) {
+            const size_t frames = static_cast<size_t>(ctx.frames);
+            for (size_t f = 0; f < frames; ++f) {
+              const float L = src[2*f];
+              const float R = src[2*f + 1];
+              const float M = 0.5f * (L + R);
+              buf[2*f]     += M * g;
+              buf[2*f + 1] += M * g;
+            }
+          } else {
+            for (size_t i = 0; i < total; ++i) buf[i] += src[i] * g;
+          }
         }
       }
       // For now, collapse all ports into a single summed input (port 0 first)
