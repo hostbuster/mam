@@ -11,6 +11,7 @@
 inline void printTopoOrderFromSpec(const GraphSpec& spec);
 inline uint64_t computeGraphPrerollSamples(const GraphSpec& spec, uint32_t sampleRate);
 inline void printConnectionsSummary(const GraphSpec& spec);
+inline void printPortsSummary(const GraphSpec& spec);
 
 // Inline impls
 inline void printTopoOrderFromSpec(const GraphSpec& spec) {
@@ -84,6 +85,31 @@ inline void printConnectionsSummary(const GraphSpec& spec) {
   for (const auto& c : spec.connections) {
     std::fprintf(stderr, "  %s -> %s  wet=%g%% dry=%g%% ports %u->%u\n",
                  c.from.c_str(), c.to.c_str(), c.gainPercent, c.dryPercent, c.fromPort, c.toPort);
+  }
+}
+
+inline void printPortsSummary(const GraphSpec& spec) {
+  if (spec.nodes.empty()) return;
+  std::fprintf(stderr, "Ports per node:\n");
+  for (const auto& n : spec.nodes) {
+    if (!n.ports.has) continue;
+    std::fprintf(stderr, "  %s (%s)\n", n.id.c_str(), n.type.c_str());
+    if (!n.ports.inputs.empty()) {
+      std::fprintf(stderr, "    inputs: ");
+      for (size_t i=0;i<n.ports.inputs.size();++i) {
+        const auto& p = n.ports.inputs[i];
+        std::fprintf(stderr, "%u:%s:%s%s", p.index, p.type.c_str(), p.role.empty()?"main":p.role.c_str(), (i+1<n.ports.inputs.size()?", ":""));
+      }
+      std::fprintf(stderr, "\n");
+    }
+    if (!n.ports.outputs.empty()) {
+      std::fprintf(stderr, "    outputs: ");
+      for (size_t i=0;i<n.ports.outputs.size();++i) {
+        const auto& p = n.ports.outputs[i];
+        std::fprintf(stderr, "%u:%s:%s%s", p.index, p.type.c_str(), p.role.empty()?"main":p.role.c_str(), (i+1<n.ports.outputs.size()?", ":""));
+      }
+      std::fprintf(stderr, "\n");
+    }
   }
 }
 

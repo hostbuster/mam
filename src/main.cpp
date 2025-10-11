@@ -553,6 +553,7 @@ int main(int argc, char** argv) {
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
       printTopoOrderFromSpec(spec);
       printConnectionsSummary(spec);
+      printPortsSummary(spec);
     } catch (...) {}
   }
   if (!validatePath.empty()) return validateGraphJson(validatePath);
