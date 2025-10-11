@@ -76,6 +76,7 @@ private:
     if (delay_.size() != need) delay_.assign(need, 0.0f);
     if (writeIndex_ >= (delay_.size() / channels)) writeIndex_ = 0;
   }
+  uint32_t latencySamples() const override { return delaySamples_; }
 };
 
 

@@ -19,6 +19,8 @@ public:
   virtual void process(ProcessContext ctx, float* interleavedOut, uint32_t channels) = 0;
   // Optional insert-style processing (for effects) defaults to no-op
   virtual void processInPlace(ProcessContext ctx, float* interleaved, uint32_t channels) { (void)ctx; (void)interleaved; (void)channels; }
+  // Optional: report algorithmic latency in samples (for preroll/compensation)
+  virtual uint32_t latencySamples() const { return 0; }
   // Optional: handle control events prior to processing a block (currently block-accurate)
   virtual void handleEvent(const Command&) {}
 };

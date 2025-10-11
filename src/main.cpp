@@ -86,6 +86,42 @@ static void printTopoOrderFromSpec(const GraphSpec& spec) {
   }
 }
 
+static uint64_t computeGraphPrerollSamples(const GraphSpec& spec, uint32_t sampleRate) {
+  // Node latency in samples (parse params for known types)
+  std::unordered_map<std::string, uint32_t> nodeLatency;
+  for (const auto& n : spec.nodes) {
+    uint32_t lat = 0;
+    if (n.type == std::string("delay")) {
+      try {
+        nlohmann::json j = nlohmann::json::parse(n.paramsJson);
+        const double ms = j.value("delayMs", 0.0);
+        lat = static_cast<uint32_t>(ms * static_cast<double>(sampleRate) * 0.001 + 0.5);
+      } catch (...) {}
+    }
+    nodeLatency[n.id] = lat;
+  }
+  // Accumulate along DAG (max path sum)
+  std::unordered_map<std::string, double> acc;
+  std::unordered_map<std::string, int> indeg;
+  std::unordered_multimap<std::string, std::string> adj;
+  for (const auto& n : spec.nodes) { indeg[n.id] = 0; acc[n.id] = static_cast<double>(nodeLatency[n.id]); }
+  for (const auto& e : spec.connections) { if (indeg.count(e.to)) indeg[e.to]++; adj.emplace(e.from, e.to); }
+  std::vector<std::string> q; q.reserve(indeg.size());
+  for (const auto& kv : indeg) if (kv.second == 0) q.push_back(kv.first);
+  for (size_t qi = 0; qi < q.size(); ++qi) {
+    const auto u = q[qi];
+    auto range = adj.equal_range(u);
+    for (auto it = range.first; it != range.second; ++it) {
+      const auto& v = it->second;
+      const double cand = acc[u] + static_cast<double>(nodeLatency[v]);
+      if (cand > acc[v]) acc[v] = cand;
+      if (--indeg[v] == 0) q.push_back(v);
+    }
+  }
+  double maxS = 0.0; for (const auto& kv : acc) if (kv.second > maxS) maxS = kv.second;
+  return static_cast<uint64_t>(maxS + 0.5);
+}
+
 static std::string formatDuration(double seconds) {
   if (seconds < 0.0) seconds = 0.0;
   const int64_t totalMs = static_cast<int64_t>(seconds * 1000.0 + 0.5);
@@ -546,8 +582,9 @@ int main(int argc, char** argv) {
         } else {
           totalFrames = static_cast<uint64_t>(2.0 * static_cast<double>(sr) + 0.5);
         }
-        // Add tail
-        totalFrames += static_cast<uint64_t>((tailMs / 1000.0) * static_cast<double>(sr) + 0.5);
+        // Add preroll (graph latency) and tail
+        const uint64_t preroll = computeGraphPrerollSamples(spec2, sr);
+        totalFrames += preroll + static_cast<uint64_t>((tailMs / 1000.0) * static_cast<double>(sr) + 0.5);
         interleaved = renderGraphWithCommands(graph, cmds, sr, channels, totalFrames);
       } catch (...) {
         if (totalFrames == 0) totalFrames = static_cast<uint64_t>(2.0 * static_cast<double>(sr) + 0.5);

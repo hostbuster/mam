@@ -145,6 +145,7 @@ Render without using CoreAudio to an uncompressed audio file. Defaults to 48 kHz
   - `--bars N`: force N bars from `transport` (if present).
   - `--loop-count N`: repeat the transport sequence N times.
   - `--tail-ms MS`: change the decay tail (default 250).
+  - Preroll: offline export automatically adds graph preroll derived from node latencies (e.g., delay lines) so transients start fully formed.
 
 Examples:
 
