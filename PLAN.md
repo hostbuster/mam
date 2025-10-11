@@ -13,6 +13,7 @@
 - Parameters: `ParamMap` metadata per node; `ParameterRegistry` with step/linear/exp smoothing; auto-doc generator (`gen_params` → `docs/ParamTables.md`)
 - JSON graph: loader with commands and transport; schema tracked in `docs/schema.graph.v1.json`
 - Realtime: `RealtimeGraphRenderer` sub-block command processing; `TransportNode` integrated for live pattern emission
+- Transport param-locks implemented in realtime and offline (pattern `locks`)
 - Offline: graph/timeline/parallel renderers; `--offline-threads` CLI
 - Mixer: per-input gains + master gain with optional soft clip
 - CLI: `--graph`, `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
@@ -20,7 +21,7 @@
 - Scaffolds: `BufferPool` and `OfflineTopoScheduler` for future topo/latency work
 
 ### Next up
-- Transport: implement param-lock emission, swing timing, and tempo ramps; ensure realtime/offline parity
+- Transport: finalize swing timing nuances and ramp shapes; ensure realtime/offline parity
 - Parameters: complete name→id auto-generation and stricter load-time validation/clamping across all nodes
 - Offline scheduler: add topological levels (when edges exist), buffer aliasing, per-node latency reporting and preroll; integrate scheduler path
 - Observability: Meter/Wiretap nodes, lightweight JSON trace, per-node perf counters
@@ -30,8 +31,8 @@
 
 1) Transport param-locks
 - JSON: `transport.patterns[i].locks[]` entries with `{ step, param|paramId, value, rampMs? }`.
-- Realtime: pre-enqueue locks or emit via `TransportNode` at step boundary; apply before processing the sub-block.
-- Offline: generate locks into the timeline alongside triggers; preserve sample-accurate order.
+- Realtime: pre-enqueue locks or emit via `TransportNode` at step boundary; apply before processing the sub-block. Inline node locks use `paramId`.
+- Offline: generate locks into the timeline alongside triggers; preserve sample-accurate order. Top-level transport supports names.
 
 2) Offline topo scheduler
 - Topological sort when connections exist; process levels in parallel using `JobPool`.

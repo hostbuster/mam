@@ -33,6 +33,7 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - Realtime graph renderer with sample-accurate sub-block command processing
 - `TransportNode` integrated for realtime pattern emission (BPM, swing scaffold, ramps scaffold)
 - Offline renderers: graph, timeline, and parallel variants; `--offline-threads`
+- Transport param-locks (realtime + offline); schema and examples updated
 - Parameter system with registry, smoothing types (step/linear/exp), and named params via `ParamMap`
 - Mixer with per-input gains and master with optional soft clip
 - CLI: `--graph`, `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
@@ -292,11 +293,11 @@ Notes:
   - Cross-platform audio backends; plugin targets (AUv3, VST3).
   - GUI editor for node graphs and live performance controls.
 
-### Planned: Transport param-locks (design)
+### Transport param-locks
 
 Goal: let patterns do more than triggers by attaching parameter changes at specific steps. Both realtime and offline must render identical automation.
 
-- JSON shape (proposal):
+- JSON shape:
 
 ```json
 {
@@ -319,7 +320,11 @@ Goal: let patterns do more than triggers by attaching parameter changes at speci
 - Semantics: at each `step` the engine emits `SetParam` or `SetParamRamp` before processing that sub-block. `param` may be a name or numeric `paramId`.
 - Realtime: locks are pre-enqueued into the command queue and/or emitted by `TransportNode` at sample-accurate step boundaries.
 - Offline: locks are generated alongside triggers in the timeline.
- - Behavior: locks are latched. After a lock (or ramp) applies, the resulting parameter value stays in effect until another command changes it. For temporary bumps, schedule a follow-up lock to restore the previous value.
+- Behavior: locks are latched. After a lock (or ramp) applies, the resulting parameter value stays in effect until another command changes it. For temporary bumps, schedule a follow-up lock to restore the previous value.
+
+Authoring notes:
+- Top-level `transport` locks support `param` by name (recommended) or `paramId`.
+- Inline realtime `transport` node locks currently use `paramId` only. Use `--list-params <type>` to find IDs.
 
 ### Planned: Offline topo scheduler (design)
 
