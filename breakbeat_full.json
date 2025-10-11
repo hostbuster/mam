@@ -43,9 +43,24 @@
     "resolution": 16,
     "swingPercent": 8,
     "patterns": [
-      { "nodeId": "kick1", "steps": "x...x...x..x...." },
-      { "nodeId": "snr1",  "steps": "....x.......x..." },
-      { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x." }
+      { "nodeId": "kick1", "steps": "x...x...x..x....",
+        "locks": [
+          { "step": 8,  "param": "GAIN", "value": 1.00, "rampMs": 40 },
+          { "step": 12, "param": "F0",   "value": 140.0, "rampMs": 80 }
+        ]
+      },
+      { "nodeId": "snr1",  "steps": "....x.......x...",
+        "locks": [
+          { "step": 4,  "param": "GAIN", "value": 0.90 },
+          { "step": 12, "param": "GAIN", "value": 0.80 }
+        ]
+      },
+      { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x.",
+        "locks": [
+          { "step": 2,  "param": "AMP_DECAY_MS", "value": 50.0, "rampMs": 60 },
+          { "step": 10, "param": "AMP_DECAY_MS", "value": 40.0, "rampMs": 60 }
+        ]
+      }
     ]
   },
 
