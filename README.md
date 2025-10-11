@@ -6,15 +6,24 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 
 ## Features
 
-- **CoreAudio output**: Low-latency render callback to the default device
-- **Procedural kick drum**: Pitch and amplitude envelopes, onset click, gain
-- **One-shot or tempo-synced loop**: Trigger once or repeat at BPM until Ctrl-C
-- **Safe defaults**: Float32, non-interleaved stereo; uses actual device sample rate
-- **Portable C++17**: Straightforward, clean code with minimal dependencies
- - **Modular architecture**: Separated DSP, realtime, offline, and file I/O modules
- - **JSON graphs**: Define instruments, mixer, and settings in a portable file
- - **Realtime + Offline**: CoreAudio streaming and high-quality file rendering (WAV/AIFF/CAF)
- - **Concurrency scaffolding**: Command queue for sample-accurate control, offline job pool
+- **CoreAudio output**: Low-latency render callback to the default device.
+  - Benefit: responsive playback suitable for live tweaking and testing without extra drivers.
+- **Procedural kick drum**: Pitch and amplitude envelopes, onset click, gain.
+  - Benefit: clean, repeatable synthetic drum without samples; easy to automate and extend.
+- **One-shot or tempo-synced loop**: Trigger once or repeat at BPM until Ctrl-C.
+  - Benefit: quick auditioning of sounds and patterns; acts as a timing baseline for other nodes.
+- **Safe defaults**: Float32, non-interleaved stereo; uses actual device sample rate.
+  - Benefit: fewer surprises across devices; avoids clipping and format mismatches.
+- **Portable C++17**: Straightforward, clean code with minimal dependencies.
+  - Benefit: easy to build, debug, and port; a solid base for future plugins or apps.
+- **Modular architecture**: Separated DSP, realtime, offline, and file I/O modules.
+  - Benefit: faster builds, clearer responsibilities, and easier testing/reuse per layer.
+- **JSON graphs**: Define instruments, mixer, and settings in a portable file.
+  - Benefit: versionable, human-editable sessions; easy automation and CI rendering.
+- **Realtime + Offline**: CoreAudio streaming and high-quality file rendering (WAV/AIFF/CAF).
+  - Benefit: identical musical results in live and batch contexts; predictable exports.
+- **Concurrency scaffolding**: Command queue for sample-accurate control, offline job pool.
+  - Benefit: glitch-free control changes in realtime and faster-than-realtime offline renders.
 
 ### Done
 
