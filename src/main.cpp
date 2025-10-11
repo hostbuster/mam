@@ -272,6 +272,8 @@ int main(int argc, char** argv) {
   uint32_t overrideBars = 0;         // 0 means use transport length
   uint32_t overrideLoopCount = 0;    // 0 means single pass
   double tailMs = 250.0;             // default decay tail
+  bool doNormalize = false;          // normalize to peak target if true
+  double peakTargetDb = -1.0;        // default peak target when normalizing
 
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
@@ -331,6 +333,10 @@ int main(int argc, char** argv) {
       need(1); overrideLoopCount = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--tail-ms") == 0) {
       need(1); tailMs = std::max(0.0, std::atof(argv[++i]));
+    } else if (std::strcmp(a, "--normalize") == 0) {
+      doNormalize = true; peakTargetDb = -1.0;
+    } else if (std::strcmp(a, "--peak-target") == 0) {
+      need(1); doNormalize = true; peakTargetDb = std::atof(argv[++i]);
     } else if (std::strcmp(a, "--graph") == 0) {
       need(1); graphPath = argv[++i];
     } else if (std::strcmp(a, "--validate") == 0) {
@@ -489,6 +495,15 @@ int main(int argc, char** argv) {
     spec.channels = channels;
 
     try {
+      // Optional normalization
+      double prePeakDb = 0.0, preRmsDb = 0.0;
+      computePeakAndRms(interleaved, channels, prePeakDb, preRmsDb);
+      double appliedGainDb = 0.0;
+      if (doNormalize && std::isfinite(prePeakDb)) {
+        appliedGainDb = peakTargetDb - prePeakDb;
+        const double g = std::pow(10.0, appliedGainDb / 20.0);
+        for (auto& s : interleaved) s = static_cast<float>(static_cast<double>(s) * g);
+      }
       writeWithExtAudioFile(wavPath, spec, interleaved);
       double peakDb = 0.0, rmsDb = 0.0;
       computePeakAndRms(interleaved, channels, peakDb, rmsDb);
@@ -496,9 +511,9 @@ int main(int argc, char** argv) {
       const std::string hhmmss = formatDuration(seconds);
       const double nyquist = static_cast<double>(sr) * 0.5;
       std::fprintf(stderr,
-                   "Exported %s\n  Frames: %llu\n  Duration: %s (%.3fs)\n  Sample rate: %u Hz (Nyquist %.1f Hz)\n  Channels: %u\n  Format: %s / %s\n  Peak: %.2f dBFS\n  RMS: %.2f dBFS\n",
+                   "Exported %s\n  Frames: %llu\n  Duration: %s (%.3fs)\n  Sample rate: %u Hz (Nyquist %.1f Hz)\n  Channels: %u\n  Format: %s / %s\n  Peak: %.2f dBFS (pre: %.2f dBFS, gain: %+0.2f dB)\n  RMS: %.2f dBFS\n",
                    wavPath.c_str(), static_cast<unsigned long long>(totalFrames), hhmmss.c_str(), seconds,
-                   sr, nyquist, channels, toStr(spec.format), toStr(spec.bitDepth), peakDb, rmsDb);
+                   sr, nyquist, channels, toStr(spec.format), toStr(spec.bitDepth), peakDb, prePeakDb, appliedGainDb, rmsDb);
     } catch (const std::exception& e) {
       std::fprintf(stderr, "Audio file write failed: %s\n", e.what());
       return 1;
