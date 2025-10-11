@@ -5,6 +5,27 @@
 - Centralize parameter definitions and named-param mapping
 - Establish a foundation for transport, scheduling, and observability
 
+## Status
+
+### Done
+- Modular split: `mam_core`, `mam_dsp`, `mam_io`, `mam_render` (INTERFACE); executable `mam`
+- Build/tooling: warnings-as-errors option, ASan/UBSan/LTO flags, CMake presets
+- Parameters: `ParamMap` metadata per node; `ParameterRegistry` with step/linear/exp smoothing; auto-doc generator (`gen_params` → `docs/ParamTables.md`)
+- JSON graph: loader with commands and transport; schema tracked in `docs/schema.graph.v1.json`
+- Realtime: `RealtimeGraphRenderer` sub-block command processing; `TransportNode` integrated for live pattern emission
+- Offline: graph/timeline/parallel renderers; `--offline-threads` CLI
+- Mixer: per-input gains + master gain with optional soft clip
+- CLI: `--graph`, `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
+- Validation: named-param resolution; transport pattern target/steps checks
+- Scaffolds: `BufferPool` and `OfflineTopoScheduler` for future topo/latency work
+
+### Next up
+- Transport: implement param-lock emission, swing timing, and tempo ramps; ensure realtime/offline parity
+- Parameters: complete name→id auto-generation and stricter load-time validation/clamping across all nodes
+- Offline scheduler: add topological levels (when edges exist), buffer aliasing, per-node latency reporting and preroll; integrate scheduler path
+- Observability: Meter/Wiretap nodes, lightweight JSON trace, per-node perf counters
+- Validation & tooling: JSON Schema validation in `mam --validate`, golden renders, fuzzed command streams, CI presets; integrate clang-tidy checks
+
 ## Phased Roadmap
 
 ### Phase 1: Build and structure
