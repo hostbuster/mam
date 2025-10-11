@@ -53,14 +53,29 @@ public:
     }
 
     for (size_t ni : order) {
-      // Sum upstream edges into work_
+      // Sum upstream edges into work_, honoring toPort (future multi-port semantics)
       std::fill(work_.begin(), work_.end(), 0.0f);
       auto upIt = upstream_.find(ni);
+      // Optional: collect per-port sums
+      std::unordered_map<uint32_t, std::vector<float>> portSums;
       if (upIt != upstream_.end()) {
         for (const auto& u : upIt->second) {
           const auto& src = outBuffers_[u.fromIndex];
           const float g = u.gain;
-          for (size_t i = 0; i < total; ++i) work_[i] += src[i] * g;
+          auto& buf = portSums[u.toPort];
+          if (buf.size() != total) buf.assign(total, 0.0f);
+          for (size_t i = 0; i < total; ++i) buf[i] += src[i] * g;
+        }
+      }
+      // For now, collapse all ports into a single summed input (port 0 first)
+      if (!portSums.empty()) {
+        // Prefer port 0, then add others
+        auto it0 = portSums.find(0u);
+        if (it0 != portSums.end()) work_ = it0->second;
+        for (const auto& kv : portSums) {
+          if (kv.first == 0u) continue;
+          const auto& ps = kv.second;
+          for (size_t i = 0; i < total; ++i) work_[i] += ps[i];
         }
       }
       Node* node = nodes_[ni].node.get();
