@@ -88,6 +88,30 @@ open build-xcode/kickdrum.xcodeproj
 ./build/mam --list-params kick
 ```
 
+### Full-feature example (recommended)
+
+Use `breakbeat_full.json` to try multi-pattern transport with swing and tempo ramps:
+
+- Realtime playback:
+
+```bash
+./build/mam --graph breakbeat_full.json
+```
+
+- Offline render to WAV (48 kHz float32), with optional parallelism:
+
+```bash
+./build/mam --graph breakbeat_full.json --wav out.wav --sr 48000
+# Parallel offline rendering (e.g., 4 worker threads):
+./build/mam --graph breakbeat_full.json --wav out.wav --sr 48000 --offline-threads 4
+```
+
+- Validate the example graph:
+
+```bash
+./build/mam --validate breakbeat_full.json
+```
+
 ### Offline rendering
 
 Render without using CoreAudio to an uncompressed audio file. Defaults to 48 kHz float32 WAV.
