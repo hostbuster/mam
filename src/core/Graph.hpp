@@ -8,6 +8,7 @@
 #include "MixerNode.hpp"
 #include "DelayNode.hpp"
 #include "MeterNode.hpp"
+#include "CompressorNode.hpp"
 #include "GraphConfig.hpp"
 #include <unordered_map>
 #include <unordered_set>
@@ -99,7 +100,7 @@ public:
       if (!portSums.empty()) {
         // Prefer port 0, then add others
         auto it0 = portSums.find(0u);
-        if (it0 != portSums.end()) work_ = it0->second;
+        if (it0 != portSums.end()) work_ = it0->second; else std::fill(work_.begin(), work_.end(), 0.0f);
         for (const auto& kv : portSums) {
           if (kv.first == 0u) continue;
           const auto& ps = kv.second;
@@ -113,6 +114,14 @@ public:
         auto& out = outBuffers_[ni];
         std::copy(work_.begin(), work_.end(), out.begin());
         d->processInPlace(ctx, out.data(), channels);
+      } else if (auto* c = dynamic_cast<CompressorNode*>(node)) {
+        // If sidechain is provided on port 1, use it; else self-detect
+        auto& out = outBuffers_[ni];
+        std::copy(work_.begin(), work_.end(), out.begin());
+        scWork_.assign(total, 0.0f);
+        auto itSC = portSums.find(1u);
+        if (itSC != portSums.end()) scWork_ = itSC->second;
+        c->applySidechain(ctx, out.data(), scWork_.data(), channels);
       } else if (auto* m = dynamic_cast<MeterNode*>(node)) {
         // pass-through input to output
         auto& out = outBuffers_[ni];
@@ -162,6 +171,7 @@ private:
   std::vector<GraphSpec::Connection> connections_{};
   std::vector<std::vector<float>> outBuffers_{};
   std::vector<float> work_{};
+  std::vector<float> scWork_{};
 
   struct UpEdge { size_t fromIndex; float gain; uint32_t fromPort; uint32_t toPort; };
   std::unordered_map<size_t, std::vector<UpEdge>> upstream_{};

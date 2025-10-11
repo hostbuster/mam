@@ -177,6 +177,25 @@ Examples:
 - `--meters`: after export, print a concise line with peak and RMS in dBFS.
 - `--verbose`: in realtime, print loop counter and elapsed time at loop boundaries.
 
+##### Sidechain routing (MVP)
+
+- Nodes can declare input/output ports with `ports.inputs[]` / `ports.outputs[]`.
+- Use `connections[].fromPort`/`toPort` to route into specific ports. Example sidechain compressor:
+
+```json
+{
+  "nodes": [
+    { "id": "comp1", "type": "compressor",
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain" } ],
+                  "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
+  ],
+  "connections": [
+    { "from": "bass",  "to": "comp1", "fromPort": 0, "toPort": 0 },
+    { "from": "kick",  "to": "comp1", "fromPort": 0, "toPort": 1 }
+  ]
+}
+```
+
 Examples:
 
 ```bash
