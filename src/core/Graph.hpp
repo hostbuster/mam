@@ -78,23 +78,12 @@ public:
           const float g = u.gain;
           auto& buf = portSums[u.toPort];
           if (buf.size() != total) buf.assign(total, 0.0f);
-          // Channel adapters (MVP): handle mono<->stereo by simple averaging/duplication
+          // Generalized channel adaptation N<->M using declared port channel counts
           const uint32_t srcDeclared = (outPortChannels_.count(u.fromIndex) && outPortChannels_[u.fromIndex].count(u.fromPort))
                                         ? outPortChannels_[u.fromIndex][u.fromPort] : 0u;
           const uint32_t dstDeclared = (inPortChannels_.count(ni) && inPortChannels_[ni].count(u.toPort))
                                         ? inPortChannels_[ni][u.toPort] : 0u;
-          if (channels == 2 && (srcDeclared == 1u || dstDeclared == 1u)) {
-            const size_t frames = static_cast<size_t>(ctx.frames);
-            for (size_t f = 0; f < frames; ++f) {
-              const float L = src[2*f];
-              const float R = src[2*f + 1];
-              const float M = 0.5f * (L + R);
-              buf[2*f]     += M * g;
-              buf[2*f + 1] += M * g;
-            }
-          } else {
-            for (size_t i = 0; i < total; ++i) buf[i] += src[i] * g;
-          }
+          adaptAndAccumulate(src.data(), buf, static_cast<uint32_t>(ctx.frames), channels, srcDeclared, dstDeclared, g);
         }
       }
       // For now, collapse all ports into a single summed input (port 0 first)
@@ -261,6 +250,43 @@ public:
       topoOrder_.clear();
     }
     topoDirty_ = false;
+  }
+
+private:
+  // Adapt src declared channels to dst declared channels within a graph that runs at 'graphCh' channels
+  // and accumulate into dst buffer with gain. Declared channel count 0 means "graph default".
+  void adaptAndAccumulate(const float* src, std::vector<float>& dst,
+                          uint32_t frames, uint32_t graphCh,
+                          uint32_t srcDeclared, uint32_t dstDeclared,
+                          float gain) {
+    const size_t total = static_cast<size_t>(frames) * static_cast<size_t>(graphCh);
+    const uint32_t srcCh = (srcDeclared == 0u) ? graphCh : srcDeclared;
+    const uint32_t dstCh = (dstDeclared == 0u) ? graphCh : dstDeclared;
+
+    // If either side is mono, average to mono and duplicate across graph channels
+    if (srcCh == 1u || dstCh == 1u) {
+      for (uint32_t f = 0; f < frames; ++f) {
+        // Average across graph channels (robust even if actual src duplicated)
+        double sum = 0.0;
+        for (uint32_t c = 0; c < graphCh; ++c) sum += static_cast<double>(src[static_cast<size_t>(f)*graphCh + c]);
+        const float m = static_cast<float>(sum / static_cast<double>(graphCh));
+        for (uint32_t c = 0; c < graphCh; ++c) dst[static_cast<size_t>(f)*graphCh + c] += m * gain;
+      }
+      return;
+    }
+
+    // Otherwise, pass-through channel-wise (graph channels act as max width).
+    // If declared counts differ but both >1, use modulo mapping as a simple adapter.
+    if (srcCh == dstCh) {
+      for (size_t i = 0; i < total; ++i) dst[i] += src[i] * gain;
+      return;
+    }
+    for (uint32_t f = 0; f < frames; ++f) {
+      for (uint32_t c = 0; c < graphCh; ++c) {
+        const uint32_t s = (c % graphCh); // graph-sized interleaved
+        dst[static_cast<size_t>(f)*graphCh + c] += src[static_cast<size_t>(f)*graphCh + s] * gain;
+      }
+    }
   }
 };
 

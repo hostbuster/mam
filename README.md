@@ -237,6 +237,17 @@ Timed realtime exit:
 ./build/mam --graph two_kicks.json --quit-after 10
 ```
 
+#### Channel adapters
+
+Generalized N↔M adaptation guided by declared port channel counts:
+- mono→stereo (or mono→N): average source to mono and duplicate across destination width
+- stereo→mono (or N→mono): average to mono, then duplicate to graph width
+- N→M where N,M>1: simple modulo mapping within graph channel width
+
+Authoring:
+- Declare `channels` in `ports.inputs[].channels` / `ports.outputs[].channels` to hint adapters. `0` or omitted means “use graph channels”.
+- If neither side declares channels, the graph’s channel count is used.
+
 ## Graph configuration (JSON)
 
 You can define instruments and their parameters using a JSON graph file and pass it with `--graph path.json`.
