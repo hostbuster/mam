@@ -142,6 +142,18 @@ static const char* dupStr(const std::string& s) {
   return p;
 }
 
+// Intern nodeId strings to avoid per-command heap churn/leaks in realtime enqueue paths
+static const char* internNodeId(const std::string& s) {
+  static std::unordered_map<std::string, const char*> pool;
+  static std::mutex m;
+  std::lock_guard<std::mutex> lock(m);
+  auto it = pool.find(s);
+  if (it != pool.end()) return it->second;
+  const char* p = dupStr(s);
+  pool.emplace(s, p);
+  return p;
+}
+
 static int listNodesGraphJson(const std::string& path) {
   try {
     GraphSpec spec = loadGraphSpecFromJsonFile(path);
@@ -947,7 +959,7 @@ int main(int argc, char** argv) {
       for (const auto& c : realtimeCmds) {
         Command cmd{};
         cmd.sampleTime = c.sampleTime;
-        cmd.nodeId = dupStr(c.nodeId);
+        cmd.nodeId = internNodeId(c.nodeId);
         if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger;
         else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam;
         else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp;
@@ -957,26 +969,33 @@ int main(int argc, char** argv) {
         (void)cmdQueue.push(cmd);
       }
 
-      // Rolling feeder thread to extend horizon in realtime
+      // Rolling feeder thread to extend horizon in realtime without flooding the queue
       if (spec.hasTransport && loopLen > 0) {
         uint64_t nextOffset = ((horizonFrames / loopLen) + 1) * loopLen;
-        transportFeeder = std::thread([&cmdQueue, baseCmds, loopLen, nextOffset]() mutable {
+        const uint64_t desiredAheadFrames = static_cast<uint64_t>(5.0 * 48000.0); // keep ~5s of commands ahead
+        transportFeeder = std::thread([&cmdQueue, baseCmds, loopLen, nextOffset, desiredAheadFrames, &rt]() mutable {
           uint64_t offset = nextOffset;
           while (gRunning.load()) {
-            for (auto c : baseCmds) {
-              Command cmd{};
-              cmd.sampleTime = c.sampleTime + offset;
-              cmd.nodeId = dupStr(c.nodeId);
-              if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger;
-              else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam;
-              else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp;
-              cmd.paramId = c.paramId;
-              cmd.value = c.value;
-              cmd.rampMs = c.rampMs;
-              (void)cmdQueue.push(cmd);
+            const uint64_t framesNow = static_cast<uint64_t>(rt.sampleCounter());
+            // Current queued horizon end in frames is offset + loopLen
+            if ((offset + loopLen) <= framesNow + desiredAheadFrames) {
+              // Enqueue one additional loop span
+              for (auto c : baseCmds) {
+                Command cmd{};
+                cmd.sampleTime = c.sampleTime + offset;
+                cmd.nodeId = internNodeId(c.nodeId);
+                if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger;
+                else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam;
+                else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp;
+                cmd.paramId = c.paramId;
+                cmd.value = c.value;
+                cmd.rampMs = c.rampMs;
+                (void)cmdQueue.push(cmd); // non-blocking; bounded by horizon gating
+              }
+              offset += loopLen;
+            } else {
+              std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
-            offset += loopLen;
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
           }
         });
       }
