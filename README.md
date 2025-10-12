@@ -118,6 +118,21 @@ Use `demo.json` to try multi-pattern transport with swing and tempo ramps:
 ./build/mam --graph demo.json --random-seed 42          # deterministic randomness override
 ```
 
+Longer techno demo (16-bar) in `demo2.json`:
+
+Realtime:
+
+```bash
+./build/mam --graph demo2.json --verbose
+# For loop testing, you can set lengthBars to 1 and verify seamless boundaries
+```
+
+Offline export (auto-duration from transport bars, includes preroll/tail):
+
+```bash
+./build/mam --graph demo2.json --wav techno.wav --sr 48000 --normalize --peak-target -1.0
+```
+
 - Offline render to WAV (48 kHz float32), with optional parallelism:
 
 ```bash
@@ -230,6 +245,10 @@ Examples:
 # Export, show topo order and meters together
 ./build/mam --graph demo.json --wav demo.wav --print-topo --meters
 ```
+
+Transport and looping notes (realtime):
+- Loop length is computed exactly from transport bars × bar duration to avoid boundary gaps.
+- Transport events are emitted sample-accurately at segment boundaries to ensure continuous groove.
 
 Timed realtime exit:
 
