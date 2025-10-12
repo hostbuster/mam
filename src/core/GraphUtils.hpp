@@ -81,10 +81,26 @@ inline void printConnectionsSummary(const GraphSpec& spec) {
     std::fprintf(stderr, "No connections defined.\n");
     return;
   }
+  // Build port channel maps if declared
+  std::unordered_map<std::string, std::unordered_map<uint32_t, uint32_t>> inCh, outCh;
+  for (const auto& n : spec.nodes) {
+    if (n.ports.has) {
+      for (const auto& ip : n.ports.inputs) inCh[n.id][ip.index] = ip.channels;
+      for (const auto& op : n.ports.outputs) outCh[n.id][op.index] = op.channels;
+    }
+  }
   std::fprintf(stderr, "Connections (%zu):\n", spec.connections.size());
   for (const auto& c : spec.connections) {
-    std::fprintf(stderr, "  %s -> %s  wet=%g%% dry=%g%% ports %u->%u\n",
-                 c.from.c_str(), c.to.c_str(), c.gainPercent, c.dryPercent, c.fromPort, c.toPort);
+    uint32_t fromCh = 0, toCh = 0;
+    if (outCh.count(c.from) && outCh[c.from].count(c.fromPort)) fromCh = outCh[c.from][c.fromPort];
+    if (inCh.count(c.to) && inCh[c.to].count(c.toPort)) toCh = inCh[c.to][c.toPort];
+    if (fromCh == 0 && toCh == 0) {
+      std::fprintf(stderr, "  %s -> %s  wet=%g%% dry=%g%% ports %u->%u\n",
+                   c.from.c_str(), c.to.c_str(), c.gainPercent, c.dryPercent, c.fromPort, c.toPort);
+    } else {
+      std::fprintf(stderr, "  %s -> %s  wet=%g%% dry=%g%% ports %u(ch%u)->%u(ch%u)\n",
+                   c.from.c_str(), c.to.c_str(), c.gainPercent, c.dryPercent, c.fromPort, fromCh, c.toPort, toCh);
+    }
   }
 }
 

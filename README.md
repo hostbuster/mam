@@ -204,6 +204,20 @@ Examples:
 }
 ```
 
+Wiretap (debugging):
+- Insert a `wiretap` node to record the input of the effect chain to a WAV file during offline export.
+
+```json
+{
+  "nodes": [
+    { "id": "wt1", "type": "wiretap", "params": { "path": "tap.wav", "enabled": true },
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" } ],
+                  "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
+  ],
+  "connections": [ { "from": "snr1", "to": "wt1" } ]
+}
+```
+
 Examples:
 
 ```bash
