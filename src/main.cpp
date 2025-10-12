@@ -924,11 +924,21 @@ int main(int argc, char** argv) {
       std::sort(baseCmds.begin(), baseCmds.end(), [](const auto& a, const auto& b){ return a.sampleTime < b.sampleTime; });
       // Repeat transport loop up to horizon (quit-after or ~60s)
       uint64_t horizonFrames = (quitAfterSec > 0.0) ? static_cast<uint64_t>(quitAfterSec * 48000.0) : static_cast<uint64_t>(60.0 * 48000.0);
+      // Determine exact loop length in frames from transport (bars × framesPerBar).
+      // Using exact bar length avoids gaps/overlaps at loop boundaries, ensuring continuous groove.
       uint64_t loopLen = 0;
-      for (const auto& c : baseCmds) if (c.sampleTime > loopLen) loopLen = c.sampleTime;
-      if (loopLen == 0) loopLen = static_cast<uint64_t>(spec.transport.lengthBars * (4.0 * (60.0 / std::max(1.0f, spec.transport.bpm))) * 48000.0);
-      const uint64_t safety = 128;
-      loopLen += safety;
+      if (spec.hasTransport) {
+        const double bpm = (spec.transport.bpm > 0.0) ? spec.transport.bpm : 120.0;
+        const double secPerBeat = 60.0 / bpm;
+        const double secPerBar = 4.0 * secPerBeat;
+        const uint64_t framesPerBar = static_cast<uint64_t>(secPerBar * 48000.0 + 0.5);
+        const uint32_t bars = (spec.transport.lengthBars > 0) ? spec.transport.lengthBars : 1u;
+        loopLen = framesPerBar * static_cast<uint64_t>(bars);
+      }
+      if (loopLen == 0) {
+        // Fallback: derive from last event if transport is absent
+        for (const auto& c : baseCmds) if (c.sampleTime > loopLen) loopLen = c.sampleTime;
+      }
       rtLoopLen = loopLen;
       std::vector<GraphSpec::CommandSpec> realtimeCmds;
       for (uint64_t offset = 0; offset < horizonFrames; offset += loopLen) {

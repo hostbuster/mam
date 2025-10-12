@@ -139,12 +139,15 @@ private:
         if (auto* t = dynamic_cast<TransportNode*>(&n)) {
           SampleTime cursor = blockStartAbs + static_cast<SampleTime>(segStart);
           const SampleTime segAbsEnd = blockStartAbs + static_cast<SampleTime>(segEnd);
-          while (t->nextEventSample() >= cursor && t->nextEventSample() < segAbsEnd) {
-            const SampleTime when = t->nextEventSample();
-            t->emitIfMatch(when, [&](const Command& c){
+          // Emit all events at or after cursor; if next event is before cursor (wrap), allow it on the boundary to avoid missing step 0
+          while (true) {
+            const SampleTime next = t->nextEventSample();
+            if (next < cursor) break; // already emitted earlier in this block
+            if (next >= segAbsEnd) break;
+            t->emitIfMatch(next, [&](const Command& c){
               self->graph_->forEachNode([&](const std::string& nid, Node& nn){ if (nid == c.nodeId) nn.handleEvent(c); });
             });
-            cursor = when + 1; // advance to avoid tight loop on same sample
+            cursor = next + 1;
           }
         }
       });
