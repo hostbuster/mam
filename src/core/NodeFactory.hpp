@@ -10,6 +10,7 @@
 #include "MeterNode.hpp"
 #include "CompressorNode.hpp"
 #include "ReverbNode.hpp"
+#include "WiretapNode.hpp"
 // Mixer is not created via NodeFactory; it is set on Graph from GraphSpec.mixer
 
 inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
@@ -98,6 +99,16 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
       r->mix = static_cast<float>(j.value("mix", 0.2));
     } catch (...) {}
     return r;
+  }
+  if (spec.type == "wiretap") {
+    std::string path = "wiretap.wav";
+    bool enabled = true;
+    try {
+      nlohmann::json j = nlohmann::json::parse(spec.paramsJson);
+      if (j.contains("path")) path = j.value("path", path);
+      enabled = j.value("enabled", true);
+    } catch (...) {}
+    return std::make_unique<WiretapNode>(path, enabled);
   }
   // Unknown node type
   std::fprintf(stderr, "Warning: Unknown node type '%s' (id='%s')\n", spec.type.c_str(), spec.id.c_str());

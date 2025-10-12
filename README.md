@@ -51,6 +51,11 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - Routed, topological graph execution with `connections` and per-edge gains (MVP)
 - Per-edge wet/dry semantics: `gainPercent` (wet into destination) and `dryPercent` (dry tap to master)
 - Realtime loop diagnostics gated by `--verbose`
+- New nodes: `compressor` (port-1 sidechain detector) and `reverb` (Schroeder-style, demo-quality)
+- Ports (MVP): nodes can declare `ports.inputs[]`/`ports.outputs[]` and route via `fromPort`→`toPort`
+- Per-node meters: `--meters-per-node` prints peak/RMS per node; nodes with no audio are marked `inactive`
+- Looping UX: `--loop-minutes` / `--loop-seconds` auto-derives loop-count; export prints planned duration (incl. preroll/tail)
+- Validation/CLI: schema enforcement hook; `--list-node-types` prints supported node types
 
 ## Build (macOS)
 
@@ -149,8 +154,10 @@ Render without using CoreAudio to an uncompressed audio file. Defaults to 48 kHz
   - `--duration SEC`: hard duration; bypasses auto logic.
   - `--bars N`: force N bars from `transport` (if present).
   - `--loop-count N`: repeat the transport sequence N times.
+  - `--loop-minutes M` / `--loop-seconds S`: auto-derive loop-count to reach at least M minutes / S seconds.
   - `--tail-ms MS`: change the decay tail (default 250).
   - Preroll: offline export automatically adds graph preroll derived from node latencies (e.g., delay lines) so transients start fully formed.
+  - When looping, export prints planned duration (incl. preroll/tail).
 
 Examples:
 
@@ -176,6 +183,7 @@ Examples:
 - `--print-topo`: print a simple topological order derived from `connections` (MVP). Helpful to validate routing intent.
 - `--meters`: after export, print a concise line with peak and RMS in dBFS.
 - `--verbose`: in realtime, print loop counter and elapsed time at loop boundaries.
+- `--meters-per-node`: print per-node peak/RMS and mark nodes with no audio as `inactive`.
 
 ##### Sidechain routing (MVP)
 

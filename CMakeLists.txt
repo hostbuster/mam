@@ -31,6 +31,7 @@ add_library(mam_core STATIC
     src/core/TransportNode.hpp
     src/core/CompressorNode.hpp
     src/core/ReverbNode.hpp
+    src/core/WiretapNode.hpp
     src/core/SchemaValidate.hpp
     src/core/SchemaValidate.cpp
 )
