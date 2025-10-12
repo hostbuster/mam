@@ -36,6 +36,7 @@
 #include "core/ParamMap.hpp"
 #include "core/Random.hpp"
 #include "core/GraphUtils.hpp"
+#include "core/SchemaValidate.hpp"
 
 // Use KickSynth (from dsp/) for both realtime and offline paths
 
@@ -205,10 +206,20 @@ static int structuralCheckJson(const std::string& path) {
   }
 }
 
+// removed legacy schemaEnforceJson (replaced by validateJsonWithDraft2020)
+
 static int validateGraphJson(const std::string& path) {
   try {
     // Structural sanity (schema-aligned, lightweight)
     if (int s = structuralCheckJson(path); s == 1) return 1; else if (s == 2) { /* continue with detailed checks but mark */ }
+    // Schema enforcement (best-effort using bundled schema)
+    {
+      const std::string schemaPath = std::string("docs/schema.graph.v1.json");
+      std::string diag;
+      int s2 = validateJsonWithDraft2020(path, schemaPath, diag);
+      if (s2 == 1) return 1; // fatal
+      if (s2 == 2) std::fprintf(stderr, "Schema: %s\n", diag.c_str());
+    }
     GraphSpec spec = loadGraphSpecFromJsonFile(path);
     int errors = 0;
     std::vector<std::string> nodeIds;
@@ -226,7 +237,7 @@ static int validateGraphJson(const std::string& path) {
     }
     // Known node types + minimal transport check
     for (const auto& n : spec.nodes) {
-      if (!(n.type == "kick" || n.type == "clap" || n.type == "transport" || n.type == "delay" || n.type == "meter")) {
+      if (!(n.type == "kick" || n.type == "clap" || n.type == "transport" || n.type == "delay" || n.type == "meter" || n.type == "compressor" || n.type == "reverb")) {
         std::fprintf(stderr, "Unknown node type '%s' (id=%s)\n", n.type.c_str(), n.id.c_str());
       }
       if (n.type == "transport") {
@@ -406,15 +417,7 @@ static int validateGraphJson(const std::string& path) {
           }
         }
       }
-      // fromPort/toPort basic checks (non-negative already via schema; warn only for now)
-      for (const auto& c : spec.connections) {
-        if (c.fromPort != 0u) {
-          std::fprintf(stderr, "Warning: fromPort %u on %s->%s is not implemented yet (treated as 0)\n", c.fromPort, c.from.c_str(), c.to.c_str());
-        }
-        if (c.toPort != 0u) {
-          std::fprintf(stderr, "Warning: toPort %u on %s->%s is not implemented yet (treated as 0)\n", c.toPort, c.from.c_str(), c.to.c_str());
-        }
-      }
+      // fromPort/toPort supported (aggregated) – no warnings
     }
 
     // Type-specific param sanity checks
@@ -478,9 +481,9 @@ int main(int argc, char** argv) {
   double peakTargetDb = -1.0;        // default peak target when normalizing
   bool printTopo = false;            // print topo order from connections
   bool printMeters = false;          // print meter summary explicitly
-
-  bool verbose = false;
-  uint32_t randomSeedOverride = 0;
+  bool tailOverridden = false;
+  bool verbose = false;              // realtime loop diagnostics
+  uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
     auto need = [&](int remain) {
@@ -538,7 +541,7 @@ int main(int argc, char** argv) {
     } else if (std::strcmp(a, "--loop-count") == 0) {
       need(1); overrideLoopCount = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--tail-ms") == 0) {
-      need(1); tailMs = std::max(0.0, std::atof(argv[++i]));
+      need(1); tailMs = std::max(0.0, std::atof(argv[++i])); tailOverridden = true;
     } else if (std::strcmp(a, "--normalize") == 0) {
       doNormalize = true; peakTargetDb = -1.0;
     } else if (std::strcmp(a, "--peak-target") == 0) {
@@ -710,8 +713,24 @@ int main(int argc, char** argv) {
           totalFrames = static_cast<uint64_t>(2.0 * static_cast<double>(sr) + 0.5);
         }
         // Add preroll (graph latency) and tail
+        // Suggest longer tail for long delays/reverb if not overridden
+        double tailMsLocal = tailMs;
+        if (!tailOverridden) {
+          double maxDelayMs = 0.0; bool hasReverb = false;
+          for (const auto& ns : spec2.nodes) {
+            if (ns.type == std::string("delay")) {
+              try { nlohmann::json pj = nlohmann::json::parse(ns.paramsJson); maxDelayMs = std::max(maxDelayMs, pj.value("delayMs", 0.0)); } catch (...) {}
+            } else if (ns.type == std::string("reverb")) {
+              hasReverb = true;
+            }
+          }
+          double suggested = 250.0;
+          if (maxDelayMs > 0.0) suggested = std::max(suggested, std::min(6000.0, maxDelayMs * 2.0));
+          if (hasReverb) suggested = std::max(suggested, 1000.0);
+          tailMsLocal = suggested;
+        }
         const uint64_t preroll = computeGraphPrerollSamples(spec2, sr);
-        totalFrames += preroll + static_cast<uint64_t>((tailMs / 1000.0) * static_cast<double>(sr) + 0.5);
+        totalFrames += preroll + static_cast<uint64_t>((tailMsLocal / 1000.0) * static_cast<double>(sr) + 0.5);
         interleaved = renderGraphWithCommands(graph, cmds, sr, channels, totalFrames);
       } catch (...) {
         if (totalFrames == 0) totalFrames = static_cast<uint64_t>(2.0 * static_cast<double>(sr) + 0.5);

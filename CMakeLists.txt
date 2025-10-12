@@ -29,6 +29,9 @@ add_library(mam_core STATIC
     src/core/ParamMap.hpp
     src/core/TransportNode.hpp
     src/core/CompressorNode.hpp
+    src/core/ReverbNode.hpp
+    src/core/SchemaValidate.hpp
+    src/core/SchemaValidate.cpp
 )
 
 add_library(mam_dsp STATIC

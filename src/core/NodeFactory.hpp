@@ -9,6 +9,7 @@
 #include "DelayNode.hpp"
 #include "MeterNode.hpp"
 #include "CompressorNode.hpp"
+#include "ReverbNode.hpp"
 // Mixer is not created via NodeFactory; it is set on Graph from GraphSpec.mixer
 
 inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
@@ -87,6 +88,16 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
       c->makeupDb = static_cast<float>(j.value("makeupDb", 0.0));
     } catch (...) {}
     return c;
+  }
+  if (spec.type == "reverb") {
+    auto r = std::make_unique<ReverbNode>();
+    try {
+      nlohmann::json j = nlohmann::json::parse(spec.paramsJson);
+      r->roomSize = static_cast<float>(j.value("roomSize", 0.5));
+      r->damp = static_cast<float>(j.value("damp", 0.3));
+      r->mix = static_cast<float>(j.value("mix", 0.2));
+    } catch (...) {}
+    return r;
   }
   // Unknown node type
   std::fprintf(stderr, "Warning: Unknown node type '%s' (id='%s')\n", spec.type.c_str(), spec.id.c_str());
