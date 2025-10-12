@@ -1,0 +1,103 @@
+{
+  "version": 1,
+  "randomSeed": 4242,
+  "sampleRate": 48000,
+  "channels": 2,
+
+  "nodes": [
+    { "id": "kick1", "type": "kick",
+      "params": { "f0": 115, "fend": 38, "pitchDecayMs": 60, "ampDecayMs": 220, "gain": 0.95, "click": 0.12, "bpm": 0, "loop": false } },
+
+    { "id": "snr1", "type": "clap",
+      "params": { "ampDecayMs": 170, "gain": 0.80, "bpm": 0, "loop": false } },
+
+    { "id": "hat1", "type": "clap",
+      "params": { "ampDecayMs": 60, "gain": 0.55, "bpm": 0, "loop": false } },
+
+    { "id": "delayA", "type": "delay", "params": { "delayMs": 375, "feedback": 0.30, "mix": 1.0 },
+      "ports": { "inputs":  [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ],
+                  "outputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ] } },
+
+    { "id": "delayB", "type": "delay", "params": { "delayMs": 750, "feedback": 0.25, "mix": 1.0 },
+      "ports": { "inputs":  [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ],
+                  "outputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ] } },
+
+    { "id": "rev1", "type": "reverb", "params": { "roomSize": 0.65, "damp": 0.35, "mix": 0.22 },
+      "ports": { "inputs":  [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ],
+                  "outputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ] } },
+
+    { "id": "comp1", "type": "compressor",
+      "params": { "thresholdDb": -4, "ratio": 1.6, "attackMs": 12, "releaseMs": 180, "makeupDb": 1.5 },
+      "ports": { "inputs":  [ { "index": 0, "type": "audio", "channels": 2, "role": "main" },
+                                  { "index": 1, "type": "audio", "channels": 1, "role": "sidechain" } ],
+                  "outputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ] } },
+
+    { "id": "wtDrum", "type": "wiretap", "params": { "path": "techno_tap.wav", "enabled": true },
+      "ports": { "inputs":  [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ],
+                  "outputs": [ { "index": 0, "type": "audio", "channels": 1, "role": "main" } ] } }
+  ],
+
+  "mixer": {
+    "masterPercent": 92,
+    "softClip": true,
+    "inputs": [
+      { "id": "kick1",  "gainPercent": 85 },
+      { "id": "snr1",   "gainPercent": 55 },
+      { "id": "hat1",   "gainPercent": 40 },
+      { "id": "delayB", "gainPercent": 28 },
+      { "id": "rev1",   "gainPercent": 30 },
+      { "id": "comp1",  "gainPercent": 35 }
+    ]
+  },
+
+  "transport": {
+    "bpm": 128,
+    "lengthBars": 16,
+    "resolution": 16,
+    "swingPercent": 8,
+    "tempoRamps": [ { "bar": 8, "bpm": 130 } ],
+    "patterns": [
+      { "nodeId": "kick1", "steps": "x...x...x...x...",
+        "locks": [
+          { "step": 0,  "param": "F0",             "value": 115 },
+          { "step": 8,  "param": "F0",             "value": 105, "rampMs": 40 },
+          { "step": 0,  "param": "AMP_DECAY_MS",   "value": 220 },
+          { "step": 12, "param": "AMP_DECAY_MS",   "value": 180, "rampMs": 30 },
+          { "step": 0,  "param": "PITCH_DECAY_MS", "value": 60 },
+          { "step": 8,  "param": "PITCH_DECAY_MS", "value": 70 },
+          { "step": 4,  "param": "GAIN",           "value": 0.90 },
+          { "step": 12, "param": "GAIN",           "value": 1.00, "rampMs": 30 }
+        ] },
+
+      { "nodeId": "snr1",  "steps": "....x.......x...",
+        "locks": [
+          { "step": 4,  "param": "AMP_DECAY_MS", "value": 160 },
+          { "step": 12, "param": "AMP_DECAY_MS", "value": 190 }
+        ] },
+
+      { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x.",
+        "locks": [
+          { "step": 0,  "param": "AMP_DECAY_MS", "value": 55 },
+          { "step": 8,  "param": "GAIN",         "value": 0.45 },
+          { "step": 12, "param": "GAIN",         "value": 0.60, "rampMs": 25 }
+        ] }
+    ]
+  },
+
+  "connections": [
+    { "from": "hat1",   "to": "delayA", "gainPercent": 70,  "dryPercent": 0, "fromPort": 0, "toPort": 0 },
+    { "from": "snr1",   "to": "delayA", "gainPercent": 55,  "dryPercent": 0, "fromPort": 0, "toPort": 0 },
+    { "from": "delayA", "to": "delayB", "gainPercent": 100, "dryPercent": 0, "fromPort": 0, "toPort": 0 },
+
+    { "from": "snr1",   "to": "wtDrum", "gainPercent": 100, "dryPercent": 0, "fromPort": 0, "toPort": 0 },
+    { "from": "wtDrum", "to": "rev1",   "gainPercent": 100, "dryPercent": 0, "fromPort": 0, "toPort": 0 },
+
+    { "from": "kick1",  "to": "comp1",  "gainPercent": 100, "dryPercent": 0, "fromPort": 0, "toPort": 1 },
+    { "from": "kick1",  "to": "comp1",  "gainPercent": 25,  "dryPercent": 0, "fromPort": 0, "toPort": 0 },
+    { "from": "snr1",   "to": "comp1",  "gainPercent": 25,  "dryPercent": 0, "fromPort": 0, "toPort": 0 }
+  ],
+
+  "commands": []
+}
+
+
