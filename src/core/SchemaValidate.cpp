@@ -3,7 +3,7 @@
 #include <sstream>
 #include <nlohmann/json.hpp>
 
-#ifdef USE_JSON_SCHEMA
+#if defined(MAM_USE_JSON_SCHEMA) || defined(USE_JSON_SCHEMA)
 #include <json-schema.hpp>
 #endif
 
@@ -23,7 +23,7 @@ int validateJsonWithDraft2020(const std::string& jsonPath,
       if (!fg.good()) { outDiagnostics = "Graph not found"; return 1; }
       fg >> doc;
     }
-#ifdef USE_JSON_SCHEMA
+#if defined(MAM_USE_JSON_SCHEMA) || defined(USE_JSON_SCHEMA)
     // Strict schema validation
     json_schema::json_validator validator;
     validator.set_root_schema(schema);

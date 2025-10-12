@@ -56,6 +56,7 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - Per-node meters: `--meters-per-node` prints peak/RMS per node; nodes with no audio are marked `inactive`
 - Looping UX: `--loop-minutes` / `--loop-seconds` auto-derives loop-count; export prints planned duration (incl. preroll/tail)
 - Validation/CLI: schema enforcement hook; `--list-node-types` prints supported node types
+  - Strict JSON Schema can be enabled at configure time via `-DMAM_USE_JSON_SCHEMA=ON` (requires bundled `third_party/json-schema.hpp`)
 
 ## Build (macOS)
 
