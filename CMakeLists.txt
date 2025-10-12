@@ -9,6 +9,7 @@ option(MAM_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 option(MAM_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(MAM_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(MAM_ENABLE_LTO "Enable Link-Time Optimization" OFF)
+option(MAM_USE_JSON_SCHEMA "Enable strict JSON Schema validation (requires json-schema.hpp)" OFF)
 
 include_directories(third_party)
 
@@ -33,6 +34,12 @@ add_library(mam_core STATIC
     src/core/SchemaValidate.hpp
     src/core/SchemaValidate.cpp
 )
+
+if (MAM_USE_JSON_SCHEMA)
+    target_compile_definitions(mam_core PRIVATE USE_JSON_SCHEMA)
+    # If you vendor pboettch/json-schema-validator headers under third_party/json-schema-validator,
+    # the global include_directories(third_party) above will make <json-schema.hpp> resolvable.
+endif()
 
 add_library(mam_dsp STATIC
     src/instruments/kick/KickSynth.hpp

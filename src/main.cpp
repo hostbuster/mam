@@ -122,8 +122,11 @@ static void printUsage(const char* exe) {
                "  --loop-count N     Repeat transport sequence N times (default 1)\n"
                "  --tail-ms MS       Decay tail appended (default 250)\n"
                "  --verbose          Print realtime loop diagnostics (loop counter and elapsed time)\n"
+               "  --meters-per-node  Print per-node peak/RMS after run/export\n"
+               "  --loop-minutes M   Repeat transport to reach at least M minutes (offline)\n"
+               "  --loop-seconds S   Repeat transport to reach at least S seconds (offline)\n"
                "  --random-seed N    Override JSON randomSeed for deterministic randomness (0 to skip)\n"
-               "          [--validate path.json] [--list-nodes path.json] [--list-params kick|clap]\n"
+               "          [--validate path.json] [--list-nodes path.json] [--list-params kick|clap] [--list-node-types]\n"
                "\n"
                "Examples:\n"
                "  %s                       # one-shot, defaults (real-time)\n"
@@ -468,6 +471,7 @@ int main(int argc, char** argv) {
   std::string validatePath;
   std::string listNodesPath;
   std::string listParamsType;
+  bool listNodeTypes = false;
   double offlineSr = 48000.0;
   bool pcm16 = false;
   double quitAfterSec = 0.0;
@@ -476,6 +480,8 @@ int main(int argc, char** argv) {
   double overrideDurationSec = -1.0; // < 0 means auto
   uint32_t overrideBars = 0;         // 0 means use transport length
   uint32_t overrideLoopCount = 0;    // 0 means single pass
+  double loopMinutes = 0.0;          // derive loop-count if > 0
+  double loopSeconds = 0.0;          // derive loop-count if > 0
   double tailMs = 250.0;             // default decay tail
   bool doNormalize = false;          // normalize to peak target if true
   double peakTargetDb = -1.0;        // default peak target when normalizing
@@ -484,6 +490,7 @@ int main(int argc, char** argv) {
   bool tailOverridden = false;
   bool verbose = false;              // realtime loop diagnostics
   uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
+  bool metersPerNode = false;
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
     auto need = [&](int remain) {
@@ -540,6 +547,10 @@ int main(int argc, char** argv) {
       need(1); overrideBars = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--loop-count") == 0) {
       need(1); overrideLoopCount = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--loop-minutes") == 0) {
+      need(1); loopMinutes = std::max(0.0, std::atof(argv[++i]));
+    } else if (std::strcmp(a, "--loop-seconds") == 0) {
+      need(1); loopSeconds = std::max(0.0, std::atof(argv[++i]));
     } else if (std::strcmp(a, "--tail-ms") == 0) {
       need(1); tailMs = std::max(0.0, std::atof(argv[++i])); tailOverridden = true;
     } else if (std::strcmp(a, "--normalize") == 0) {
@@ -554,6 +565,8 @@ int main(int argc, char** argv) {
       printTopo = true;
     } else if (std::strcmp(a, "--meters") == 0) {
       printMeters = true;
+    } else if (std::strcmp(a, "--meters-per-node") == 0) {
+      metersPerNode = true;
     } else if (std::strcmp(a, "--random-seed") == 0) {
       need(1); randomSeedOverride = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--validate") == 0) {
@@ -562,6 +575,8 @@ int main(int argc, char** argv) {
       need(1); listNodesPath = argv[++i];
     } else if (std::strcmp(a, "--list-params") == 0) {
       need(1); listParamsType = argv[++i];
+    } else if (std::strcmp(a, "--list-node-types") == 0) {
+      listNodeTypes = true;
     } else {
       std::fprintf(stderr, "Unknown option: %s\n", a);
       printUsage(argv[0]);
@@ -590,6 +605,23 @@ int main(int argc, char** argv) {
   }
   if (!validatePath.empty()) return validateGraphJson(validatePath);
   if (!listNodesPath.empty()) return listNodesGraphJson(listNodesPath);
+  if (listNodeTypes) {
+    try {
+      nlohmann::json schema;
+      std::ifstream fs("docs/schema.graph.v1.json");
+      if (fs.good()) {
+        fs >> schema;
+        const auto& enumArr = schema.at("properties").at("nodes").at("items").at("properties").at("type").at("enum");
+        std::printf("Supported node types (%zu):\n", enumArr.size());
+        for (const auto& e : enumArr) std::printf("- %s\n", e.get<std::string>().c_str());
+      } else {
+        std::printf("Supported node types: kick, clap, transport, delay, meter, compressor, reverb\n");
+      }
+    } catch (...) {
+      std::printf("Supported node types: kick, clap, transport, delay, meter, compressor, reverb\n");
+    }
+    return 0;
+  }
   if (!listParamsType.empty()) {
     if (listParamsType == std::string("kick")) {
       std::printf("kick params:\n");
@@ -638,10 +670,12 @@ int main(int argc, char** argv) {
           const float master = spec.mixer.masterPercent * (1.0f/100.0f);
           graph.setMixer(std::make_unique<MixerNode>(std::move(chans), master, spec.mixer.softClip));
         }
-        if (!spec.connections.empty()) {
+      if (!spec.connections.empty()) {
           graph.setConnections(spec.connections);
         }
-        if (printTopo) printTopoOrderFromSpec(spec);
+      if (printTopo) printTopoOrderFromSpec(spec);
+      if (metersPerNode) graph.enableStats(true);
+      if (metersPerNode) graph.enableStats(true);
       } catch (const std::exception& e) {
         std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
         return 1;
@@ -663,8 +697,20 @@ int main(int argc, char** argv) {
           // Generate transport commands covering requested bars/loops
           GraphSpec::Transport tgen = spec2.transport;
           const uint32_t baseBars = spec2.transport.lengthBars ? spec2.transport.lengthBars : 1u;
-          const uint32_t useBars = overrideBars > 0 ? overrideBars : baseBars;
-          const uint32_t loops = overrideLoopCount > 0 ? overrideLoopCount : 1u;
+          uint32_t useBars = overrideBars > 0 ? overrideBars : baseBars;
+          uint32_t loops = overrideLoopCount > 0 ? overrideLoopCount : 1u;
+          if ((loopMinutes > 0.0 || loopSeconds > 0.0) && useBars > 0) {
+            const double targetSec = (loopMinutes > 0.0 ? loopMinutes * 60.0 : loopSeconds);
+            if (targetSec > 0.0) {
+              // compute seconds per bar with ramps by averaging first bar
+              const double bpm = spec2.transport.bpm > 0.0 ? spec2.transport.bpm : 120.0;
+              const double secPerBar = 4.0 * (60.0 / bpm);
+              const uint32_t perLoopBars = useBars;
+              const double perLoopSec = secPerBar * static_cast<double>(perLoopBars);
+              loops = static_cast<uint32_t>(std::ceil(targetSec / std::max(0.001, perLoopSec)));
+              if (loops == 0) loops = 1;
+            }
+          }
           tgen.lengthBars = useBars * loops;
           auto gen = generateCommandsFromTransport(tgen, sr);
           cmds.insert(cmds.end(), gen.begin(), gen.end());
@@ -731,6 +777,13 @@ int main(int argc, char** argv) {
         }
         const uint64_t preroll = computeGraphPrerollSamples(spec2, sr);
         totalFrames += preroll + static_cast<uint64_t>((tailMsLocal / 1000.0) * static_cast<double>(sr) + 0.5);
+        // Print planned duration info when looping or bars override is used
+        if (overrideBars > 0 || overrideLoopCount > 0 || loopMinutes > 0.0 || loopSeconds > 0.0) {
+          const double plannedSec = static_cast<double>(totalFrames) / static_cast<double>(sr);
+          std::fprintf(stderr, "Planned duration: %s (%.3fs) including preroll %.3fs and tail %.3fs\n",
+                       formatDuration(plannedSec).c_str(), plannedSec,
+                       static_cast<double>(preroll) / static_cast<double>(sr), tailMsLocal / 1000.0);
+        }
         interleaved = renderGraphWithCommands(graph, cmds, sr, channels, totalFrames);
       } catch (...) {
         if (totalFrames == 0) totalFrames = static_cast<uint64_t>(2.0 * static_cast<double>(sr) + 0.5);
@@ -776,6 +829,17 @@ int main(int argc, char** argv) {
         // duplicate a concise meters line for easy parsing
         std::fprintf(stderr, "Meters: peak_dBFS=%.2f rms_dBFS=%.2f\n", peakDb, rmsDb);
       }
+      if (metersPerNode) {
+        const auto nodeMeters = graph.getNodeMeters(channels);
+        for (const auto& m : nodeMeters) {
+          const bool inactive = (!std::isfinite(m.peakDb) && !std::isfinite(m.rmsDb));
+          if (inactive) {
+            std::fprintf(stderr, "Node %s: inactive\n", m.id.c_str());
+          } else {
+            std::fprintf(stderr, "Node %s: peak=%.2f dBFS rms=%.2f dBFS\n", m.id.c_str(), m.peakDb, m.rmsDb);
+          }
+        }
+      }
     } catch (const std::exception& e) {
       std::fprintf(stderr, "Audio file write failed: %s\n", e.what());
       return 1;
@@ -810,7 +874,7 @@ int main(int argc, char** argv) {
       }
       // Provide port descriptors to graph (for future adapters)
       graph.setPortDescriptors(spec.nodes);
-      graph.setPortDescriptors(spec.nodes);
+      if (metersPerNode) graph.enableStats(true);
     } catch (const std::exception& e) {
       std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
       return 1;
@@ -938,6 +1002,12 @@ int main(int argc, char** argv) {
   }
 
   rt.stop();
+  if (metersPerNode) {
+    const auto meters = graph.getNodeMeters(2);
+    for (const auto& m : meters) {
+      std::fprintf(stderr, "Node %s: peak=%.2f dBFS rms=%.2f dBFS\n", m.id.c_str(), m.peakDb, m.rmsDb);
+    }
+  }
   if (transportFeeder.joinable()) transportFeeder.join();
 
   return 0;

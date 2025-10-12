@@ -44,6 +44,7 @@ public:
 
   void prepare(double sampleRate, uint32_t maxBlock) {
     for (auto& e : nodes_) e.node->prepare(sampleRate, maxBlock);
+    if (statsEnabled_) initStats();
   }
 
   void reset() {
@@ -114,6 +115,7 @@ public:
         auto& out = outBuffers_[ni];
         std::copy(work_.begin(), work_.end(), out.begin());
         d->processInPlace(ctx, out.data(), channels);
+        if (statsEnabled_) accumulateStats(ni, out.data(), ctx.frames, channels);
       } else if (auto* c = dynamic_cast<CompressorNode*>(node)) {
         // If sidechain is provided on port 1, use it; else self-detect
         auto& out = outBuffers_[ni];
@@ -122,14 +124,17 @@ public:
         auto itSC = portSums.find(1u);
         if (itSC != portSums.end()) scWork_ = itSC->second;
         c->applySidechain(ctx, out.data(), scWork_.data(), channels);
+        if (statsEnabled_) accumulateStats(ni, out.data(), ctx.frames, channels);
       } else if (auto* m = dynamic_cast<MeterNode*>(node)) {
         // pass-through input to output
         auto& out = outBuffers_[ni];
         std::copy(work_.begin(), work_.end(), out.begin());
         m->updateFromBuffer(out.data(), ctx.frames, channels);
+        if (statsEnabled_) accumulateStats(ni, out.data(), ctx.frames, channels);
       } else {
         // generator/process node writes its own output (ignores inputs)
         node->process(ctx, outBuffers_[ni].data(), channels);
+        if (statsEnabled_) accumulateStats(ni, outBuffers_[ni].data(), ctx.frames, channels);
       }
     }
 
@@ -183,6 +188,46 @@ private:
   std::unordered_map<size_t, std::unordered_map<uint32_t, uint32_t>> inPortChannels_{};
   std::unordered_map<size_t, std::unordered_map<uint32_t, uint32_t>> outPortChannels_{};
   std::unordered_map<std::string, size_t> idToIndex_{};
+
+  // Per-node meters (accumulated across processing until reset)
+  bool statsEnabled_ = false;
+  struct NodeAccum { double peak = 0.0; long double sumSq = 0.0L; uint64_t count = 0; };
+  std::vector<NodeAccum> nodeAccums_{};
+
+  void initStats() {
+    nodeAccums_.assign(nodes_.size(), NodeAccum{});
+  }
+  void accumulateStats(size_t nodeIdx, const float* interleaved, uint32_t frames, uint32_t channels) {
+    if (nodeIdx >= nodeAccums_.size()) return;
+    auto& a = nodeAccums_[nodeIdx];
+    const size_t n = static_cast<size_t>(frames) * channels;
+    for (size_t i = 0; i < n; ++i) {
+      const double s = interleaved[i];
+      const double aabs = std::fabs(s);
+      if (aabs > a.peak) a.peak = aabs;
+      a.sumSq += static_cast<long double>(s) * static_cast<long double>(s);
+    }
+    a.count += static_cast<uint64_t>(n);
+  }
+
+public:
+  void enableStats(bool on) { statsEnabled_ = on; if (on) initStats(); }
+  struct NodeMeter { std::string id; double peakDb; double rmsDb; };
+  std::vector<NodeMeter> getNodeMeters(uint32_t /*channels*/) const {
+    std::vector<NodeMeter> out;
+    out.reserve(nodes_.size());
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+      const auto& a = nodeAccums_.empty() ? NodeAccum{} : nodeAccums_[i];
+      double peakDb = (a.peak > 0.0) ? 20.0 * std::log10(a.peak) : -INFINITY;
+      double rmsDb = -INFINITY;
+      if (a.count > 0) {
+        const double rms = std::sqrt(static_cast<double>(a.sumSq / static_cast<long double>(a.count)));
+        rmsDb = (rms > 0.0) ? 20.0 * std::log10(rms) : -INFINITY;
+      }
+      out.push_back(NodeMeter{nodes_[i].id, peakDb, rmsDb});
+    }
+    return out;
+  }
 
   void rebuildTopology() {
     insertionOrder_.clear(); insertionOrder_.reserve(nodes_.size());
