@@ -23,26 +23,30 @@
 - CLI: `--graph`, `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
 - Validation: named-param resolution; transport pattern target/steps checks; duplicate mixer input detection; dry+mixed double-count warnings; type param sanity (delay, meter)
 - Scaffolds: `BufferPool` and `OfflineTopoScheduler` for future topo/latency work
+ - Nodes: `delay`, `meter`, `compressor` (sidechain port), `reverb`, `wiretap`
+ - Channel adapters: generalized N↔M adaptation guided by declared port `channels` (mono↔stereo and N→M modulo mapping)
+ - Realtime loop stability: exact loop length from transport bars; throttled rolling feeder; interned nodeId strings; seamless 1‑bar looping
+ - Observability: per-node meter printing after offline export and at realtime loop boundaries (`--verbose` + `--meters-per-node`)
+ - Docs: `demo.json` refined; new `demo2.json` (16‑bar techno); sidechain cookbook; enhanced `--print-topo` with port channel info
+ - Schema: strict validation toggle via `-DMAM_USE_JSON_SCHEMA=ON`
 
 ### Top priority (next)
-- Multi-port routing and port descriptors
-  - Declare per-node ports (inputs/outputs with index/name/type/channels/role) in schema and JSON.
-  - Enforce `fromPort`/`toPort` against node descriptors in validation.
-  - Implement per-port accumulation in `Graph` (MVP collapse done); expose hooks for port-aware nodes.
-  - Channel adapters (mono↔stereo) with validation warnings.
-- JSON Schema validation in CLI
-  - Integrate a draft 2020-12 validator and validate against `docs/schema.graph.v1.json` in `--validate`.
-  - Keep semantic checks (cycles, ranges, param maps) after schema pass.
+- Multi-port routing (beyond MVP)
+  - Full per-port accumulation and delivery (no collapse to port 0); port-aware processing in nodes (e.g., compressor sidechain)
+  - Sidechain ergonomics: examples and validation for multi-consumer keys; clarify dry/wet interactions
+- Latency reporting UI and preroll accounting in CLI output (offline and realtime stats print)
+- JSON Schema validation default path
+  - Prefer enabling `MAM_USE_JSON_SCHEMA` by default in developer presets; keep semantic checks after schema
 
 ### Next up
 - Routing engine (Phase 4 MVP → full):
-  - Add explicit audio ports and per-edge gains; execute graph strictly by topological order from `connections` (both offline and realtime). Implement multi-port mixing.
-  - Replace global-insert effects with per-connection processing; maintain `MixerNode` as a terminal node.
-  - Report per-node latency; add preroll and optional compensation (offline first).
-- Transport timing: finalize swing nuances and ramp curves; add seek and loop ranges.
-- Parameters: complete name→id auto-generation; stricter load-time validation/clamping across all nodes.
-- Observability: expand Meter/Wiretap nodes; JSON perf trace; per-node counters.
-- Validation & tooling: JSON Schema validation in `mam --validate` (integrate draft 2020-12); golden renders; CI with sanitizers and clang-tidy.
+  - Execute strictly by topological order from `connections` in both offline and realtime paths; implement multi-port mixing semantics
+  - Per-edge wet/dry refinement; avoid double-count by design
+  - Report per-node latency; add preroll and optional compensation (offline first)
+- Transport timing: finalize swing behavior and ramp curves; seek/loop ranges and duration hints
+- Parameters: complete name→id coverage across all nodes; stricter load-time validation/clamping using `ParamMap`
+- Observability: lightweight JSON perf trace; per-node counters; optional realtime perf dump
+- Validation & tooling: schema-on by default in dev; golden renders; CI with sanitizers and clang-tidy
 
 ### Design notes
 
