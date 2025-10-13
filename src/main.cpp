@@ -991,7 +991,12 @@ int main(int argc, char** argv) {
       // Sort by time to preserve draining order in the SPSC queue
       std::sort(baseCmds.begin(), baseCmds.end(), [](const auto& a, const auto& b){ return a.sampleTime < b.sampleTime; });
       // Repeat transport loop up to horizon (quit-after or ~60s)
-      uint64_t horizonFrames = (quitAfterSec > 0.0) ? static_cast<uint64_t>(quitAfterSec * 48000.0) : static_cast<uint64_t>(60.0 * 48000.0);
+      // Horizon is exact multiple of loopLen to avoid a boundary block without triggers
+      uint64_t loopsAhead = 16;
+      if (quitAfterSec > 0.0 && rtLoopLen > 0) {
+        loopsAhead = static_cast<uint64_t>(std::ceil((quitAfterSec * 48000.0) / static_cast<double>(rtLoopLen)));
+      }
+      uint64_t horizonFrames = (rtLoopLen > 0) ? (loopsAhead * rtLoopLen) : static_cast<uint64_t>(60.0 * 48000.0);
       // Determine exact loop length in frames from transport (bars × framesPerBar).
       // Using exact bar length avoids gaps/overlaps at loop boundaries, ensuring continuous groove.
       uint64_t loopLen = 0;
@@ -1029,7 +1034,7 @@ int main(int argc, char** argv) {
 
       // Rolling feeder thread to extend horizon in realtime without flooding the queue
       if (spec.hasTransport && loopLen > 0) {
-        uint64_t nextOffset = ((horizonFrames / loopLen) + 1) * loopLen;
+        uint64_t nextOffset = horizonFrames;
         constexpr uint64_t desiredAheadFrames = 5ull * 48000ull; // keep ~5s of commands ahead
         transportFeeder = std::thread([&cmdQueue, baseCmds, loopLen, nextOffset, &rt]() mutable {
           uint64_t offset = nextOffset;
