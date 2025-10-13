@@ -8,7 +8,17 @@
     {
       "id": "kick1",
       "type": "kick",
-      "params": { "f0": 120, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 220, "gain": 0.9, "click": 0.1, "bpm": 0, "loop": false }
+      "params": { "f0": 120, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 220, "gain": 0.9, "click": 0.1, "bpm": 0, "loop": false },
+      "mod": {
+        "lfos": [
+          { "id": 1, "wave": "sine", "freqHz": 2.0, "phase": 0.0 },
+          { "id": 2, "wave": "triangle", "freqHz": 0.2, "phase": 0.0 }
+        ],
+        "routes": [
+          { "sourceId": 1, "destParam": "F0", "depth": 40.0, "offset": 0.0 },
+          { "sourceId": 2, "destParam": "LFO.1.freqHz", "depth": 1.5, "offset": 0.5 }
+        ]
+      }
     },
     {
       "id": "snr1",
