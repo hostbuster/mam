@@ -944,6 +944,7 @@ int main(int argc, char** argv) {
     try { GraphSpec tmp = loadGraphSpecFromJsonFile(graphPath); if (tmp.hasTransport && tmp.transport.resolution > 0) diagRes = tmp.transport.resolution; } catch (...) {}
   }
   rt.setDiagnostics(printTriggers, 120.0, diagRes);
+  rt.setDiagLoop(rtLoopLen);
   rt.setTransportEmitEnabled(false); // all triggers come from pre-enqueued commands for parity
   try {
     rt.start(graph, 48000.0, 2);

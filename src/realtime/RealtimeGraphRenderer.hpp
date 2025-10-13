@@ -24,6 +24,7 @@ public:
   void setDiagnostics(bool printTriggers, double bpmForBeats, uint32_t resolutionStepsPerBar) {
     printTriggers_ = printTriggers; diagBpm_ = bpmForBeats; diagResolution_ = (resolutionStepsPerBar == 0 ? 16u : resolutionStepsPerBar);
   }
+  void setDiagLoop(uint64_t loopFrames) { diagLoopFrames_ = loopFrames; }
   void setTransportEmitEnabled(bool enabled) { transportEmitEnabled_ = enabled; }
 
   void start(Graph& graph, double requestedSampleRate, uint32_t channels) {
@@ -190,9 +191,12 @@ private:
   double diagBpm_ = 120.0;
   uint32_t diagResolution_ = 16;
   bool transportEmitEnabled_ = false;
+  uint64_t diagLoopFrames_ = 0;
 
   void printEvent(const char* tag, const Command& c) const {
-    const double tSec = static_cast<double>(c.sampleTime) / sampleRate_;
+    const uint64_t st = c.sampleTime;
+    const uint64_t within = (diagLoopFrames_ > 0) ? (st % diagLoopFrames_) : st;
+    const double tSec = static_cast<double>(within) / sampleRate_;
     double beat = (diagBpm_ > 0.0) ? (tSec * diagBpm_ / 60.0) : 0.0;
     if (beat < 0.0) beat = 0.0;
     const double beatsPerBar = 4.0;
@@ -201,7 +205,7 @@ private:
     const double stepLenBeats = beatsPerBar / static_cast<double>(diagResolution_);
     const uint32_t stepIdx = static_cast<uint32_t>(std::floor(beatInBar / stepLenBeats + 1e-9));
     std::fprintf(stderr, "%s t=%.6fs bar=%llu step=%u node=%s type=%u pid=%u val=%.3f\n",
-                 tag, tSec, static_cast<unsigned long long>(barIdx), stepIdx, c.nodeId ? c.nodeId : "",
+                 tag, tSec, static_cast<unsigned long long>(barIdx + 1ull), stepIdx + 1u, c.nodeId ? c.nodeId : "",
                  static_cast<unsigned>(c.type), c.paramId, static_cast<double>(c.value));
   }
 };
