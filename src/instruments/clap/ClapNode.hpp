@@ -30,13 +30,24 @@ public:
       mod_.tick();
       float baseGain = params_.next(ClapParam::GAIN);
       float baseDecay = params_.next(ClapParam::AMP_DECAY_MS);
+      float basePan = params_.current(ClapParam::PAN);
       const float modGain = mod_.sumFor(ClapParam::GAIN);
       const float modDecay = mod_.sumFor(ClapParam::AMP_DECAY_MS);
       // Apply modulation
       nodeGain_ = baseGain + modGain; if (nodeGain_ < 0.0f) nodeGain_ = 0.0f;
       float dec = baseDecay + modDecay; if (dec < 1.0f) dec = 1.0f; synth_.params().ampDecayMs = dec;
       const float s = synth_.process();
-      for (uint32_t ch = 0; ch < channels; ++ch) interleavedOut[i * channels + ch] = s * nodeGain_;
+      // Simple equal-power pan
+      float pan = basePan; if (pan < -1.0f) pan = -1.0f; else if (pan > 1.0f) pan = 1.0f;
+      float l = std::cos(0.25f * 3.14159265f * (pan + 1.0f));
+      float r = std::sin(0.25f * 3.14159265f * (pan + 1.0f));
+      if (channels >= 2) {
+        interleavedOut[i * channels + 0] = s * nodeGain_ * l;
+        interleavedOut[i * channels + 1] = s * nodeGain_ * r;
+        for (uint32_t ch = 2; ch < channels; ++ch) interleavedOut[i * channels + ch] = s * nodeGain_ * 0.5f;
+      } else {
+        interleavedOut[i * channels + 0] = s * nodeGain_;
+      }
     }
   }
 
@@ -49,6 +60,7 @@ public:
       switch (cmd.paramId) {
         case ClapParam::AMP_DECAY_MS: params_.setImmediate(ClapParam::AMP_DECAY_MS, cmd.value); break;
         case ClapParam::GAIN: params_.setImmediate(ClapParam::GAIN, cmd.value); nodeGain_ = cmd.value; break;
+        case ClapParam::PAN: params_.setImmediate(ClapParam::PAN, cmd.value); break;
         case ClapParam::BPM: synth_.params().bpm = cmd.value; synth_.params().loop = (cmd.value > 0.0f); break;
         case ClapParam::LOOP: synth_.params().loop = (cmd.value >= 0.5f); break;
         case ClapParam::LFO1_FREQ_HZ: mod_.addLfo(1, ModLfo::Wave::Sine, cmd.value, 0.0f); break;

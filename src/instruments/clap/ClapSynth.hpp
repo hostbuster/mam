@@ -16,6 +16,7 @@ public:
   double sampleRate() const;
   void reset();
   void trigger();
+  void trigger(float velocity);
   float process();
   const ClapParams& params() const;
   ClapParams& params();
@@ -30,6 +31,7 @@ private:
   bool active_ = false;
   bool triggeredOnce_ = false;
   uint32_t rngState_ = 0x12345678u;
+  float velocity_ = 1.0f; // 0..1, applied to output
 };
 
 

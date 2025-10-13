@@ -20,6 +20,12 @@ void ClapSynth::trigger() {
   active_ = true;
 }
 
+void ClapSynth::trigger(float velocity) {
+  if (velocity < 0.0f) velocity = 0.0f; else if (velocity > 1.0f) velocity = 1.0f;
+  velocity_ = velocity;
+  trigger();
+}
+
 inline float ClapSynth::nextNoise() {
   // xorshift32
   uint32_t x = rngState_;
@@ -46,7 +52,7 @@ float ClapSynth::process() {
     const float tauAmp = params_.ampDecayMs * 0.001f;
     const float env = std::exp(static_cast<float>(-tSec_) / tauAmp);
     const float n = nextNoise();
-    sample = env * n * params_.gain;
+    sample = env * n * params_.gain * velocity_;
 
     tSec_ += 1.0 / sr;
     if (env < 0.00005f) {

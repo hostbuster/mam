@@ -18,6 +18,7 @@ namespace ClapParam {
   constexpr uint16_t GAIN = 2;
   constexpr uint16_t BPM = 3;
   constexpr uint16_t LOOP = 4;
+  constexpr uint16_t PAN = 5; // -1..1 (L..R)
   // Modulation-related pseudo-params for transport/commands
   constexpr uint16_t LFO1_FREQ_HZ = 101;
   constexpr uint16_t LFO2_FREQ_HZ = 102;
