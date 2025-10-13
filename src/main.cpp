@@ -1069,8 +1069,14 @@ int main(int argc, char** argv) {
       // Provide precise loop length to realtime diagnostics so Loop N prints at exact boundaries
       rt.setDiagLoop(rtLoopLen);
       std::vector<GraphSpec::CommandSpec> realtimeCmds;
-      for (uint64_t offset = 0; offset < horizonFrames; offset += loopLen) {
-        for (auto c : baseCmds) { c.sampleTime += offset; realtimeCmds.push_back(c); }
+      // Use baseCmds as-is if they already span the initial horizon; otherwise replicate to cover it
+      uint64_t baseSpan = 0; for (const auto& c : baseCmds) if (c.sampleTime > baseSpan) baseSpan = c.sampleTime;
+      if (baseSpan >= horizonFrames) {
+        realtimeCmds = baseCmds;
+      } else {
+        for (uint64_t offset = 0; offset < horizonFrames; offset += loopLen) {
+          for (auto c : baseCmds) { c.sampleTime += offset; realtimeCmds.push_back(c); }
+        }
       }
       for (const auto& c : realtimeCmds) {
         Command cmd{};
@@ -1106,7 +1112,10 @@ int main(int argc, char** argv) {
                 cmd.paramId = c.paramId;
                 cmd.value = c.value;
                 cmd.rampMs = c.rampMs;
-                (void)cmdQueue.push(cmd); // non-blocking; bounded by horizon gating
+                // Always push; queue may briefly fill but next iteration will catch up
+                while (!cmdQueue.push(cmd)) {
+                  std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                }
               }
               offset += loopLen;
             } else {
