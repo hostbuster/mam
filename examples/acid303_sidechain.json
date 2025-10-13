@@ -8,14 +8,7 @@
       "id": "bass303",
       "type": "tb303_ext",
       "params": { "waveform": 0, "tune": 0, "glideMs": 18, "cutoff": 900, "resonance": 0.55, "envMod": 0.55, "decay": 220, "ampDecayMs": 220, "gain": 0.9 },
-      "mod": {
-        "lfos": [
-          { "id": 1, "wave": "sine", "freqHz": 0.5333333333, "phase": 0.0 }
-        ],
-        "routes": [
-          { "sourceId": 1, "destParam": "CUTOFF_HZ", "min": 300, "max": 2400, "map": "exp" }
-        ]
-      }
+      "mod": { "lfos": [], "routes": [] }
     },
     { "id": "kick1", "type": "kick", "params": { "f0": 120, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 1.0 } },
     { "id": "comp303", "type": "compressor",
