@@ -108,6 +108,7 @@ private:
   bool gate_ = false;
   float curHz_ = 110.0f;
   float targetHz_ = 110.0f;
+  // future: pan per-voice if stereo processing is added
 };
 
 
