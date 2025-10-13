@@ -16,6 +16,7 @@ namespace Tb303Param {
   constexpr uint16_t FILTER_DECAY_MS = 7;
   constexpr uint16_t AMP_DECAY_MS = 8;
   constexpr uint16_t AMP_GAIN = 9;
+  constexpr uint16_t DRIVE = 13;
 }
 
 class Tb303ExtNode : public Node {
@@ -36,6 +37,7 @@ public:
     params_.ensureParam(Tb303Param::FILTER_DECAY_MS, 200.0f);
     params_.ensureParam(Tb303Param::AMP_DECAY_MS, 200.0f);
     params_.ensureParam(Tb303Param::AMP_GAIN, 0.8f);
+    params_.ensureParam(Tb303Param::DRIVE, 0.0f);
     mod_.prepare(sampleRate);
   }
   void reset() override { synth_.reset(); }
@@ -53,6 +55,7 @@ public:
       synth_.params().filterDecayMs = params_.next(Tb303Param::FILTER_DECAY_MS);
       synth_.params().ampDecayMs = params_.next(Tb303Param::AMP_DECAY_MS);
       synth_.params().ampGain = params_.next(Tb303Param::AMP_GAIN);
+      synth_.params().drive = params_.next(Tb303Param::DRIVE);
       float s = synth_.process();
       for (uint32_t ch = 0; ch < channels; ++ch) interleavedOut[i * channels + ch] = s;
     }
@@ -82,6 +85,7 @@ public:
         case Tb303Param::FILTER_DECAY_MS: params_.setImmediate(Tb303Param::FILTER_DECAY_MS, cmd.value); break;
         case Tb303Param::AMP_DECAY_MS: params_.setImmediate(Tb303Param::AMP_DECAY_MS, cmd.value); break;
         case Tb303Param::AMP_GAIN: params_.setImmediate(Tb303Param::AMP_GAIN, cmd.value); break;
+        case Tb303Param::DRIVE: params_.setImmediate(Tb303Param::DRIVE, cmd.value); break;
         // MIDI CC simulation
         case 101 /* CC1 */: synth_.params().envMod = cmd.value; break;
         case 102 /* CC74 */: synth_.params().cutoffHz = cmd.value * 18000.0f; break;

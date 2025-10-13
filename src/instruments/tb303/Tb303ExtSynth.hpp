@@ -16,6 +16,7 @@ struct Tb303ExtParams {
   float accent = 0.0f;       // 0..1
   float velocity = 1.0f;     // 0..1
   float noteSemitones = 48.0f; // C3 default
+  float drive = 0.0f;        // 0..1 (pre-filter soft drive)
 };
 
 class Tb303ExtSynth {
@@ -23,7 +24,7 @@ public:
   explicit Tb303ExtSynth(const Tb303ExtParams& p, double sr) : params_(p), sampleRate_(sr) {}
   void setSampleRate(double sr) { sampleRate_ = sr; }
   void reset() {
-    phase_ = 0.0; gate_ = false; envF_ = 0.0f; envA_ = 0.0f; curHz_ = noteToHz(params_.noteSemitones + params_.tuneSemitones);
+    phase_ = 0.0; gate_ = false; envF_ = 0.001f; envA_ = 0.001f; curHz_ = noteToHz(params_.noteSemitones + params_.tuneSemitones);
   }
   void noteOn(float noteSemis, float velocity, float accent) {
     params_.noteSemitones = noteSemis; params_.velocity = velocity; params_.accent = accent; gate_ = true;
@@ -53,12 +54,19 @@ public:
     // Oscillator
     const double inc = (2.0 * M_PI) * static_cast<double>(curHz_) / sampleRate_;
     phase_ += inc;
-    if (phase_ > 1e12) phase_ = std::fmod(phase_, 2.0 * M_PI);
+    // keep phase wrapped each sample for stable saw computation
+    const double twopi = 2.0 * M_PI;
+    const double phaseWrapped = std::fmod(phase_, twopi);
+    if (phase_ > 1e6) {
+      // avoid growth of phase_ over long sessions
+      phase_ = phaseWrapped;
+    }
     float osc;
     if (params_.waveform == 1) {
-      osc = (std::sin(phase_) >= 0.0 ? 1.0f : -1.0f);
+      osc = (std::sin(phaseWrapped) >= 0.0 ? 1.0f : -1.0f);
     } else {
-      osc = static_cast<float>(2.0 * (phase_ / (2.0 * M_PI)) - 1.0);
+      const float ph01 = static_cast<float>(phaseWrapped / twopi);
+      osc = 2.0f * ph01 - 1.0f;
     }
 
     // 3-pole resonant LPF (simple cascaded one-pole with feedback)
@@ -68,13 +76,21 @@ public:
     const float a = std::exp(-2.0f * static_cast<float>(M_PI) * cutoff / static_cast<float>(sampleRate_));
     const float b = 1.0f - a;
     const float res = params_.resonance;
-    const float in = osc - res * y3_; // feedback from last pole
+    // Pre-filter soft drive (tanh) normalized to preserve level
+    float driveAmt = params_.drive;
+    if (driveAmt < 0.0f) driveAmt = 0.0f; if (driveAmt > 1.0f) driveAmt = 1.0f;
+    const float driveGain = 1.0f + 4.0f * driveAmt;
+    const float norm = std::tanh(driveGain);
+    const float oscDriven = (norm > 0.0f) ? (std::tanh(osc * driveGain) / norm) : osc;
+    const float in = oscDriven - res * y3_; // feedback from last pole
     y1_ = a * y1_ + b * in;
     y2_ = a * y2_ + b * y1_;
     y3_ = a * y3_ + b * y2_;
 
-    const float amp = params_.ampGain * (0.6f + 0.4f * params_.velocity) * (1.0f + 0.5f * params_.accent) * envA_;
-    return y3_ * amp;
+    // Output gain (independent of amp decay for now to ensure audibility)
+    const float gainBase = params_.ampGain * (0.6f + 0.4f * params_.velocity) * (1.0f + 0.5f * params_.accent);
+    const float sOut = y3_ * gainBase;
+    return sOut;
   }
 
   Tb303ExtParams& params() { return params_; }

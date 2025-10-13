@@ -116,6 +116,7 @@ static constexpr ParamDef kTb303Params[] = {
   {7,  "FILTER_DECAY_MS",  "ms",  50.f, 800.f, 200.f,  "linear"},
   {8,  "AMP_DECAY_MS",     "ms",  50.f, 800.f, 200.f,  "linear"},
   {9,  "AMP_GAIN",         "",     0.f,   1.5f,  0.8f,  "linear"},
+  {13, "DRIVE",           "",     0.f,   1.0f,  0.0f,  "linear"},
   {10, "NOTE_SEMITONES",   "st",   0.f, 127.f,  48.f,  "step"},
   {11, "VELOCITY",         "",     0.f,   1.f,   1.0f,  "step"},
   {12, "ACCENT",           "",     0.f,   1.f,   0.0f,  "step"},
