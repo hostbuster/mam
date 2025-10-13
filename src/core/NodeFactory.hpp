@@ -11,6 +11,7 @@
 #include "CompressorNode.hpp"
 #include "ReverbNode.hpp"
 #include "WiretapNode.hpp"
+#include "../instruments/tb303/Tb303ExtNode.hpp"
 #include <type_traits>
 // Mixer is not created via NodeFactory; it is set on Graph from GraphSpec.mixer
 
@@ -179,6 +180,49 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
       enabled = j.value("enabled", true);
     } catch (...) {}
     return std::make_unique<WiretapNode>(path, enabled);
+  }
+  if (spec.type == "tb303_ext") {
+    Tb303ExtParams p{};
+    try {
+      nlohmann::json j = nlohmann::json::parse(spec.paramsJson);
+      p.waveform = j.value("waveform", 0);
+      p.tuneSemitones = static_cast<float>(j.value("tune", 0.0));
+      p.glideMs = static_cast<float>(j.value("glideMs", 10.0));
+      p.cutoffHz = static_cast<float>(j.value("cutoff", 800.0));
+      p.resonance = static_cast<float>(j.value("resonance", 0.3));
+      p.envMod = static_cast<float>(j.value("envMod", 0.5));
+      p.filterDecayMs = static_cast<float>(j.value("decay", 200.0));
+      p.ampDecayMs = static_cast<float>(j.value("ampDecayMs", 200.0));
+      p.ampGain = static_cast<float>(j.value("gain", 0.8));
+    } catch (...) {}
+    auto node = std::make_unique<Tb303ExtNode>(p);
+    if (spec.mod.has) {
+      for (const auto& l : spec.mod.lfos) {
+        ModLfo::Wave w = ModLfo::Wave::Sine;
+        if (l.wave == "triangle") w = ModLfo::Wave::Triangle; else if (l.wave == "saw") w = ModLfo::Wave::Saw; else if (l.wave == "square") w = ModLfo::Wave::Square;
+        node->addLfo(l.id, w, l.freqHz, l.phase01);
+      }
+      for (const auto& r : spec.mod.routes) {
+        if (!r.destParamName.empty() && r.destParamName.rfind("LFO.", 0) == 0 && r.destParamName.find(".freqHz") != std::string::npos) {
+          const auto dotPos = r.destParamName.find('.');
+          const auto secondDot = r.destParamName.find('.', dotPos + 1);
+          const std::string idStr = r.destParamName.substr(dotPos + 1, secondDot - (dotPos + 1));
+          const uint16_t lfoId = static_cast<uint16_t>(std::atoi(idStr.c_str()));
+          node->addLfoFreqRoute(r.sourceId, lfoId, r.depth, r.offset);
+          continue;
+        }
+        uint16_t dest = r.destParamId;
+        if (dest == 0 && !r.destParamName.empty()) dest = resolveParamIdByName(kKickParamMap, r.destParamName); // reuse mapping infra or add tb303 map later
+        if (dest != 0) {
+          if (!r.map.empty() || (r.minValue < r.maxValue)) {
+            auto mapMode = ModMatrix<>::Route::Map::Linear; if (r.map == "exp") mapMode = ModMatrix<>::Route::Map::Exp;
+            const float minV = r.minValue, maxV = r.maxValue;
+            if (minV < maxV) node->addRouteWithRange(r.sourceId, dest, minV, maxV, mapMode); else node->addRoute(r.sourceId, dest, r.depth, r.offset);
+          } else node->addRoute(r.sourceId, dest, r.depth, r.offset);
+        }
+      }
+    }
+    return node;
   }
   // Unknown node type
   std::fprintf(stderr, "Warning: Unknown node type '%s' (id='%s')\n", spec.type.c_str(), spec.id.c_str());

@@ -11,6 +11,15 @@
       "params": { "f0": 120, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 220, "gain": 0.9, "click": 0.1, "bpm": 0, "loop": false }
     },
     {
+      "id": "bass303",
+      "type": "tb303_ext",
+      "params": { "waveform": 0, "tune": 0, "glideMs": 25, "cutoff": 900, "resonance": 0.4, "envMod": 0.5, "decay": 220, "ampDecayMs": 200, "gain": 0.8 },
+      "mod": {
+        "lfos": [ { "id": 1, "wave": "sine", "freqHz": 0.5, "phase": 0.0 } ],
+        "routes": [ { "sourceId": 1, "destParam": "CUTOFF_HZ", "min": 300, "max": 2000, "map": "exp" } ]
+      }
+    },
+    {
       "id": "snr1",
       "type": "clap",
       "params": { "ampDecayMs": 180, "gain": 0.85, "bpm": 0, "loop": false },
