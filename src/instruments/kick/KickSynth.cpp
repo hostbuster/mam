@@ -21,6 +21,12 @@ void KickSynth::trigger() {
   active_ = true;
 }
 
+void KickSynth::trigger(float velocity) {
+  if (velocity < 0.0f) velocity = 0.0f; else if (velocity > 1.0f) velocity = 1.0f;
+  velocity_ = velocity;
+  trigger();
+}
+
 float KickSynth::process() {
   const double sr = sampleRate_;
   if (params_.loop) {
@@ -49,7 +55,7 @@ float KickSynth::process() {
 
     const float s = std::sin(static_cast<float>(phase_));
     const float click = (tSec_ < (1.5 / sr)) ? params_.click : 0.0f;
-    sample = (aEnv * s + click) * params_.gain;
+    sample = (aEnv * s + click) * params_.gain * velocity_;
 
     tSec_ += 1.0 / sr;
     if (aEnv < 0.00005f) {

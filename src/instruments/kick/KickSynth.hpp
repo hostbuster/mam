@@ -21,6 +21,7 @@ public:
   double sampleRate() const;
   void reset();
   void trigger();
+  void trigger(float velocity);
   float process();
   const KickParams& params() const;
   KickParams& params();
@@ -33,6 +34,7 @@ private:
   uint64_t framesUntilNextTrigger_ = 0;
   bool active_ = false;
   bool triggeredOnce_ = false;
+  float velocity_ = 1.0f;
 };
 
 

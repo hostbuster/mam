@@ -55,7 +55,8 @@ public:
 
   void handleEvent(const Command& cmd) override {
     if (cmd.type == CommandType::Trigger) {
-      synth_.trigger();
+      // Use GAIN as a proxy for velocity for now or extend ParamMap for VELOCITY if needed
+      synth_.trigger(1.0f);
       return;
     }
     if (cmd.type == CommandType::SetParam) {
