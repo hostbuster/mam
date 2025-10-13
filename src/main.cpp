@@ -884,6 +884,18 @@ int main(int argc, char** argv) {
           }
         }
       }
+      // Sort and de-duplicate identical events to avoid accidental double-triggers
+      std::sort(cmds.begin(), cmds.end(), [](const auto& a, const auto& b){
+        if (a.sampleTime != b.sampleTime) return a.sampleTime < b.sampleTime;
+        if (a.nodeId != b.nodeId) return a.nodeId < b.nodeId;
+        if (a.type != b.type) return a.type < b.type;
+        if (a.paramId != b.paramId) return a.paramId < b.paramId;
+        if (a.paramName != b.paramName) return a.paramName < b.paramName;
+        return a.value < b.value;
+      });
+      cmds.erase(std::unique(cmds.begin(), cmds.end(), [](const auto& x, const auto& y){
+        return x.sampleTime == y.sampleTime && x.nodeId == y.nodeId && x.type == y.type && x.paramId == y.paramId && x.paramName == y.paramName;
+      }), cmds.end());
     } catch (const std::exception& e) {
       std::fprintf(stderr, "Audio file write failed: %s\n", e.what());
       return 1;

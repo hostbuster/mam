@@ -3,24 +3,24 @@
   "sampleRate": 48000,
   "channels": 2,
   "nodes": [
-    { "id": "bass", "type": "clap", "params": { "ampDecayMs": 200, "gain": 0.8 } },
+    { "id": "clap", "type": "clap", "params": { "ampDecayMs": 200, "gain": 0.8 } },
     { "id": "kick", "type": "kick", "params": { "f0": 120, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 1.0 } },
     { "id": "compA", "type": "compressor",
       "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ],
                   "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
   ],
-  "mixer": { "masterPercent": 90, "softClip": true, "inputs": [ { "id": "compA", "gainPercent": 100 } ] },
+  "mixer": { "masterPercent": 90, "softClip": true, "inputs": [ { "id": "compA", "gainPercent": 100 }, { "id": "kick", "gainPercent": 80 } ] },
   "transport": {
     "bpm": 128,
     "lengthBars": 2,
     "resolution": 16,
     "patterns": [
       { "nodeId": "kick", "steps": "x...x...x...x..." },
-      { "nodeId": "bass", "steps": "....x.......x..." }
+      { "nodeId": "clap", "steps": "....x.......x..." }
     ]
   },
   "connections": [
-    { "from": "bass", "to": "compA", "fromPort": 0, "toPort": 0 },
+    { "from": "clap", "to": "compA", "fromPort": 0, "toPort": 0 },
     { "from": "kick", "to": "compA", "fromPort": 0, "toPort": 1 }
   ],
   "commands": []

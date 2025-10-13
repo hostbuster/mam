@@ -97,9 +97,20 @@ private:
     std::vector<uint32_t> splitOffsets;
     splitOffsets.reserve(8);
     splitOffsets.push_back(0);
-    if (self->cmdQueue_) {
+      if (self->cmdQueue_) {
       self->drained_.clear();
       self->cmdQueue_->drainUpTo(cutoff, self->drained_);
+        // Sort events to stabilize segment splits and de-duplicate identical ones on the same sample
+        std::sort(self->drained_.begin(), self->drained_.end(), [](const Command& a, const Command& b){
+          if (a.sampleTime != b.sampleTime) return a.sampleTime < b.sampleTime;
+          if (a.nodeId != b.nodeId) return std::strcmp(a.nodeId ? a.nodeId : "", b.nodeId ? b.nodeId : "") < 0;
+          if (a.type != b.type) return a.type < b.type;
+          if (a.paramId != b.paramId) return a.paramId < b.paramId;
+          return a.value < b.value;
+        });
+        self->drained_.erase(std::unique(self->drained_.begin(), self->drained_.end(), [](const Command& x, const Command& y){
+          return x.sampleTime == y.sampleTime && x.nodeId && y.nodeId && std::strcmp(x.nodeId, y.nodeId) == 0 && x.type == y.type && x.paramId == y.paramId;
+        }), self->drained_.end());
       for (const Command& c : self->drained_) {
         if (c.sampleTime >= blockStartAbs && c.sampleTime < cutoff) {
           const uint32_t off = static_cast<uint32_t>(c.sampleTime - blockStartAbs);
