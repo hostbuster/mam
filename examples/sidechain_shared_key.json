@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "nodes": [
+    { "id": "pad",  "type": "clap", "params": { "ampDecayMs": 220, "gain": 0.6 } },
+    { "id": "bass", "type": "clap", "params": { "ampDecayMs": 180, "gain": 0.7 } },
+    { "id": "kick", "type": "kick", "params": { "f0": 120, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 1.0 } },
+    { "id": "compPad",  "type": "compressor",
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ],
+                  "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } },
+    { "id": "compBass", "type": "compressor",
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ],
+                  "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
+  ],
+  "mixer": { "masterPercent": 90, "softClip": true, "inputs": [ { "id": "compPad", "gainPercent": 100 }, { "id": "compBass", "gainPercent": 100 } ] },
+  "connections": [
+    { "from": "pad",  "to": "compPad",  "fromPort": 0, "toPort": 0 },
+    { "from": "bass", "to": "compBass", "fromPort": 0, "toPort": 0 },
+    { "from": "kick", "to": "compPad",  "fromPort": 0, "toPort": 1 },
+    { "from": "kick", "to": "compBass", "fromPort": 0, "toPort": 1 }
+  ],
+  "commands": []
+}

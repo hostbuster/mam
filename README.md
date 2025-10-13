@@ -110,30 +110,30 @@ open build-xcode/kickdrum.xcodeproj
 
 ### Full-feature example (recommended)
 
-Use `demo.json` to try multi-pattern transport with swing and tempo ramps:
+Use `examples/demo.json` to try multi-pattern transport with swing and tempo ramps:
 
 - Realtime playback:
 
 ```bash
-./build/mam --graph demo.json
-./build/mam --graph demo.json --verbose                 # loop diagnostics
-./build/mam --graph demo.json --random-seed 42          # deterministic randomness override
+./build/mam --graph examples/demo.json
+./build/mam --graph examples/demo.json --verbose                 # loop diagnostics
+./build/mam --graph examples/demo.json --random-seed 42          # deterministic randomness override
 ```
 
-Longer techno demo (16-bar) in `demo2.json`:
+Longer techno demo (16-bar) in `examples/demo2.json`:
 
 Realtime:
 
 ```bash
-./build/mam --graph demo2.json --verbose
+./build/mam --graph examples/demo2.json --verbose
 # For loop testing, you can set lengthBars to 1 and verify seamless boundaries
 ```
 
 Offline export (auto-duration from transport bars, includes preroll/tail):
 
 ```bash
-./build/mam --graph demo2.json --wav techno.wav --sr 48000 --normalize --peak-target -1.0
-./build/mam --graph demo2.json --schema-strict --wav techno.wav  # validate against schema before export
+./build/mam --graph examples/demo2.json --wav techno.wav --sr 48000 --normalize --peak-target -1.0
+./build/mam --graph examples/demo2.json --schema-strict --wav techno.wav  # validate against schema before export
 ```
 
 - Offline render to WAV (48 kHz float32), with optional parallelism:

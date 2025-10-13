@@ -183,3 +183,12 @@ If your key source is stereo and the detector is mono (recommended), leave the s
 - See `docs/schema.graph.v1.json` for the node and connection shapes.
 - See `README.md` for an overview and quick examples.
 - See `demo2.json` for a practical 16-bar graph including sidechain use.
+
+### Examples directory
+
+See ready-to-run JSON files under `examples/`:
+- `examples/sidechain_mono_key.json`
+- `examples/sidechain_shared_key.json`
+- `examples/sidechain_post_effect_duck.json`
+- `examples/sidechain_stereo_key_to_mono.json`
+- `examples/sidechain_bus_key.json`

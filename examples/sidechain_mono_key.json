@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "nodes": [
+    { "id": "bass", "type": "clap", "params": { "ampDecayMs": 200, "gain": 0.8 } },
+    { "id": "kick", "type": "kick", "params": { "f0": 120, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 1.0 } },
+    { "id": "compA", "type": "compressor",
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ],
+                  "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
+  ],
+  "mixer": { "masterPercent": 90, "softClip": true, "inputs": [ { "id": "compA", "gainPercent": 100 } ] },
+  "connections": [
+    { "from": "bass", "to": "compA", "fromPort": 0, "toPort": 0 },
+    { "from": "kick", "to": "compA", "fromPort": 0, "toPort": 1 }
+  ],
+  "commands": []
+}

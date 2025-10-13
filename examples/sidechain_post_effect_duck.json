@@ -1,0 +1,24 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "nodes": [
+    { "id": "vocals", "type": "clap", "params": { "ampDecayMs": 250, "gain": 0.8 } },
+    { "id": "kick",   "type": "kick", "params": { "f0": 120, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 1.0 } },
+    { "id": "rev",    "type": "reverb", "params": { "roomSize": 0.6, "damp": 0.35, "mix": 0.25 },
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" } ], "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } },
+    { "id": "wtKick", "type": "wiretap", "params": { "path": "kick_key.wav", "enabled": true },
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" } ], "outputs": [ { "index": 0, "type": "audio", "role": "main", "channels": 1 } ] } },
+    { "id": "compRev", "type": "compressor",
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ],
+                  "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
+  ],
+  "mixer": { "masterPercent": 90, "softClip": true, "inputs": [ { "id": "compRev", "gainPercent": 100 } ] },
+  "connections": [
+    { "from": "vocals", "to": "rev",     "fromPort": 0, "toPort": 0 },
+    { "from": "rev",    "to": "compRev", "fromPort": 0, "toPort": 0 },
+    { "from": "kick",   "to": "wtKick",  "fromPort": 0, "toPort": 0 },
+    { "from": "wtKick", "to": "compRev", "fromPort": 0, "toPort": 1 }
+  ],
+  "commands": []
+}
