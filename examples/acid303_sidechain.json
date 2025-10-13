@@ -14,6 +14,18 @@
       }
     },
     { "id": "kick1", "type": "kick", "params": { "f0": 120, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 1.0 } },
+    { "id": "clap1", "type": "clap", "params": { "ampDecayMs": 180, "gain": 0.85 },
+      "mod": {
+        "lfos": [
+          { "id": 10, "wave": "sine",     "freqHz": 4.0,  "phase": 0.0 },
+          { "id": 20, "wave": "triangle", "freqHz": 0.20, "phase": 0.0 }
+        ],
+        "routes": [
+          { "sourceId": 10, "destParam": "GAIN",          "depth": 0.6, "offset": 0.0 },
+          { "sourceId": 20, "destParam": "LFO.10.freqHz", "min": 2.0,  "max": 12.0, "map": "exp" }
+        ]
+      }
+    },
     { "id": "comp303", "type": "compressor",
       "params": { "thresholdDb": -12.0, "ratio": 4.0, "attackMs": 5.0, "releaseMs": 140.0, "makeupDb": 0.0 },
       "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ],
@@ -80,13 +92,22 @@
           { "step": 92,  "param": "NOTE_SEMITONES", "value": 36 }
         ]
       },
-      { "nodeId": "kick1", "steps": "x...x...x...x..." }
+      { "nodeId": "kick1", "steps": "x...x...x...x..." },
+      { "nodeId": "clap1", "steps": "..x...x...x...x.",
+        "locks": [
+          { "step": 0,  "param": "LFO1_FREQ_HZ", "value": 4.0 },
+          { "step": 8,  "param": "LFO1_FREQ_HZ", "value": 8.0 },
+          { "step": 0,  "param": "AMP_DECAY_MS", "value": 180 },
+          { "step": 8,  "param": "AMP_DECAY_MS", "value": 140 }
+        ]
+      }
     ]
   },
 
   "connections": [
     { "from": "bass303", "to": "comp303", "fromPort": 0, "toPort": 0 },
-    { "from": "kick1",   "to": "comp303", "fromPort": 0, "toPort": 1 }
+    { "from": "kick1",   "to": "comp303", "fromPort": 0, "toPort": 1 },
+    { "from": "clap1",   "to": "comp303", "fromPort": 0, "toPort": 0 }
   ],
   "commands": []
 }
