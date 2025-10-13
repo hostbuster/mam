@@ -121,6 +121,15 @@ static constexpr ParamDef kTb303Params[] = {
   {10, "NOTE_SEMITONES",   "st",   0.f, 127.f,  48.f,  "step"},
   {11, "VELOCITY",         "",     0.f,   1.f,   1.0f,  "step"},
   {12, "ACCENT",           "",     0.f,   1.f,   0.0f,  "step"},
+  // Optional ADSR mode and parameters (non-breaking: defaults align with decay-only behavior)
+  {200, "ENV_MODE",         "",     0.f,   1.f,   0.0f,  "step"},
+  {201, "FILTER_ATTACK_MS", "ms",   0.f, 400.f,  0.f,    "linear"},
+  {202, "FILTER_SUSTAIN",   "",     0.f,   1.f,   0.0f,  "linear"},
+  {203, "FILTER_RELEASE_MS","ms",   0.f, 800.f,  200.f,  "linear"},
+  {204, "AMP_ATTACK_MS",    "ms",   0.f, 400.f,  0.f,    "linear"},
+  {205, "AMP_SUSTAIN",      "",     0.f,   1.f,   0.7f,  "linear"},
+  {206, "AMP_RELEASE_MS",   "ms",   0.f, 800.f,  200.f,  "linear"},
+  {207, "GATE_LEN_MS",      "ms",   1.f,1000.f, 120.f,   "step"},
   // CC pseudo-params (mapped to above):
   {101, "CC1",             "",     0.f,   1.f,   0.0f,  "linear"}, // Mod Wheel → env mod depth
   {102, "CC74",            "",     0.f,   1.f,   0.0f,  "linear"}, // Cutoff (normalized)

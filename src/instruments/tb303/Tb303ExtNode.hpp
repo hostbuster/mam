@@ -38,6 +38,15 @@ public:
     params_.ensureParam(Tb303Param::AMP_DECAY_MS, 200.0f);
     params_.ensureParam(Tb303Param::AMP_GAIN, 0.8f);
     params_.ensureParam(Tb303Param::DRIVE, 0.0f);
+    // ADSR optional params (defaults preserve legacy behavior)
+    params_.ensureParam(200 /* ENV_MODE */, 0.0f);
+    params_.ensureParam(201 /* FILTER_ATTACK_MS */, 0.0f);
+    params_.ensureParam(202 /* FILTER_SUSTAIN */, 0.0f);
+    params_.ensureParam(203 /* FILTER_RELEASE_MS */, 200.0f);
+    params_.ensureParam(204 /* AMP_ATTACK_MS */, 0.0f);
+    params_.ensureParam(205 /* AMP_SUSTAIN */, 0.7f);
+    params_.ensureParam(206 /* AMP_RELEASE_MS */, 200.0f);
+    params_.ensureParam(207 /* GATE_LEN_MS */, 120.0f);
     mod_.prepare(sampleRate);
   }
   void reset() override { synth_.reset(); }
@@ -56,6 +65,15 @@ public:
       synth_.params().ampDecayMs = params_.next(Tb303Param::AMP_DECAY_MS);
       synth_.params().ampGain = params_.next(Tb303Param::AMP_GAIN);
       synth_.params().drive = params_.next(Tb303Param::DRIVE);
+      // ADSR optional
+      synth_.params().envMode = params_.current(200);
+      synth_.params().filterAttackMs = params_.current(201);
+      synth_.params().filterSustain = params_.current(202);
+      synth_.params().filterReleaseMs = params_.current(203);
+      synth_.params().ampAttackMs = params_.current(204);
+      synth_.params().ampSustain = params_.current(205);
+      synth_.params().ampReleaseMs = params_.current(206);
+      synth_.params().gateLenMs = params_.current(207);
       float s = synth_.process();
       for (uint32_t ch = 0; ch < channels; ++ch) interleavedOut[i * channels + ch] = s;
     }
@@ -86,6 +104,14 @@ public:
         case Tb303Param::AMP_DECAY_MS: params_.setImmediate(Tb303Param::AMP_DECAY_MS, cmd.value); break;
         case Tb303Param::AMP_GAIN: params_.setImmediate(Tb303Param::AMP_GAIN, cmd.value); break;
         case Tb303Param::DRIVE: params_.setImmediate(Tb303Param::DRIVE, cmd.value); break;
+        case 200 /* ENV_MODE */: params_.setImmediate(200, cmd.value); break;
+        case 201 /* FILTER_ATTACK_MS */: params_.setImmediate(201, cmd.value); break;
+        case 202 /* FILTER_SUSTAIN */: params_.setImmediate(202, cmd.value); break;
+        case 203 /* FILTER_RELEASE_MS */: params_.setImmediate(203, cmd.value); break;
+        case 204 /* AMP_ATTACK_MS */: params_.setImmediate(204, cmd.value); break;
+        case 205 /* AMP_SUSTAIN */: params_.setImmediate(205, cmd.value); break;
+        case 206 /* AMP_RELEASE_MS */: params_.setImmediate(206, cmd.value); break;
+        case 207 /* GATE_LEN_MS */: params_.setImmediate(207, cmd.value); break;
         // MIDI CC simulation
         case 101 /* CC1 */: synth_.params().envMod = cmd.value; break;
         case 102 /* CC74 */: synth_.params().cutoffHz = cmd.value * 18000.0f; break;

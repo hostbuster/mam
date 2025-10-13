@@ -10,6 +10,7 @@ struct Tb303ExtParams {
   float cutoffHz = 800.0f;
   float resonance = 0.3f;    // 0..1
   float envMod = 0.5f;       // filter env amount (0..1)
+  // Legacy decay-only mode (default)
   float filterDecayMs = 200.0f;
   float ampDecayMs = 200.0f;
   float ampGain = 0.8f;
@@ -17,6 +18,15 @@ struct Tb303ExtParams {
   float velocity = 1.0f;     // 0..1
   float noteSemitones = 48.0f; // C3 default
   float drive = 0.0f;        // 0..1 (pre-filter soft drive)
+  // Optional ADSR mode (ENV_MODE > 0.5 enables these)
+  float envMode = 0.0f;      // 0 = decay-only (legacy), 1 = ADSR
+  float filterAttackMs = 0.0f;
+  float filterSustain = 0.0f;
+  float filterReleaseMs = 200.0f;
+  float ampAttackMs = 0.0f;
+  float ampSustain = 0.7f;
+  float ampReleaseMs = 200.0f;
+  float gateLenMs = 120.0f;  // gate length for auto release in ADSR
 };
 
 class Tb303ExtSynth {
@@ -25,12 +35,17 @@ public:
   void setSampleRate(double sr) { sampleRate_ = sr; }
   void reset() {
     phase_ = 0.0; gate_ = false; envF_ = 0.001f; envA_ = 0.001f; curHz_ = noteToHz(params_.noteSemitones + params_.tuneSemitones);
+    fStage_ = Stage::Idle; aStage_ = Stage::Idle; stageSamples_ = 0.0f;
   }
   void noteOn(float noteSemis, float velocity, float accent) {
     params_.noteSemitones = noteSemis; params_.velocity = velocity; params_.accent = accent; gate_ = true;
     // Re-trigger envelopes
-    envF_ = 1.0f * std::fmin(1.5f, 1.0f + 0.8f * (velocity + accent));
-    envA_ = 1.0f * std::fmin(1.5f, 1.0f + 0.5f * (velocity + 0.5f * accent));
+    if (params_.envMode > 0.5f) {
+      fStage_ = Stage::Attack; aStage_ = Stage::Attack; envF_ = 0.0f; envA_ = 0.0f; stageSamples_ = 0.0f;
+    } else {
+      envF_ = 1.0f * std::fmin(1.5f, 1.0f + 0.8f * (velocity + accent));
+      envA_ = 1.0f * std::fmin(1.5f, 1.0f + 0.5f * (velocity + 0.5f * accent));
+    }
     targetHz_ = noteToHz(params_.noteSemitones + params_.tuneSemitones);
   }
   void noteOff() { gate_ = false; }
@@ -45,11 +60,16 @@ public:
       curHz_ = targetHz_;
     }
 
-    // Envelopes (simple exponential decays with retrigger to 1)
-    const float fTau = std::exp(-1.0f / static_cast<float>((params_.filterDecayMs * 0.001) * sampleRate_ + 1.0));
-    const float aTau = std::exp(-1.0f / static_cast<float>((params_.ampDecayMs * 0.001) * sampleRate_ + 1.0));
-    envF_ *= fTau;
-    envA_ *= aTau;
+    // Envelopes
+    if (params_.envMode > 0.5f) {
+      advanceAdsr(envF_, fStage_, params_.filterAttackMs, params_.filterDecayMs, params_.filterSustain, params_.filterReleaseMs);
+      advanceAdsr(envA_, aStage_, params_.ampAttackMs, params_.ampDecayMs, params_.ampSustain, params_.ampReleaseMs);
+    } else {
+      const float fTau = std::exp(-1.0f / static_cast<float>((params_.filterDecayMs * 0.001) * sampleRate_ + 1.0));
+      const float aTau = std::exp(-1.0f / static_cast<float>((params_.ampDecayMs * 0.001) * sampleRate_ + 1.0));
+      envF_ *= fTau;
+      envA_ *= aTau;
+    }
 
     // Oscillator
     const double inc = (2.0 * M_PI) * static_cast<double>(curHz_) / sampleRate_;
@@ -87,9 +107,10 @@ public:
     y2_ = a * y2_ + b * y1_;
     y3_ = a * y3_ + b * y2_;
 
-    // Output gain (independent of amp decay for now to ensure audibility)
+    // Output gain; scale by amp ADSR only when ADSR mode is enabled
     const float gainBase = params_.ampGain * (0.6f + 0.4f * params_.velocity) * (1.0f + 0.5f * params_.accent);
-    const float sOut = y3_ * gainBase;
+    const float ampEnvScale = (params_.envMode > 0.5f) ? envA_ : 1.0f;
+    const float sOut = y3_ * gainBase * ampEnvScale;
     return sOut;
   }
 
@@ -97,6 +118,37 @@ public:
   const Tb303ExtParams& params() const { return params_; }
 
 private:
+  enum class Stage : uint8_t { Idle = 0, Attack, Decay, Sustain, Release };
+  void advanceAdsr(float& env, Stage& st, float attMs, float decMs, float sus, float relMs) {
+    const float sr = static_cast<float>(sampleRate_);
+    const float gateSamps = static_cast<float>(std::max(1.0, (params_.gateLenMs * 0.001) * sr));
+    // Auto release after gate length
+    if (st != Stage::Idle && stageSamples_ >= gateSamps && st != Stage::Release) {
+      st = Stage::Release; stageSamples_ = 0.0f;
+    }
+    switch (st) {
+      case Stage::Idle: env = 0.0f; break;
+      case Stage::Attack: {
+        const float aS = std::max(1.0f, attMs * 0.001f * sr);
+        env += (1.0f - env) * (1.0f / aS);
+        if (++stageSamples_ >= aS) { st = Stage::Decay; stageSamples_ = 0.0f; }
+        break;
+      }
+      case Stage::Decay: {
+        const float dS = std::max(1.0f, decMs * 0.001f * sr);
+        env += (sus - env) * (1.0f / dS);
+        if (++stageSamples_ >= dS) { st = Stage::Sustain; stageSamples_ = 0.0f; }
+        break;
+      }
+      case Stage::Sustain: env = sus; stageSamples_ += 1.0f; break;
+      case Stage::Release: {
+        const float rS = std::max(1.0f, relMs * 0.001f * sr);
+        env += (0.0f - env) * (1.0f / rS);
+        if (++stageSamples_ >= rS) { st = Stage::Idle; stageSamples_ = 0.0f; env = 0.0f; }
+        break;
+      }
+    }
+  }
   static float noteToHz(float semis) { return 440.0f * std::pow(2.0f, (semis - 69.0f) / 12.0f); }
 
   Tb303ExtParams params_{};
@@ -108,6 +160,9 @@ private:
   bool gate_ = false;
   float curHz_ = 110.0f;
   float targetHz_ = 110.0f;
+  Stage fStage_ = Stage::Idle;
+  Stage aStage_ = Stage::Idle;
+  float stageSamples_ = 0.0f;
   // future: pan per-voice if stereo processing is added
 };
 
