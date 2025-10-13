@@ -16,7 +16,7 @@
       "params": { "ampDecayMs": 180, "gain": 0.85, "bpm": 0, "loop": false },
       "mod": {
         "lfos": [
-          { "id": 1, "wave": "sine", "freqHz": 4.0, "phase": 0.0 },
+          { "id": 1, "wave": "sine", "freqHz": 40.0, "phase": 0.0 },
           { "id": 2, "wave": "triangle", "freqHz": 0.2, "phase": 0.0 }
         ],
         "routes": [
@@ -58,7 +58,7 @@
 
   "transport": {
     "bpm": 126,
-    "lengthBars": 8,
+    "lengthBars": 1,
     "resolution": 16,
     "patterns": [
       { "nodeId": "kick1", "steps": "x...x...x...x...",
@@ -78,7 +78,14 @@
           { "step": 12, "param": "GAIN",          "value": 1.00, "rampMs": 40 }
         ]
       },
-      { "nodeId": "snr1",  "steps": "....x.......x..." }
+      { "nodeId": "snr1",  "steps": "....x.......x...",
+        "locks": [
+          { "step": 0,  "param": "LFO1_FREQ_HZ", "value": 4.0 },
+          { "step": 4,  "param": "LFO1_FREQ_HZ", "value": 8.0 },
+          { "step": 8,  "param": "LFO1_FREQ_HZ", "value": 12.0 },
+          { "step": 12, "param": "LFO1_FREQ_HZ", "value": 16.0 }
+        ]
+      }
     ]
   },
 

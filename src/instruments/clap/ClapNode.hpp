@@ -49,6 +49,8 @@ public:
         case ClapParam::GAIN: params_.setImmediate(ClapParam::GAIN, cmd.value); nodeGain_ = cmd.value; break;
         case ClapParam::BPM: synth_.params().bpm = cmd.value; synth_.params().loop = (cmd.value > 0.0f); break;
         case ClapParam::LOOP: synth_.params().loop = (cmd.value >= 0.5f); break;
+        case ClapParam::LFO1_FREQ_HZ: mod_.addLfo(1, ModLfo::Wave::Sine, cmd.value, 0.0f); break;
+        case ClapParam::LFO2_FREQ_HZ: mod_.addLfo(2, ModLfo::Wave::Sine, cmd.value, 0.0f); break;
         default: break;
       }
     } else if (cmd.type == CommandType::SetParamRamp) {
