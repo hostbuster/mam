@@ -21,6 +21,10 @@ public:
   ~RealtimeGraphRenderer() { stop(); }
 
   void setCommandQueue(SpscCommandQueue<2048>* q) { cmdQueue_ = q; }
+  void setDiagnostics(bool printTriggers, double bpmForBeats) {
+    printTriggers_ = printTriggers; diagBpm_ = bpmForBeats;
+  }
+  void setTransportEmitEnabled(bool enabled) { transportEmitEnabled_ = enabled; }
 
   void start(Graph& graph, double requestedSampleRate, uint32_t channels) {
     if (channels == 0) throw std::invalid_argument("channels must be > 0");
@@ -97,7 +101,7 @@ private:
     std::vector<uint32_t> splitOffsets;
     splitOffsets.reserve(8);
     splitOffsets.push_back(0);
-      if (self->cmdQueue_) {
+    if (self->cmdQueue_) {
       self->drained_.clear();
       self->cmdQueue_->drainUpTo(cutoff, self->drained_);
         // Sort events to stabilize segment splits and de-duplicate identical ones on the same sample
@@ -137,6 +141,12 @@ private:
         const SampleTime segAbsStart = blockStartAbs + static_cast<SampleTime>(segStart);
         for (const Command& c : self->drained_) {
           if (c.sampleTime == segAbsStart && c.nodeId) {
+            if (self->printTriggers_) {
+              const double tSec = static_cast<double>(c.sampleTime) / self->sampleRate_;
+              const double beat = (self->diagBpm_ > 0.0) ? (tSec * self->diagBpm_ / 60.0) : 0.0;
+              std::fprintf(stderr, "TRIGGER t=%.6fs beat=%.3f node=%s type=%u pid=%u val=%.3f\n",
+                           tSec, beat, c.nodeId, static_cast<unsigned>(c.type), c.paramId, static_cast<double>(c.value));
+            }
             self->graph_->forEachNode([&](const std::string& id, Node& n){
               if (id == c.nodeId) n.handleEvent(c);
             });
@@ -147,7 +157,7 @@ private:
       // Let transport-like nodes emit events at exact sample offsets across the whole segment
       self->graph_->forEachNode([&](const std::string& id, Node& n){
         (void)id;
-        if (auto* t = dynamic_cast<TransportNode*>(&n)) {
+        if (self->transportEmitEnabled_) if (auto* t = dynamic_cast<TransportNode*>(&n)) {
           SampleTime cursor = blockStartAbs + static_cast<SampleTime>(segStart);
           const SampleTime segAbsEnd = blockStartAbs + static_cast<SampleTime>(segEnd);
           // Emit all events at or after cursor; if next event is before cursor (wrap), allow it on the boundary to avoid missing step 0
@@ -156,6 +166,12 @@ private:
             if (next < cursor) break; // already emitted earlier in this block
             if (next >= segAbsEnd) break;
             t->emitIfMatch(next, [&](const Command& c){
+              if (self->printTriggers_) {
+                const double tSec = static_cast<double>(c.sampleTime) / self->sampleRate_;
+                const double beat = (self->diagBpm_ > 0.0) ? (tSec * self->diagBpm_ / 60.0) : 0.0;
+                std::fprintf(stderr, "TRANSPORT t=%.6fs beat=%.3f node=%s type=%u pid=%u val=%.3f\n",
+                             tSec, beat, c.nodeId ? c.nodeId : "", static_cast<unsigned>(c.type), c.paramId, static_cast<double>(c.value));
+              }
               self->graph_->forEachNode([&](const std::string& nid, Node& nn){ if (nid == c.nodeId) nn.handleEvent(c); });
             });
             cursor = next + 1;
@@ -180,6 +196,9 @@ private:
   std::atomic<SampleTime> sampleCounter_{0};
   SpscCommandQueue<2048>* cmdQueue_ = nullptr;
   std::vector<Command> drained_;
+  bool printTriggers_ = false;
+  double diagBpm_ = 120.0;
+  bool transportEmitEnabled_ = false;
 };
 
 

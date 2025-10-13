@@ -524,6 +524,7 @@ int main(int argc, char** argv) {
   bool verbose = false;              // realtime loop diagnostics
   uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
   bool metersPerNode = false;
+  bool printTriggers = false;
   bool schemaStrict = false;         // enforce JSON Schema on load
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
@@ -603,6 +604,8 @@ int main(int argc, char** argv) {
       metersPerNode = true;
     } else if (std::strcmp(a, "--random-seed") == 0) {
       need(1); randomSeedOverride = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--print-triggers") == 0) {
+      printTriggers = true;
     } else if (std::strcmp(a, "--schema-strict") == 0) {
       schemaStrict = true;
     } else if (std::strcmp(a, "--validate") == 0) {
@@ -884,18 +887,6 @@ int main(int argc, char** argv) {
           }
         }
       }
-      // Sort and de-duplicate identical events to avoid accidental double-triggers
-      std::sort(cmds.begin(), cmds.end(), [](const auto& a, const auto& b){
-        if (a.sampleTime != b.sampleTime) return a.sampleTime < b.sampleTime;
-        if (a.nodeId != b.nodeId) return a.nodeId < b.nodeId;
-        if (a.type != b.type) return a.type < b.type;
-        if (a.paramId != b.paramId) return a.paramId < b.paramId;
-        if (a.paramName != b.paramName) return a.paramName < b.paramName;
-        return a.value < b.value;
-      });
-      cmds.erase(std::unique(cmds.begin(), cmds.end(), [](const auto& x, const auto& y){
-        return x.sampleTime == y.sampleTime && x.nodeId == y.nodeId && x.type == y.type && x.paramId == y.paramId && x.paramName == y.paramName;
-      }), cmds.end());
     } catch (const std::exception& e) {
       std::fprintf(stderr, "Audio file write failed: %s\n", e.what());
       return 1;
@@ -947,6 +938,8 @@ int main(int argc, char** argv) {
   RealtimeGraphRenderer rt;
   SpscCommandQueue<2048> cmdQueue;
   rt.setCommandQueue(&cmdQueue);
+  rt.setDiagnostics(printTriggers, 120.0);
+  rt.setTransportEmitEnabled(false); // all triggers come from pre-enqueued commands for parity
   try {
     rt.start(graph, 48000.0, 2);
   } catch (const std::exception& e) {
