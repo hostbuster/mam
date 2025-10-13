@@ -26,6 +26,12 @@ public:
     updatePhaseInc();
   }
 
+  // Dynamic per-sample frequency modulation; updates phase increment immediately
+  void setDynamicFreqHz(float freqHz) {
+    freqHz_ = freqHz;
+    updatePhaseInc();
+  }
+
   // Returns bipolar [-1, +1]
   float next() {
     float out = 0.0f;
@@ -55,7 +61,7 @@ private:
   double sampleRate_ = 48000.0;
 };
 
-template <size_t MaxSources = 4, size_t MaxRoutes = 8>
+template <size_t MaxSources = 4, size_t MaxRoutes = 12>
 class ModMatrix {
 public:
   void prepare(double sampleRate) {
@@ -67,11 +73,15 @@ public:
     ModLfo lfo{};
     float last = 0.0f; // cached output (bipolar)
     bool active = false;
+    float baseFreqHz = 0.5f; // for LFO freq routing
   };
 
   struct Route {
+    enum class Target : uint8_t { DestParam = 0, LfoFreq = 1 };
+    Target target = Target::DestParam;
     uint16_t sourceId = 0;
-    uint16_t destParamId = 0;
+    uint16_t destParamId = 0; // when Target::DestParam
+    uint16_t lfoTargetId = 0; // when Target::LfoFreq
     float depth = 0.0f;   // scales bipolar source
     float offset = 0.0f;  // constant additive offset
     bool active = false;
@@ -82,6 +92,7 @@ public:
     if (idx >= 0) {
       sources_[static_cast<size_t>(idx)].lfo.set(wave, freqHz, phase01);
       sources_[static_cast<size_t>(idx)].active = true;
+      sources_[static_cast<size_t>(idx)].baseFreqHz = freqHz;
       return true;
     }
     if (numSources_ >= MaxSources) return false;
@@ -89,6 +100,7 @@ public:
     s.id = id;
     s.lfo.set(wave, freqHz, phase01);
     s.active = true;
+    s.baseFreqHz = freqHz;
     sources_[numSources_++] = s;
     return true;
   }
@@ -96,6 +108,7 @@ public:
   bool addRoute(uint16_t sourceId, uint16_t destParamId, float depth, float offset = 0.0f) {
     if (numRoutes_ >= MaxRoutes) return false;
     Route r{};
+    r.target = Route::Target::DestParam;
     r.sourceId = sourceId;
     r.destParamId = destParamId;
     r.depth = depth;
@@ -105,8 +118,39 @@ public:
     return true;
   }
 
+  bool addLfoFreqRoute(uint16_t sourceId, uint16_t lfoId, float depth, float offset = 0.0f) {
+    if (numRoutes_ >= MaxRoutes) return false;
+    Route r{};
+    r.target = Route::Target::LfoFreq;
+    r.sourceId = sourceId;
+    r.lfoTargetId = lfoId;
+    r.depth = depth;
+    r.offset = offset;
+    r.active = true;
+    routes_[numRoutes_++] = r;
+    return true;
+  }
+
   // Advance all sources one sample and cache outputs
   void tick() {
+    // 1) Compute per-LFO dynamic frequency from routes
+    for (size_t i = 0; i < numSources_; ++i) {
+      if (!sources_[i].active) continue;
+      float freqMod = 0.0f;
+      for (size_t r = 0; r < numRoutes_; ++r) {
+        const Route& route = routes_[r];
+        if (!route.active || route.target != Route::Target::LfoFreq) continue;
+        if (route.lfoTargetId != sources_[i].id) continue;
+        const int sIdx = findSourceIndex(route.sourceId);
+        if (sIdx < 0) continue;
+        const Source& src = sources_[static_cast<size_t>(sIdx)];
+        freqMod += route.offset + route.depth * src.last;
+      }
+      float freqHz = sources_[i].baseFreqHz + freqMod;
+      if (freqHz < 0.01f) freqHz = 0.01f;
+      sources_[i].lfo.setDynamicFreqHz(freqHz);
+    }
+    // 2) Advance sources and cache outputs for use by param routes and next tick
     for (size_t i = 0; i < numSources_; ++i) {
       if (sources_[i].active) sources_[i].last = sources_[i].lfo.next();
     }
@@ -117,7 +161,7 @@ public:
     float acc = 0.0f;
     for (size_t i = 0; i < numRoutes_; ++i) {
       const Route& r = routes_[i];
-      if (!r.active || r.destParamId != destParamId) continue;
+      if (!r.active || r.target != Route::Target::DestParam || r.destParamId != destParamId) continue;
       const int sIdx = findSourceIndex(r.sourceId);
       if (sIdx < 0) continue;
       const Source& s = sources_[static_cast<size_t>(sIdx)];

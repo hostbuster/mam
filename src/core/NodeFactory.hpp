@@ -28,6 +28,15 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
         node->addLfo(l.id, w, l.freqHz, l.phase01);
       }
       for (const auto& r : spec.mod.routes) {
+        // Support LFO.<id>.freqHz target
+        if (!r.destParamName.empty() && r.destParamName.rfind("LFO.", 0) == 0 && r.destParamName.find(".freqHz") != std::string::npos) {
+          const auto dotPos = r.destParamName.find('.');
+          const auto secondDot = r.destParamName.find('.', dotPos + 1);
+          const std::string idStr = r.destParamName.substr(dotPos + 1, secondDot - (dotPos + 1));
+          const uint16_t lfoId = static_cast<uint16_t>(std::atoi(idStr.c_str()));
+          node->addLfoFreqRoute(r.sourceId, lfoId, r.depth, r.offset);
+          continue;
+        }
         uint16_t dest = r.destParamId;
         if (dest == 0 && !r.destParamName.empty()) dest = resolveParamIdByName(kKickParamMap, r.destParamName);
         if (dest != 0) node->addRoute(r.sourceId, dest, r.depth, r.offset);
@@ -46,6 +55,14 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
         node->addLfo(l.id, w, l.freqHz, l.phase01);
       }
       for (const auto& r : spec.mod.routes) {
+        if (!r.destParamName.empty() && r.destParamName.rfind("LFO.", 0) == 0 && r.destParamName.find(".freqHz") != std::string::npos) {
+          const auto dotPos = r.destParamName.find('.');
+          const auto secondDot = r.destParamName.find('.', dotPos + 1);
+          const std::string idStr = r.destParamName.substr(dotPos + 1, secondDot - (dotPos + 1));
+          const uint16_t lfoId = static_cast<uint16_t>(std::atoi(idStr.c_str()));
+          node->addLfoFreqRoute(r.sourceId, lfoId, r.depth, r.offset);
+          continue;
+        }
         uint16_t dest = r.destParamId;
         if (dest == 0 && !r.destParamName.empty()) dest = resolveParamIdByName(kClapParamMap, r.destParamName);
         if (dest != 0) node->addRoute(r.sourceId, dest, r.depth, r.offset);

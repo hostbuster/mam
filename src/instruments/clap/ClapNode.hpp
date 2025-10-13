@@ -12,6 +12,7 @@ public:
   const char* name() const override { return "ClapNode"; }
   bool addLfo(uint16_t id, ModLfo::Wave wave, float freqHz, float phase01) { return mod_.addLfo(id, wave, freqHz, phase01); }
   bool addRoute(uint16_t sourceId, uint16_t destParamId, float depth, float offset = 0.0f) { return mod_.addRoute(sourceId, destParamId, depth, offset); }
+  bool addLfoFreqRoute(uint16_t sourceId, uint16_t lfoId, float depth, float offset = 0.0f) { return mod_.addLfoFreqRoute(sourceId, lfoId, depth, offset); }
   void prepare(double sampleRate, uint32_t /*maxBlock*/) override {
     synth_.setSampleRate(sampleRate);
     params_.prepare(sampleRate);
