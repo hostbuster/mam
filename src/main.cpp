@@ -938,12 +938,19 @@ int main(int argc, char** argv) {
   RealtimeGraphRenderer rt;
   SpscCommandQueue<2048> cmdQueue;
   rt.setCommandQueue(&cmdQueue);
-  // Try to infer transport resolution from graph for diagnostics; default to 16
+  // Try to infer transport resolution and bpm from graph for diagnostics; defaults: res=16, bpm=120
   uint32_t diagRes = 16;
+  double diagBpm = 120.0;
   if (!graphPath.empty()) {
-    try { GraphSpec tmp = loadGraphSpecFromJsonFile(graphPath); if (tmp.hasTransport && tmp.transport.resolution > 0) diagRes = tmp.transport.resolution; } catch (...) {}
+    try {
+      GraphSpec tmp = loadGraphSpecFromJsonFile(graphPath);
+      if (tmp.hasTransport) {
+        if (tmp.transport.resolution > 0) diagRes = tmp.transport.resolution;
+        if (tmp.transport.bpm > 0.0f) diagBpm = tmp.transport.bpm;
+      }
+    } catch (...) {}
   }
-  rt.setDiagnostics(printTriggers, 120.0, diagRes);
+  rt.setDiagnostics(printTriggers, diagBpm, diagRes);
   rt.setDiagLoop(rtLoopLen);
   rt.setTransportEmitEnabled(false); // all triggers come from pre-enqueued commands for parity
   try {
