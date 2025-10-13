@@ -58,9 +58,10 @@ public:
 
   void handleEvent(const Command& cmd) override {
     if (cmd.type == CommandType::Trigger) {
-      // Use value as velocity (0..1), accent if >1 (e.g., 2.0 means accent)
-      const float vel = std::fmin(1.0f, std::fmax(0.0f, cmd.value));
-      const float acc = (cmd.value > 1.0f) ? 1.0f : 0.0f;
+      // If trigger value is 0, use last-set VELOCITY/ACCENT from params
+      const float velCmd = std::fmin(1.0f, std::fmax(0.0f, cmd.value));
+      const float vel = (velCmd > 0.0f) ? velCmd : synth_.params().velocity;
+      const float acc = synth_.params().accent;
       synth_.noteOn(synth_.params().noteSemitones, vel, acc);
       return;
     }

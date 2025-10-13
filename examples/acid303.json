@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+
+  "nodes": [
+    {
+      "id": "bass303",
+      "type": "tb303_ext",
+      "params": { "waveform": 0, "tune": 0, "glideMs": 18, "cutoff": 900, "resonance": 0.55, "envMod": 0.55, "decay": 220, "ampDecayMs": 220, "gain": 0.9 },
+      "mod": {
+        "lfos": [
+          { "id": 1, "wave": "sine",     "freqHz": 0.33, "phase": 0.0 },
+          { "id": 2, "wave": "triangle", "freqHz": 0.08, "phase": 0.0 }
+        ],
+        "routes": [
+          { "sourceId": 1, "destParam": "CUTOFF_HZ", "min": 300, "max": 2400, "map": "exp" },
+          { "sourceId": 2, "destParam": "LFO.1.freqHz", "min": 0.2, "max": 1.2, "map": "linear" }
+        ]
+      }
+    }
+  ],
+
+  "mixer": {
+    "masterPercent": 90,
+    "softClip": true,
+    "inputs": [
+      { "id": "bass303", "gainPercent": 90 }
+    ]
+  },
+
+  "transport": {
+    "bpm": 128,
+    "lengthBars": 8,
+    "resolution": 16,
+    "patterns": [
+      {
+        "nodeId": "bass303",
+        "steps": "x..xx..x.x..x.x.",
+        "locks": [
+          /* Bar 1: C2-based riff with slides and accents */
+          { "step": 0,  "param": "NOTE_SEMITONES", "value": 36 },
+          { "step": 0,  "param": "VELOCITY",       "value": 0.85 },
+          { "step": 2,  "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 2,  "param": "GLIDE_MS",       "value": 45 },
+          { "step": 3,  "param": "ACCENT",         "value": 1.0 },
+          { "step": 5,  "param": "NOTE_SEMITONES", "value": 41 },
+          { "step": 5,  "param": "VELOCITY",       "value": 0.75 },
+          { "step": 7,  "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 7,  "param": "GLIDE_MS",       "value": 30 },
+          { "step": 9,  "param": "NOTE_SEMITONES", "value": 48 },
+          { "step": 9,  "param": "ACCENT",         "value": 1.0 },
+          { "step": 11, "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 13, "param": "NOTE_SEMITONES", "value": 41 },
+          { "step": 15, "param": "NOTE_SEMITONES", "value": 38 },
+
+          /* Bar 2: small motif variation */
+          { "step": 16+0,  "param": "NOTE_SEMITONES", "value": 36 },
+          { "step": 16+3,  "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 16+3,  "param": "GLIDE_MS",       "value": 50 },
+          { "step": 16+6,  "param": "NOTE_SEMITONES", "value": 46 },
+          { "step": 16+6,  "param": "ACCENT",         "value": 1.0 },
+          { "step": 16+9,  "param": "NOTE_SEMITONES", "value": 48 },
+          { "step": 16+12, "param": "NOTE_SEMITONES", "value": 43 },
+
+          /* Bars 3-4: raise energy */
+          { "step": 32+0,  "param": "VELOCITY", "value": 0.9 },
+          { "step": 32+0,  "param": "ACCENT",   "value": 1.0 },
+          { "step": 32+4,  "param": "CUTOFF_HZ", "value": 1400 },
+          { "step": 32+8,  "param": "CUTOFF_HZ", "value": 1800 },
+          { "step": 32+12, "param": "CUTOFF_HZ", "value": 1200 },
+
+          /* Bars 5-8: octave lifts and slides */
+          { "step": 64+0,  "param": "NOTE_SEMITONES", "value": 48 },
+          { "step": 64+0,  "param": "GLIDE_MS",       "value": 25 },
+          { "step": 64+8,  "param": "NOTE_SEMITONES", "value": 50 },
+          { "step": 64+12, "param": "NOTE_SEMITONES", "value": 48 },
+          { "step": 80+4,  "param": "NOTE_SEMITONES", "value": 46 },
+          { "step": 80+8,  "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 80+8,  "param": "GLIDE_MS",       "value": 50 },
+          { "step": 80+12, "param": "NOTE_SEMITONES", "value": 36 }
+        ]
+      }
+    ]
+  },
+
+  "connections": [],
+  "commands": []
+}
+
+

@@ -97,7 +97,7 @@
           { "step": 12, "param": "LFO1_FREQ_HZ", "value": 1400.0 }
         ]
       },
-      { "nodeId": "bass303",  "steps": "........x...xxxx",
+      { "nodeId": "bass303",  "steps": "x...............",
         "locks": [
           { "step": 0,  "param": "NOTE_SEMITONES", "value": 36 },
           { "step": 0,  "param": "VELOCITY", "value": 0.8 },

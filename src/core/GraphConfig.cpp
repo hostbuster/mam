@@ -140,6 +140,7 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
         auto mapParam = [](const std::string& type, const std::string& name) -> uint16_t {
           if (type == "kick") return resolveParamIdByName(kKickParamMap, name);
           if (type == "clap") return resolveParamIdByName(kClapParamMap, name);
+          if (type == "tb303_ext") return resolveParamIdByName(kTb303ParamMap, name);
           return 0;
         };
         cs.paramId = mapParam(nodeType, cs.paramName);

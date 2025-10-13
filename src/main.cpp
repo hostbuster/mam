@@ -318,6 +318,7 @@ static int validateGraphJson(const std::string& path) {
           for (const auto& n : spec.nodes) if (n.id == c.nodeId) { nodeType = n.type; break; }
           if (nodeType == "kick") pid = resolveParamIdByName(kKickParamMap, c.paramName);
           else if (nodeType == "clap") pid = resolveParamIdByName(kClapParamMap, c.paramName);
+          else if (nodeType == "tb303_ext") pid = resolveParamIdByName(kTb303ParamMap, c.paramName);
         }
         if (pid == 0) { std::fprintf(stderr, "Command missing/unknown param (node=%s)\n", c.nodeId.c_str()); errors++; }
       }
@@ -331,6 +332,7 @@ static int validateGraphJson(const std::string& path) {
       auto mapParam = [](const std::string& type, const std::string& name) -> uint16_t {
         if (type == std::string("kick")) return resolveParamIdByName(kKickParamMap, name);
         if (type == std::string("clap")) return resolveParamIdByName(kClapParamMap, name);
+        if (type == std::string("tb303_ext")) return resolveParamIdByName(kTb303ParamMap, name);
         return 0;
       };
       for (const auto& p : spec.transport.patterns) {
