@@ -196,17 +196,19 @@ private:
   void printEvent(const char* tag, const Command& c) const {
     const uint64_t st = c.sampleTime;
     const uint64_t within = (diagLoopFrames_ > 0) ? (st % diagLoopFrames_) : st;
+    // Compute integer bar/step using samples to avoid FP drift
+    const double framesPerBarD = (diagBpm_ > 0.0) ? ((60.0 * 4.0) * sampleRate_ / diagBpm_) : (sampleRate_ * 2.0);
+    const uint64_t framesPerBar = static_cast<uint64_t>(framesPerBarD + 0.5);
+    const uint64_t barIdx = (framesPerBar > 0) ? (within / framesPerBar) : 0ull;
+    const uint64_t withinBar = (framesPerBar > 0) ? (within % framesPerBar) : within;
+    const uint64_t stepIdx = (framesPerBar > 0 && diagResolution_ > 0)
+      ? ((withinBar * static_cast<uint64_t>(diagResolution_) + framesPerBar / 2) / framesPerBar)
+      : 0ull;
+    const uint64_t stepClamped = (stepIdx >= diagResolution_) ? (diagResolution_ - 1) : stepIdx;
     const double tSec = static_cast<double>(within) / sampleRate_;
-    double beat = (diagBpm_ > 0.0) ? (tSec * diagBpm_ / 60.0) : 0.0;
-    if (beat < 0.0) beat = 0.0;
-    const double beatsPerBar = 4.0;
-    const uint64_t barIdx = static_cast<uint64_t>(beat / beatsPerBar);
-    const double beatInBar = beat - static_cast<double>(barIdx) * beatsPerBar;
-    const double stepLenBeats = beatsPerBar / static_cast<double>(diagResolution_);
-    const uint32_t stepIdx = static_cast<uint32_t>(std::floor(beatInBar / stepLenBeats + 1e-9));
-    std::fprintf(stderr, "%s t=%.6fs bar=%llu step=%u node=%s type=%u pid=%u val=%.3f\n",
-                 tag, tSec, static_cast<unsigned long long>(barIdx + 1ull), stepIdx + 1u, c.nodeId ? c.nodeId : "",
-                 static_cast<unsigned>(c.type), c.paramId, static_cast<double>(c.value));
+    std::fprintf(stderr, "%s t=%.6fs bar=%llu step=%llu node=%s type=%u pid=%u val=%.3f\n",
+                 tag, tSec, static_cast<unsigned long long>(barIdx + 1ull), static_cast<unsigned long long>(stepClamped + 1ull),
+                 c.nodeId ? c.nodeId : "", static_cast<unsigned>(c.type), c.paramId, static_cast<double>(c.value));
   }
 };
 
