@@ -971,7 +971,7 @@ int main(int argc, char** argv) {
       // Build initial command set (explicit + transport)
       std::vector<GraphSpec::CommandSpec> baseCmds = spec.commands;
       if (spec.hasTransport) {
-        auto gen = generateCommandsFromTransport(spec.transport, 48000);
+        auto gen = generateCommandsFromTransport(spec.transport, static_cast<uint32_t>(rt.sampleRate() + 0.5));
         baseCmds.insert(baseCmds.end(), gen.begin(), gen.end());
       }
       // Resolve named params to IDs based on node type
@@ -998,9 +998,13 @@ int main(int argc, char** argv) {
       // Horizon is exact multiple of loopLen to avoid a boundary block without triggers
       uint64_t loopsAhead = 16;
       if (quitAfterSec > 0.0 && rtLoopLen > 0) {
-        loopsAhead = static_cast<uint64_t>(std::ceil((quitAfterSec * 48000.0) / static_cast<double>(rtLoopLen)));
+        loopsAhead = static_cast<uint64_t>(
+          std::ceil((quitAfterSec * rt.sampleRate()) / static_cast<double>(rtLoopLen))
+        );
       }
-      uint64_t horizonFrames = (rtLoopLen > 0) ? (loopsAhead * rtLoopLen) : static_cast<uint64_t>(60.0 * 48000.0);
+      uint64_t horizonFrames = (rtLoopLen > 0)
+        ? (loopsAhead * rtLoopLen)
+        : static_cast<uint64_t>(60.0 * rt.sampleRate());
       // Determine exact loop length in frames from transport (bars × framesPerBar).
       // Using exact bar length avoids gaps/overlaps at loop boundaries, ensuring continuous groove.
       uint64_t loopLen = 0;
@@ -1008,7 +1012,7 @@ int main(int argc, char** argv) {
         const double bpm = (spec.transport.bpm > 0.0) ? spec.transport.bpm : 120.0;
         const double secPerBeat = 60.0 / bpm;
         const double secPerBar = 4.0 * secPerBeat;
-        const uint64_t framesPerBar = static_cast<uint64_t>(secPerBar * 48000.0 + 0.5);
+        const uint64_t framesPerBar = static_cast<uint64_t>(secPerBar * rt.sampleRate() + 0.5);
         const uint32_t bars = (spec.transport.lengthBars > 0) ? spec.transport.lengthBars : 1u;
         loopLen = framesPerBar * static_cast<uint64_t>(bars);
       }
@@ -1039,7 +1043,7 @@ int main(int argc, char** argv) {
       // Rolling feeder thread to extend horizon in realtime without flooding the queue
       if (spec.hasTransport && loopLen > 0) {
         uint64_t nextOffset = horizonFrames;
-        constexpr uint64_t desiredAheadFrames = 5ull * 48000ull; // keep ~5s of commands ahead
+        const uint64_t desiredAheadFrames = static_cast<uint64_t>(5.0 * rt.sampleRate()); // keep ~5s of commands ahead
         transportFeeder = std::thread([&cmdQueue, baseCmds, loopLen, nextOffset, &rt]() mutable {
           uint64_t offset = nextOffset;
           while (gRunning.load()) {
