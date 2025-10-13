@@ -59,6 +59,7 @@
     "softClip": true,
     "inputs": [
       { "id": "kick1", "gainPercent": 90 },
+      { "id": "bass303",  "gainPercent": 80 },
       { "id": "snr1",  "gainPercent": 65 },
       { "id": "delay2",  "gainPercent": 30 },
       { "id": "comp1",  "gainPercent": 100 },
@@ -96,7 +97,7 @@
           { "step": 12, "param": "LFO1_FREQ_HZ", "value": 1400.0 }
         ]
       },
-      { "nodeId": "bass303",  "steps": "x...x...x...x...",
+      { "nodeId": "bass303",  "steps": "........x...xxxx",
         "locks": [
           { "step": 0,  "param": "NOTE_SEMITONES", "value": 36 },
           { "step": 0,  "param": "VELOCITY", "value": 0.8 },
