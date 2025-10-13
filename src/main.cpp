@@ -1008,6 +1008,8 @@ int main(int argc, char** argv) {
         for (const auto& c : baseCmds) if (c.sampleTime > loopLen) loopLen = c.sampleTime;
       }
       rtLoopLen = loopLen;
+      // Provide precise loop length to realtime diagnostics so Loop N prints at exact boundaries
+      rt.setDiagLoop(rtLoopLen);
       std::vector<GraphSpec::CommandSpec> realtimeCmds;
       for (uint64_t offset = 0; offset < horizonFrames; offset += loopLen) {
         for (auto c : baseCmds) { c.sampleTime += offset; realtimeCmds.push_back(c); }
