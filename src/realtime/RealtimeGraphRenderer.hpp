@@ -133,7 +133,7 @@ private:
           return a.value < b.value;
         });
         self->drained_.erase(std::unique(self->drained_.begin(), self->drained_.end(), [](const Command& x, const Command& y){
-          return x.sampleTime == y.sampleTime && x.nodeId && y.nodeId && std::strcmp(x.nodeId, y.nodeId) == 0 && x.type == y.type && x.paramId == y.paramId;
+          return x.sampleTime == y.sampleTime && x.nodeId && y.nodeId && std::strcmp(x.nodeId, y.nodeId) == 0 && x.type == y.type && x.paramId == y.paramId && x.value == y.value && x.rampMs == y.rampMs;
         }), self->drained_.end());
       for (const Command& c : self->drained_) {
         if (c.sampleTime >= blockStartAbs && c.sampleTime < cutoff) {
