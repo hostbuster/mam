@@ -25,8 +25,8 @@ This page explains how to author and use the general-purpose LFO system and the 
       { "id": 2, "wave": "triangle", "freqHz": 0.2, "phase": 0.0 }
     ],
     "routes": [
-      { "sourceId": 1, "destParam": "GAIN", "depth": 0.6, "offset": 0.0 },
-      { "sourceId": 2, "destParam": "LFO.1.freqHz", "depth": 1.5, "offset": 0.5 }
+      { "sourceId": 1, "destParam": "GAIN", "min": 0.3, "max": 1.1, "map": "linear" },
+      { "sourceId": 2, "destParam": "LFO.1.freqHz", "min": 0.5, "max": 8.0, "map": "exp" }
     ]
   }
 }
@@ -37,6 +37,15 @@ This page explains how to author and use the general-purpose LFO system and the 
 - Destinations:
   - Any node param by name (e.g., `GAIN`, `F0`)
   - LFO frequency target as `"LFO.<id>.freqHz"`
+
+Mapping and curves:
+- Instead of `depth`/`offset`, you can specify a target range and curve:
+  - `min` / `max`: maps source [-1,+1] to [min,max]
+  - `map`: `linear` (default) or `exp` (uses t^2 curve)
+  - If `min < max`, this mapping overrides `depth`/`offset` for that route
+
+Smoothing:
+- LFO frequency changes are slewed internally to avoid zipper noise when modulated.
 
 ### Per-step modulation via transport locks
 

@@ -20,8 +20,8 @@
           { "id": 2, "wave": "triangle", "freqHz": 0.2, "phase": 0.0 }
         ],
         "routes": [
-          { "sourceId": 1, "destParam": "GAIN", "depth": 0.6, "offset": 0.0 },
-          { "sourceId": 2, "destParam": "LFO.1.freqHz", "depth": 1.5, "offset": 0.5 }
+          { "sourceId": 1, "destParam": "GAIN", "min": 0.3, "max": 1.1, "map": "linear" },
+          { "sourceId": 2, "destParam": "LFO.1.freqHz", "min": 0.5, "max": 8.0, "map": "exp" }
         ]
       }
     },

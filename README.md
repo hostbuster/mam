@@ -206,7 +206,7 @@ Examples:
 - `--schema-strict`: enforce JSON Schema `docs/schema.graph.v1.json` on load (realtime/offline). Requires validator available (see build note).
 
 LFOs and modulation matrix:
-- See `docs/LFO.md` for a guide to authoring LFOs, routing to params, LFO-on-LFO frequency modulation, and per-step transport locks.
+- See `docs/LFO.md` for a guide to authoring LFOs, routing to params, LFO-on-LFO frequency modulation, per-step transport locks, and mapped routes (`min`/`max`, `map: linear|exp`).
 
 ##### Sidechain routing (MVP)
 
