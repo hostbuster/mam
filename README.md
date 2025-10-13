@@ -224,6 +224,8 @@ Examples:
 }
 ```
 
+See also: docs/Sidechain.md for an in-depth guide and additional patterns.
+
 Wiretap (debugging):
 - Insert a `wiretap` node to record the input of the effect chain to a WAV file during offline export.
 
