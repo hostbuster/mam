@@ -38,7 +38,6 @@
         "nodeId": "bass303",
         "steps": "x..xx..x.x..x.x.",
         "locks": [
-          /* Bar 1: C2-based riff with slides and accents */
           { "step": 0,  "param": "NOTE_SEMITONES", "value": 36 },
           { "step": 0,  "param": "VELOCITY",       "value": 0.85 },
           { "step": 2,  "param": "NOTE_SEMITONES", "value": 43 },
@@ -53,32 +52,29 @@
           { "step": 11, "param": "NOTE_SEMITONES", "value": 43 },
           { "step": 13, "param": "NOTE_SEMITONES", "value": 41 },
           { "step": 15, "param": "NOTE_SEMITONES", "value": 38 },
-
-          /* Bar 2: small motif variation */
-          { "step": 16+0,  "param": "NOTE_SEMITONES", "value": 36 },
-          { "step": 16+3,  "param": "NOTE_SEMITONES", "value": 43 },
-          { "step": 16+3,  "param": "GLIDE_MS",       "value": 50 },
-          { "step": 16+6,  "param": "NOTE_SEMITONES", "value": 46 },
-          { "step": 16+6,  "param": "ACCENT",         "value": 1.0 },
-          { "step": 16+9,  "param": "NOTE_SEMITONES", "value": 48 },
-          { "step": 16+12, "param": "NOTE_SEMITONES", "value": 43 },
-
-          /* Bars 3-4: raise energy */
-          { "step": 32+0,  "param": "VELOCITY", "value": 0.9 },
-          { "step": 32+0,  "param": "ACCENT",   "value": 1.0 },
-          { "step": 32+4,  "param": "CUTOFF_HZ", "value": 1400 },
-          { "step": 32+8,  "param": "CUTOFF_HZ", "value": 1800 },
-          { "step": 32+12, "param": "CUTOFF_HZ", "value": 1200 },
-
-          /* Bars 5-8: octave lifts and slides */
-          { "step": 64+0,  "param": "NOTE_SEMITONES", "value": 48 },
-          { "step": 64+0,  "param": "GLIDE_MS",       "value": 25 },
-          { "step": 64+8,  "param": "NOTE_SEMITONES", "value": 50 },
-          { "step": 64+12, "param": "NOTE_SEMITONES", "value": 48 },
-          { "step": 80+4,  "param": "NOTE_SEMITONES", "value": 46 },
-          { "step": 80+8,  "param": "NOTE_SEMITONES", "value": 43 },
-          { "step": 80+8,  "param": "GLIDE_MS",       "value": 50 },
-          { "step": 80+12, "param": "NOTE_SEMITONES", "value": 36 }
+          
+          { "step": 16,  "param": "NOTE_SEMITONES", "value": 36 },
+          { "step": 19,  "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 19,  "param": "GLIDE_MS",       "value": 50 },
+          { "step": 22,  "param": "NOTE_SEMITONES", "value": 46 },
+          { "step": 22,  "param": "ACCENT",         "value": 1.0 },
+          { "step": 25,  "param": "NOTE_SEMITONES", "value": 48 },
+          { "step": 28,  "param": "NOTE_SEMITONES", "value": 43 },
+          
+          { "step": 32,  "param": "VELOCITY",       "value": 0.9 },
+          { "step": 32,  "param": "ACCENT",         "value": 1.0 },
+          { "step": 36,  "param": "CUTOFF_HZ",      "value": 1400 },
+          { "step": 40,  "param": "CUTOFF_HZ",      "value": 1800 },
+          { "step": 44,  "param": "CUTOFF_HZ",      "value": 1200 },
+          
+          { "step": 64,  "param": "NOTE_SEMITONES", "value": 48 },
+          { "step": 64,  "param": "GLIDE_MS",       "value": 25 },
+          { "step": 72,  "param": "NOTE_SEMITONES", "value": 50 },
+          { "step": 76,  "param": "NOTE_SEMITONES", "value": 48 },
+          { "step": 84,  "param": "NOTE_SEMITONES", "value": 46 },
+          { "step": 88,  "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 88,  "param": "GLIDE_MS",       "value": 50 },
+          { "step": 92,  "param": "NOTE_SEMITONES", "value": 36 }
         ]
       }
     ]
