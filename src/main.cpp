@@ -771,6 +771,7 @@ int main(int argc, char** argv) {
           auto mapParam = [](const std::string& type, const std::string& name) -> uint16_t {
             if (type == std::string("kick")) return resolveParamIdByName(kKickParamMap, name);
             if (type == std::string("clap")) return resolveParamIdByName(kClapParamMap, name);
+            if (type == std::string("tb303_ext")) return resolveParamIdByName(kTb303ParamMap, name);
             return 0;
           };
           for (auto& c : cmds) {
@@ -980,6 +981,7 @@ int main(int argc, char** argv) {
         auto mapParam = [](const std::string& type, const std::string& name) -> uint16_t {
           if (type == std::string("kick")) return resolveParamIdByName(kKickParamMap, name);
           if (type == std::string("clap")) return resolveParamIdByName(kClapParamMap, name);
+          if (type == std::string("tb303_ext")) return resolveParamIdByName(kTb303ParamMap, name);
           return 0;
         };
         for (auto& c : baseCmds) {
