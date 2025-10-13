@@ -37,6 +37,11 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
           node->addLfoFreqRoute(r.sourceId, lfoId, r.depth, r.offset);
           continue;
         }
+        // Support LFO.<id>.phase target
+        if (!r.destParamName.empty() && r.destParamName.rfind("LFO.", 0) == 0 && r.destParamName.find(".phase") != std::string::npos) {
+          // Reserved: LFO phase routing (to be exposed via node API)
+          continue;
+        }
         uint16_t dest = r.destParamId;
         if (dest == 0 && !r.destParamName.empty()) dest = resolveParamIdByName(kKickParamMap, r.destParamName);
         if (dest != 0) node->addRoute(r.sourceId, dest, r.depth, r.offset);
