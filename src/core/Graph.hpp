@@ -86,16 +86,12 @@ public:
           adaptAndAccumulate(src.data(), buf, static_cast<uint32_t>(ctx.frames), channels, srcDeclared, dstDeclared, g);
         }
       }
-      // For now, collapse all ports into a single summed input (port 0 first)
+      // Default mixing policy: only use port 0 as the node's main input.
+      // Additional ports (e.g., sidechain) are not mixed into the main input and are provided
+      // to port-aware nodes via portSums (e.g., CompressorNode reads port 1 separately).
       if (!portSums.empty()) {
-        // Prefer port 0, then add others
         auto it0 = portSums.find(0u);
         if (it0 != portSums.end()) work_ = it0->second; else std::fill(work_.begin(), work_.end(), 0.0f);
-        for (const auto& kv : portSums) {
-          if (kv.first == 0u) continue;
-          const auto& ps = kv.second;
-          for (size_t i = 0; i < total; ++i) work_[i] += ps[i];
-        }
       }
       Node* node = nodes_[ni].node.get();
       if (auto* d = dynamic_cast<DelayNode*>(node)) {

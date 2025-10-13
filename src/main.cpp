@@ -1019,6 +1019,14 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "Loop %llu at %s (%.3fs)\n",
                      static_cast<unsigned long long>(loopIdx), formatDuration(seconds).c_str(), seconds);
         lastPrintedLoop = loopIdx;
+        // Print estimated graph preroll (latency) once at first loop boundary
+        if (loopIdx == 1 && !graphPath.empty()) {
+          try {
+            GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
+            const uint64_t preroll = computeGraphPrerollSamples(spec, static_cast<uint32_t>(rt.sampleRate() + 0.5));
+            std::fprintf(stderr, "Graph preroll: %.3f ms\n", 1000.0 * static_cast<double>(preroll) / rt.sampleRate());
+          } catch (...) {}
+        }
         if (metersPerNode) {
           const auto meters = graph.getNodeMeters(2);
           for (const auto& m : meters) {
