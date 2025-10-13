@@ -99,11 +99,24 @@ private:
     // Compute split points for sample-accurate event application
     const SampleTime blockStartAbs = self->sampleCounter_.load(std::memory_order_relaxed);
     const SampleTime cutoff = blockStartAbs + static_cast<SampleTime>(inNumberFrames);
-    // Print loop boundary exactly at block start (aligns with subsequent triggers in this block)
-    if (self->printTriggers_ && self->diagLoopFrames_ > 0 && blockStartAbs > 0 &&
-        (static_cast<uint64_t>(blockStartAbs) % self->diagLoopFrames_) == 0ull) {
-      const uint64_t loopIdx = static_cast<uint64_t>(blockStartAbs) / self->diagLoopFrames_;
-      std::fprintf(stderr, "Loop %llu\n", static_cast<unsigned long long>(loopIdx));
+    // Print loop boundary if it falls at block start or anywhere within this block,
+    // before applying triggers (ensures visibility even when boundary is between triggers)
+    if (self->printTriggers_ && self->diagLoopFrames_ > 0) {
+      const uint64_t L = self->diagLoopFrames_;
+      if (L > 0) {
+        const uint64_t start = static_cast<uint64_t>(blockStartAbs);
+        const uint64_t end = static_cast<uint64_t>(cutoff);
+        if (start > 0 && (start % L) == 0ull) {
+          const uint64_t loopIdx = start / L;
+          std::fprintf(stderr, "Loop %llu\n", static_cast<unsigned long long>(loopIdx));
+        } else if (end > start) {
+          const uint64_t next = ((start + L - 1ull) / L) * L; // first multiple in [start, ∞)
+          if (next >= start && next < end && next > 0ull) {
+            const uint64_t loopIdx = next / L;
+            std::fprintf(stderr, "Loop %llu\n", static_cast<unsigned long long>(loopIdx));
+          }
+        }
+      }
     }
     std::vector<uint32_t> splitOffsets;
     splitOffsets.reserve(8);
