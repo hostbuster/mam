@@ -10,6 +10,15 @@
                   "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
   ],
   "mixer": { "masterPercent": 90, "softClip": true, "inputs": [ { "id": "compA", "gainPercent": 100 } ] },
+  "transport": {
+    "bpm": 128,
+    "lengthBars": 2,
+    "resolution": 16,
+    "patterns": [
+      { "nodeId": "kick", "steps": "x...x...x...x..." },
+      { "nodeId": "bass", "steps": "....x.......x..." }
+    ]
+  },
   "connections": [
     { "from": "bass", "to": "compA", "fromPort": 0, "toPort": 0 },
     { "from": "kick", "to": "compA", "fromPort": 0, "toPort": 1 }
