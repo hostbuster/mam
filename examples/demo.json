@@ -95,6 +95,17 @@
           { "step": 8,  "param": "LFO1_FREQ_HZ", "value": 400.0 },
           { "step": 12, "param": "LFO1_FREQ_HZ", "value": 1400.0 }
         ]
+      },
+      { "nodeId": "bass303",  "steps": "x...x...x...x...",
+        "locks": [
+          { "step": 0,  "param": "NOTE_SEMITONES", "value": 36 },
+          { "step": 0,  "param": "VELOCITY", "value": 0.8 },
+          { "step": 4,  "param": "NOTE_SEMITONES", "value": 38 },
+          { "step": 4,  "param": "GLIDE_MS", "value": 40 },
+          { "step": 8,  "param": "NOTE_SEMITONES", "value": 41 },
+          { "step": 8,  "param": "ACCENT", "value": 1.0 },
+          { "step": 12, "param": "NOTE_SEMITONES", "value": 38 }
+        ]
       }
     ]
   },

@@ -103,4 +103,28 @@ static constexpr ParamDef kClapParams[] = {
 
 static constexpr ParamMap kClapParamMap{ "clap", kClapParams, sizeof(kClapParams)/sizeof(kClapParams[0]) };
 
+// TB-303 Extended
+static constexpr ParamDef kTb303Params[] = {
+  {1,  "WAVEFORM",         "",    0.f,   1.f,    0.f,   "step"},
+  {2,  "TUNE_SEMITONES",   "st", -24.f,  24.f,   0.f,   "linear"},
+  {3,  "GLIDE_MS",         "ms",   0.f, 500.f,  10.f,   "linear"},
+  {4,  "CUTOFF_HZ",        "Hz",  20.f,18000.f, 800.f,  "linear"},
+  {5,  "RESONANCE",        "",     0.f,   1.f,   0.3f,  "linear"},
+  {6,  "ENV_MOD",          "",     0.f,   1.f,   0.5f,  "linear"},
+  {7,  "FILTER_DECAY_MS",  "ms",  50.f, 800.f, 200.f,  "linear"},
+  {8,  "AMP_DECAY_MS",     "ms",  50.f, 800.f, 200.f,  "linear"},
+  {9,  "AMP_GAIN",         "",     0.f,   1.5f,  0.8f,  "linear"},
+  {10, "NOTE_SEMITONES",   "st",   0.f, 127.f,  48.f,  "step"},
+  {11, "VELOCITY",         "",     0.f,   1.f,   1.0f,  "step"},
+  {12, "ACCENT",           "",     0.f,   1.f,   0.0f,  "step"},
+  // CC pseudo-params (mapped to above):
+  {101, "CC1",             "",     0.f,   1.f,   0.0f,  "linear"}, // Mod Wheel → env mod depth
+  {102, "CC74",            "",     0.f,   1.f,   0.0f,  "linear"}, // Cutoff (normalized)
+  {103, "CC71",            "",     0.f,   1.f,   0.0f,  "linear"}, // Resonance (normalized)
+  {104, "CC7",             "",     0.f,   1.f,   0.8f,  "linear"}, // Volume → amp gain
+  {105, "PITCH_BEND",      "",   -1.f,   1.f,   0.0f,  "linear"},  // normalized bend
+};
+
+static constexpr ParamMap kTb303ParamMap{ "tb303_ext", kTb303Params, sizeof(kTb303Params)/sizeof(kTb303Params[0]) };
+
 

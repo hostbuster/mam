@@ -68,6 +68,9 @@ public:
       switch (cmd.paramId) {
         case Tb303Param::WAVEFORM: params_.setImmediate(Tb303Param::WAVEFORM, cmd.value); break;
         case Tb303Param::TUNE_SEMITONES: params_.setImmediate(Tb303Param::TUNE_SEMITONES, cmd.value); break;
+        case 10 /* NOTE_SEMITONES */: synth_.params().noteSemitones = cmd.value; break;
+        case 11 /* VELOCITY */: synth_.params().velocity = cmd.value; break;
+        case 12 /* ACCENT */: synth_.params().accent = cmd.value; break;
         case Tb303Param::GLIDE_MS: params_.setImmediate(Tb303Param::GLIDE_MS, cmd.value); break;
         case Tb303Param::CUTOFF_HZ: params_.setImmediate(Tb303Param::CUTOFF_HZ, cmd.value); break;
         case Tb303Param::RESONANCE: params_.setImmediate(Tb303Param::RESONANCE, cmd.value); break;
@@ -75,6 +78,12 @@ public:
         case Tb303Param::FILTER_DECAY_MS: params_.setImmediate(Tb303Param::FILTER_DECAY_MS, cmd.value); break;
         case Tb303Param::AMP_DECAY_MS: params_.setImmediate(Tb303Param::AMP_DECAY_MS, cmd.value); break;
         case Tb303Param::AMP_GAIN: params_.setImmediate(Tb303Param::AMP_GAIN, cmd.value); break;
+        // MIDI CC simulation
+        case 101 /* CC1 */: synth_.params().envMod = cmd.value; break;
+        case 102 /* CC74 */: synth_.params().cutoffHz = cmd.value * 18000.0f; break;
+        case 103 /* CC71 */: synth_.params().resonance = cmd.value; break;
+        case 104 /* CC7  */: synth_.params().ampGain = cmd.value; break;
+        case 105 /* PITCH_BEND */: synth_.params().tuneSemitones = cmd.value * 2.0f; break;
         default: break;
       }
     } else if (cmd.type == CommandType::SetParamRamp) {
