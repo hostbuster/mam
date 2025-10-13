@@ -123,6 +123,9 @@ static constexpr ParamDef kTb303Params[] = {
   {103, "CC71",            "",     0.f,   1.f,   0.0f,  "linear"}, // Resonance (normalized)
   {104, "CC7",             "",     0.f,   1.f,   0.8f,  "linear"}, // Volume → amp gain
   {105, "PITCH_BEND",      "",   -1.f,   1.f,   0.0f,  "linear"},  // normalized bend
+  // TB-303 LFO pseudo-params (per-step locks for LFO frequencies)
+  {106, "LFO1_FREQ_HZ",    "Hz",   0.01f,  20.0f,  0.5f, "step"},
+  {107, "LFO2_FREQ_HZ",    "Hz",   0.01f,  20.0f,  0.2f, "step"},
 };
 
 static constexpr ParamMap kTb303ParamMap{ "tb303_ext", kTb303Params, sizeof(kTb303Params)/sizeof(kTb303Params[0]) };

@@ -88,6 +88,8 @@ public:
         case 103 /* CC71 */: synth_.params().resonance = cmd.value; break;
         case 104 /* CC7  */: synth_.params().ampGain = cmd.value; break;
         case 105 /* PITCH_BEND */: synth_.params().tuneSemitones = cmd.value * 2.0f; break;
+        case 106 /* LFO1_FREQ_HZ */: mod_.addLfo(1, ModLfo::Wave::Sine, cmd.value, 0.0f); break;
+        case 107 /* LFO2_FREQ_HZ */: mod_.addLfo(2, ModLfo::Wave::Sine, cmd.value, 0.0f); break;
         default: break;
       }
     } else if (cmd.type == CommandType::SetParamRamp) {

@@ -1,0 +1,34 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "nodes": [
+    {
+      "id": "bass303",
+      "type": "tb303_ext",
+      "params": { "waveform": 0, "tune": 0, "glideMs": 18, "cutoff": 900, "resonance": 0.55, "envMod": 0.55, "decay": 220, "ampDecayMs": 220, "gain": 0.9 },
+      "mod": {
+        "lfos": [ { "id": 1, "wave": "sine", "freqHz": 0.5, "phase": 0.0 } ],
+        "routes": [ { "sourceId": 1, "destParam": "CUTOFF_HZ", "min": 400, "max": 2000, "map": "exp" } ]
+      }
+    }
+  ],
+  "mixer": { "masterPercent": 90, "softClip": true, "inputs": [ { "id": "bass303", "gainPercent": 100 } ] },
+  "transport": {
+    "bpm": 128,
+    "lengthBars": 2,
+    "resolution": 16,
+    "patterns": [
+      { "nodeId": "bass303", "steps": "x...x...x...x...",
+        "locks": [
+          { "step": 0, "param": "LFO1_FREQ_HZ", "value": 0.5 },
+          { "step": 8, "param": "LFO1_FREQ_HZ", "value": 1.0 }
+        ]
+      }
+    ]
+  },
+  "connections": [],
+  "commands": []
+}
+
+
