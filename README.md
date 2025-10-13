@@ -200,6 +200,7 @@ Examples:
 - `--meters`: after export, print a concise line with peak and RMS in dBFS.
 - `--verbose`: in realtime, print loop counter and elapsed time at loop boundaries.
 - `--meters-per-node`: print per-node peak/RMS and mark nodes with no audio as `inactive`.
+  - When combined with `--verbose` in realtime, per-node meters are printed each time the loop boundary is crossed.
 
 ##### Sidechain routing (MVP)
 

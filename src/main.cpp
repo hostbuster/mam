@@ -19,6 +19,7 @@
 #include <unistd.h>
 #include <sys/select.h>
 #include <cassert>
+#include <mutex>
 #include "instruments/kick/KickSynth.hpp"
 #include "offline/OfflineRenderer.hpp"
 #include "offline/OfflineGraphRenderer.hpp"
@@ -972,8 +973,8 @@ int main(int argc, char** argv) {
       // Rolling feeder thread to extend horizon in realtime without flooding the queue
       if (spec.hasTransport && loopLen > 0) {
         uint64_t nextOffset = ((horizonFrames / loopLen) + 1) * loopLen;
-        const uint64_t desiredAheadFrames = static_cast<uint64_t>(5.0 * 48000.0); // keep ~5s of commands ahead
-        transportFeeder = std::thread([&cmdQueue, baseCmds, loopLen, nextOffset, desiredAheadFrames, &rt]() mutable {
+        constexpr uint64_t desiredAheadFrames = 5ull * 48000ull; // keep ~5s of commands ahead
+        transportFeeder = std::thread([&cmdQueue, baseCmds, loopLen, nextOffset, &rt]() mutable {
           uint64_t offset = nextOffset;
           while (gRunning.load()) {
             const uint64_t framesNow = static_cast<uint64_t>(rt.sampleCounter());
@@ -1018,6 +1019,17 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "Loop %llu at %s (%.3fs)\n",
                      static_cast<unsigned long long>(loopIdx), formatDuration(seconds).c_str(), seconds);
         lastPrintedLoop = loopIdx;
+        if (metersPerNode) {
+          const auto meters = graph.getNodeMeters(2);
+          for (const auto& m : meters) {
+            const bool inactive = (!std::isfinite(m.peakDb) && !std::isfinite(m.rmsDb));
+            if (inactive) {
+              std::fprintf(stderr, "  Node %s: inactive\n", m.id.c_str());
+            } else {
+              std::fprintf(stderr, "  Node %s: peak=%.2f dBFS rms=%.2f dBFS\n", m.id.c_str(), m.peakDb, m.rmsDb);
+            }
+          }
+        }
       }
     }
     if (quitAfterSec > 0.0) {
