@@ -123,6 +123,8 @@ static void printUsage(const char* exe) {
                "  --loop-count N     Repeat transport sequence N times (default 1)\n"
                "  --tail-ms MS       Decay tail appended (default 250)\n"
                "  --verbose          Print realtime loop diagnostics (loop counter and elapsed time)\n"
+               "  --print-triggers   Print realtime event deliveries (set/ramps/triggers) at render-time\n"
+               "  --dump-events      Print synthesized command events (time/bar/step) before playback/export\n"
                "  --meters-per-node  Print per-node peak/RMS after run/export\n"
                "  --loop-minutes M   Repeat transport to reach at least M minutes (offline)\n"
                "  --loop-seconds S   Repeat transport to reach at least S seconds (offline)\n"
@@ -497,6 +499,35 @@ static int validateGraphJson(const std::string& path) {
   }
 }
 
+// Diagnostics: dump command list with bar/step using provided bpm/resolution/sampleRate
+static void dumpCommands(const std::vector<GraphSpec::CommandSpec>& cmds,
+                         uint32_t sr,
+                         double bpm,
+                         uint32_t resolution,
+                         const char* tag) {
+  const double secPerBeat = (bpm > 0.0) ? (60.0 / bpm) : (60.0 / 120.0);
+  const double secPerBar = 4.0 * secPerBeat;
+  const uint64_t framesPerBar = static_cast<uint64_t>(secPerBar * static_cast<double>(sr) + 0.5);
+  for (const auto& c : cmds) {
+    const uint64_t st = c.sampleTime;
+    const uint64_t barIdx = (framesPerBar > 0) ? (st / framesPerBar) : 0ull;
+    const uint64_t withinBar = (framesPerBar > 0) ? (st % framesPerBar) : st;
+    const uint64_t stepIdx = (framesPerBar > 0 && resolution > 0)
+      ? ((withinBar * static_cast<uint64_t>(resolution) + framesPerBar / 2) / framesPerBar)
+      : 0ull;
+    const char* typeStr = (c.type == std::string("Trigger")) ? "TRIG"
+                          : (c.type == std::string("SetParam")) ? "SET"
+                          : (c.type == std::string("SetParamRamp")) ? "RAMP" : "?";
+    std::fprintf(stderr, "%s: t=%llu bar=%llu step=%llu node=%s type=%s pid=%u val=%.3f rampMs=%.1f param=%s\n",
+                 tag,
+                 static_cast<unsigned long long>(st),
+                 static_cast<unsigned long long>(barIdx + 1ull),
+                 static_cast<unsigned long long>((stepIdx % (resolution ? resolution : 16u)) + 1ull),
+                 c.nodeId.c_str(), typeStr, c.paramId, c.value, c.rampMs,
+                 c.paramName.empty() ? "" : c.paramName.c_str());
+  }
+}
+
 int main(int argc, char** argv) {
   KickParams params;
   std::string wavPath;
@@ -527,6 +558,7 @@ int main(int argc, char** argv) {
   uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
   bool metersPerNode = false;
   bool printTriggers = false;
+  bool dumpEvents = false;
   bool schemaStrict = false;         // enforce JSON Schema on load
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
@@ -608,6 +640,8 @@ int main(int argc, char** argv) {
       need(1); randomSeedOverride = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--print-triggers") == 0) {
       printTriggers = true;
+    } else if (std::strcmp(a, "--dump-events") == 0) {
+      dumpEvents = true;
     } else if (std::strcmp(a, "--schema-strict") == 0) {
       schemaStrict = true;
     } else if (std::strcmp(a, "--validate") == 0) {
@@ -781,6 +815,12 @@ int main(int argc, char** argv) {
               c.paramId = mapParam(nodeType, c.paramName);
             }
           }
+        }
+        // Optional event dump (offline): print synthesized commands with timing
+        if (dumpEvents) {
+          const double bpm = spec2.hasTransport ? spec2.transport.bpm : 120.0;
+          const uint32_t res = spec2.hasTransport ? spec2.transport.resolution : 16u;
+          dumpCommands(cmds, sr, bpm, res, "CMD");
         }
         // Determine totalFrames (auto unless overridden)
         if (overrideDurationSec >= 0.0) {
@@ -1044,7 +1084,7 @@ int main(int argc, char** argv) {
       if (spec.hasTransport && loopLen > 0) {
         uint64_t nextOffset = horizonFrames;
         const uint64_t desiredAheadFrames = static_cast<uint64_t>(5.0 * rt.sampleRate()); // keep ~5s of commands ahead
-        transportFeeder = std::thread([&cmdQueue, baseCmds, loopLen, nextOffset, &rt]() mutable {
+        transportFeeder = std::thread([&cmdQueue, baseCmds, loopLen, nextOffset, &rt, desiredAheadFrames]() mutable {
           uint64_t offset = nextOffset;
           while (gRunning.load()) {
             const uint64_t framesNow = static_cast<uint64_t>(rt.sampleCounter());
