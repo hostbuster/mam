@@ -504,6 +504,7 @@ int main(int argc, char** argv) {
   bool verbose = false;              // realtime loop diagnostics
   uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
   bool metersPerNode = false;
+  bool schemaStrict = false;         // enforce JSON Schema on load
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
     auto need = [&](int remain) {
@@ -582,6 +583,8 @@ int main(int argc, char** argv) {
       metersPerNode = true;
     } else if (std::strcmp(a, "--random-seed") == 0) {
       need(1); randomSeedOverride = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--schema-strict") == 0) {
+      schemaStrict = true;
     } else if (std::strcmp(a, "--validate") == 0) {
       need(1); validatePath = argv[++i];
     } else if (std::strcmp(a, "--list-nodes") == 0) {
@@ -667,6 +670,12 @@ int main(int argc, char** argv) {
     Graph graph;
     if (!graphPath.empty()) {
       try {
+        if (schemaStrict) {
+          std::string diag;
+          const std::string schemaPath = std::string("docs/schema.graph.v1.json");
+          int vs = validateJsonWithDraft2020(graphPath, schemaPath, diag);
+          if (vs != 0) { std::fprintf(stderr, "Schema validation failed: %s\n", diag.c_str()); return 1; }
+        }
         GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
         if (randomSeedOverride != 0) setGlobalSeed(randomSeedOverride);
         else if (spec.randomSeed != 0) setGlobalSeed(spec.randomSeed);
@@ -866,6 +875,12 @@ int main(int argc, char** argv) {
   uint64_t rtLoopLen = 0; // frames
   if (!graphPath.empty()) {
     try {
+      if (schemaStrict) {
+        std::string diag;
+        const std::string schemaPath = std::string("docs/schema.graph.v1.json");
+        int vs = validateJsonWithDraft2020(graphPath, schemaPath, diag);
+        if (vs != 0) { std::fprintf(stderr, "Schema validation failed: %s\n", diag.c_str()); return 1; }
+      }
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
       if (randomSeedOverride != 0) setGlobalSeed(randomSeedOverride);
       else if (spec.randomSeed != 0) setGlobalSeed(spec.randomSeed);

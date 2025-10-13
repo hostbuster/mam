@@ -57,6 +57,7 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - Looping UX: `--loop-minutes` / `--loop-seconds` auto-derives loop-count; export prints planned duration (incl. preroll/tail)
 - Validation/CLI: schema enforcement hook; `--list-node-types` prints supported node types
   - Strict JSON Schema can be enabled at configure time via `-DMAM_USE_JSON_SCHEMA=ON` (requires bundled `third_party/json-schema.hpp`)
+  - You can also enforce schema at runtime using `--schema-strict` (both realtime and offline)
 
 ## Build (macOS)
 
@@ -132,6 +133,7 @@ Offline export (auto-duration from transport bars, includes preroll/tail):
 
 ```bash
 ./build/mam --graph demo2.json --wav techno.wav --sr 48000 --normalize --peak-target -1.0
+./build/mam --graph demo2.json --schema-strict --wav techno.wav  # validate against schema before export
 ```
 
 - Offline render to WAV (48 kHz float32), with optional parallelism:
@@ -201,6 +203,7 @@ Examples:
 - `--verbose`: in realtime, print loop counter and elapsed time at loop boundaries.
 - `--meters-per-node`: print per-node peak/RMS and mark nodes with no audio as `inactive`.
   - When combined with `--verbose` in realtime, per-node meters are printed each time the loop boundary is crossed.
+- `--schema-strict`: enforce JSON Schema `docs/schema.graph.v1.json` on load (realtime/offline). Requires validator available (see build note).
 
 ##### Sidechain routing (MVP)
 
