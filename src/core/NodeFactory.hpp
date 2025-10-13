@@ -39,7 +39,11 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
         }
         // Support LFO.<id>.phase target
         if (!r.destParamName.empty() && r.destParamName.rfind("LFO.", 0) == 0 && r.destParamName.find(".phase") != std::string::npos) {
-          // Reserved: LFO phase routing (to be exposed via node API)
+          const auto dotPos = r.destParamName.find('.');
+          const auto secondDot = r.destParamName.find('.', dotPos + 1);
+          const std::string idStr = r.destParamName.substr(dotPos + 1, secondDot - (dotPos + 1));
+          const uint16_t lfoId = static_cast<uint16_t>(std::atoi(idStr.c_str()));
+          node->addLfoPhaseRoute(r.sourceId, lfoId, r.depth, r.offset);
           continue;
         }
         uint16_t dest = r.destParamId;

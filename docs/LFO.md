@@ -37,6 +37,7 @@ This page explains how to author and use the general-purpose LFO system and the 
 - Destinations:
   - Any node param by name (e.g., `GAIN`, `F0`)
   - LFO frequency target as `"LFO.<id>.freqHz"`
+  - LFO phase target as `"LFO.<id>.phase"` (absolute phase 0..1)
 
 Mapping and curves:
 - Instead of `depth`/`offset`, you can specify a target range and curve:
@@ -46,6 +47,7 @@ Mapping and curves:
 
 Smoothing:
 - LFO frequency changes are slewed internally to avoid zipper noise when modulated.
+- LFO phase can be driven per-sample; prefer gentle modulation or step/snap at musical boundaries.
 
 ### Per-step modulation via transport locks
 

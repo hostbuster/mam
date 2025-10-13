@@ -13,6 +13,7 @@ public:
   bool addLfo(uint16_t id, ModLfo::Wave wave, float freqHz, float phase01) { return mod_.addLfo(id, wave, freqHz, phase01); }
   bool addRoute(uint16_t sourceId, uint16_t destParamId, float depth, float offset = 0.0f) { return mod_.addRoute(sourceId, destParamId, depth, offset); }
   bool addLfoFreqRoute(uint16_t sourceId, uint16_t lfoId, float depth, float offset = 0.0f) { return mod_.addLfoFreqRoute(sourceId, lfoId, depth, offset); }
+  bool addLfoPhaseRoute(uint16_t sourceId, uint16_t lfoId, float depth, float offset = 0.0f) { return mod_.addLfoPhaseRoute(sourceId, lfoId, depth, offset); }
   bool addRouteWithRange(uint16_t sourceId, uint16_t destParamId, float minV, float maxV, typename ModMatrix<>::Route::Map map) { return mod_.addRouteWithRange(sourceId, destParamId, minV, maxV, map); }
   void prepare(double sampleRate, uint32_t /*maxBlock*/) override {
     synth_.setSampleRate(sampleRate);
