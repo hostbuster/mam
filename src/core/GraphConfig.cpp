@@ -79,6 +79,9 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
             rs.destParamName = rj.value("destParam", std::string());
             rs.depth = rj.value("depth", 0.0f);
             rs.offset = rj.value("offset", 0.0f);
+            rs.map = rj.value("map", std::string());
+            rs.minValue = rj.value("min", 0.0f);
+            rs.maxValue = rj.value("max", 0.0f);
             ns.mod.routes.push_back(rs);
           }
         }

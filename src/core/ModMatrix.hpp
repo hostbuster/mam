@@ -85,6 +85,12 @@ public:
     float depth = 0.0f;   // scales bipolar source
     float offset = 0.0f;  // constant additive offset
     bool active = false;
+    // Optional mapping range and curve
+    bool hasRange = false;
+    float minValue = 0.0f;
+    float maxValue = 0.0f;
+    enum class Map : uint8_t { Linear = 0, Exp = 1 };
+    Map map = Map::Linear;
   };
 
   bool addLfo(uint16_t id, ModLfo::Wave wave, float freqHz, float phase01) {
@@ -114,6 +120,21 @@ public:
     r.depth = depth;
     r.offset = offset;
     r.active = true;
+    routes_[numRoutes_++] = r;
+    return true;
+  }
+
+  bool addRouteWithRange(uint16_t sourceId, uint16_t destParamId, float minValue, float maxValue, typename Route::Map map = Route::Map::Linear) {
+    if (numRoutes_ >= MaxRoutes) return false;
+    Route r{};
+    r.target = Route::Target::DestParam;
+    r.sourceId = sourceId;
+    r.destParamId = destParamId;
+    r.active = true;
+    r.hasRange = true;
+    r.minValue = minValue;
+    r.maxValue = maxValue;
+    r.map = map;
     routes_[numRoutes_++] = r;
     return true;
   }
@@ -165,7 +186,17 @@ public:
       const int sIdx = findSourceIndex(r.sourceId);
       if (sIdx < 0) continue;
       const Source& s = sources_[static_cast<size_t>(sIdx)];
-      acc += r.offset + r.depth * s.last;
+      if (r.hasRange) {
+        // Map [-1,1] to [min,max] with optional exponential curve
+        float t = 0.5f * (s.last + 1.0f); // 0..1
+        if (r.map == Route::Map::Exp) {
+          // simple exponential-ish curve
+          t = t * t;
+        }
+        acc += r.minValue + (r.maxValue - r.minValue) * t;
+      } else {
+        acc += r.offset + r.depth * s.last;
+      }
     }
     return acc;
   }

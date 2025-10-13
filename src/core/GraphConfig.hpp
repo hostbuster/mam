@@ -17,6 +17,9 @@ struct NodeSpec {
     std::string destParamName; // optional, resolves to id per node type
     float depth = 0.0f;
     float offset = 0.0f;
+    std::string map; // "linear" | "exp" (optional)
+    float minValue = 0.0f; // optional mapping range; if min<max, takes precedence over depth/offset
+    float maxValue = 0.0f;
   };
   struct ModSpec {
     std::vector<ModLfoSpec> lfos;

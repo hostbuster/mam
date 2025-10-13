@@ -65,7 +65,18 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
         }
         uint16_t dest = r.destParamId;
         if (dest == 0 && !r.destParamName.empty()) dest = resolveParamIdByName(kClapParamMap, r.destParamName);
-        if (dest != 0) node->addRoute(r.sourceId, dest, r.depth, r.offset);
+        if (dest != 0) {
+          if (!r.map.empty() || (r.minValue < r.maxValue)) {
+            auto mapMode = ModMatrix<>::Route::Map::Linear;
+            if (r.map == "exp") mapMode = ModMatrix<>::Route::Map::Exp;
+            const float minV = r.minValue;
+            const float maxV = r.maxValue;
+            if (minV < maxV) node->addRouteWithRange(r.sourceId, dest, minV, maxV, mapMode);
+            else node->addRoute(r.sourceId, dest, r.depth, r.offset);
+          } else {
+            node->addRoute(r.sourceId, dest, r.depth, r.offset);
+          }
+        }
       }
     }
     return node;
