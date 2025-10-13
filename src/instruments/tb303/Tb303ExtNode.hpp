@@ -24,6 +24,7 @@ public:
   const char* name() const override { return "Tb303ExtNode"; }
   void prepare(double sampleRate, uint32_t /*maxBlock*/) override {
     synth_.setSampleRate(sampleRate);
+    ctxSampleRate_ = sampleRate;
     params_.prepare(sampleRate);
     // Ensure parameters
     params_.ensureParam(Tb303Param::WAVEFORM, 0.0f);
@@ -39,6 +40,7 @@ public:
   }
   void reset() override { synth_.reset(); }
   void process(ProcessContext ctx, float* interleavedOut, uint32_t channels) override {
+    ctxSampleRate_ = ctx.sampleRate;
     for (uint32_t i = 0; i < ctx.frames; ++i) {
       mod_.tick();
       // Pull parameter values
@@ -51,16 +53,17 @@ public:
       synth_.params().filterDecayMs = params_.next(Tb303Param::FILTER_DECAY_MS);
       synth_.params().ampDecayMs = params_.next(Tb303Param::AMP_DECAY_MS);
       synth_.params().ampGain = params_.next(Tb303Param::AMP_GAIN);
-      const float s = synth_.process();
+      float s = synth_.process();
       for (uint32_t ch = 0; ch < channels; ++ch) interleavedOut[i * channels + ch] = s;
     }
   }
 
   void handleEvent(const Command& cmd) override {
     if (cmd.type == CommandType::Trigger) {
-      // If trigger value is 0, use last-set VELOCITY/ACCENT from params
+      // If trigger value is 0, use last-set VELOCITY/ACCENT from params; default velocity to 0.8 if never set
       const float velCmd = std::fmin(1.0f, std::fmax(0.0f, cmd.value));
-      const float vel = (velCmd > 0.0f) ? velCmd : synth_.params().velocity;
+      float vel = (velCmd > 0.0f) ? velCmd : synth_.params().velocity;
+      if (vel <= 0.0f) vel = 0.8f;
       const float acc = synth_.params().accent;
       synth_.noteOn(synth_.params().noteSemitones, vel, acc);
       return;
@@ -105,8 +108,9 @@ public:
 
 private:
   Tb303ExtSynth synth_;
-  ParameterRegistry<> params_;
+  ParameterRegistry<12> params_;
   ModMatrix<> mod_;
+  double ctxSampleRate_ = 48000.0;
 };
 
 

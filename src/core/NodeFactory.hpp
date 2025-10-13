@@ -212,7 +212,7 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
           continue;
         }
         uint16_t dest = r.destParamId;
-        if (dest == 0 && !r.destParamName.empty()) dest = resolveParamIdByName(kKickParamMap, r.destParamName); // reuse mapping infra or add tb303 map later
+        if (dest == 0 && !r.destParamName.empty()) dest = resolveParamIdByName(kTb303ParamMap, r.destParamName);
         if (dest != 0) {
           if (!r.map.empty() || (r.minValue < r.maxValue)) {
             auto mapMode = ModMatrix<>::Route::Map::Linear; if (r.map == "exp") mapMode = ModMatrix<>::Route::Map::Exp;
