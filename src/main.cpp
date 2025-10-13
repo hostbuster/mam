@@ -142,6 +142,26 @@ static const char* dupStr(const std::string& s) {
   std::memcpy(p, s.c_str(), s.size() + 1);
   return p;
 }
+// Connectivity advisories (non-fatal): e.g., compressor without sidechain key
+static void warnSidechainConnectivity(const GraphSpec& spec) {
+  std::unordered_map<std::string, std::string> nodeType;
+  nodeType.reserve(spec.nodes.size());
+  for (const auto& n : spec.nodes) nodeType.emplace(n.id, n.type);
+  std::unordered_map<std::string, bool> compHasKey;
+  for (const auto& n : spec.nodes) if (n.type == std::string("compressor")) compHasKey[n.id] = false;
+  for (const auto& c : spec.connections) {
+    auto itT = nodeType.find(c.to);
+    if (itT != nodeType.end() && itT->second == std::string("compressor") && c.toPort == 1u) {
+      compHasKey[c.to] = true;
+    }
+  }
+  for (const auto& kv : compHasKey) {
+    if (!kv.second) {
+      std::fprintf(stderr, "Warning: compressor '%s' has no sidechain key connected (toPort=1); using self-detection.\n", kv.first.c_str());
+    }
+  }
+}
+
 
 // Intern nodeId strings to avoid per-command heap churn/leaks in realtime enqueue paths
 static const char* internNodeId(const std::string& s) {
@@ -610,6 +630,7 @@ int main(int argc, char** argv) {
   if (printTopo && !graphPath.empty()) {
     try {
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
+      warnSidechainConnectivity(spec);
       printTopoOrderFromSpec(spec);
       printConnectionsSummary(spec);
       printPortsSummary(spec);
@@ -677,6 +698,7 @@ int main(int argc, char** argv) {
           if (vs != 0) { std::fprintf(stderr, "Schema validation failed: %s\n", diag.c_str()); return 1; }
         }
         GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
+        warnSidechainConnectivity(spec);
         if (randomSeedOverride != 0) setGlobalSeed(randomSeedOverride);
         else if (spec.randomSeed != 0) setGlobalSeed(spec.randomSeed);
         for (const auto& ns : spec.nodes) {
