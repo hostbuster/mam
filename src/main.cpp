@@ -1112,11 +1112,13 @@ int main(int argc, char** argv) {
                 cmd.paramId = c.paramId;
                 cmd.value = c.value;
                 cmd.rampMs = c.rampMs;
-                // Always push; queue may briefly fill but next iteration will catch up
-                while (!cmdQueue.push(cmd)) {
+                // Always push; if queue is saturated, retry briefly but allow shutdown to break out
+                while (gRunning.load() && !cmdQueue.push(cmd)) {
                   std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
+                if (!gRunning.load()) break; // allow clean shutdown without blocking on a full queue
               }
+              if (!gRunning.load()) break;
               offset += loopLen;
             } else {
               std::this_thread::sleep_for(std::chrono::milliseconds(50));
