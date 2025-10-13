@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "nodes": [
+    { "id": "clap1", "type": "clap", "params": { "ampDecayMs": 180, "gain": 0.85 } }
+  ],
+  "mixer": { "masterPercent": 90, "softClip": true, "inputs": [ { "id": "clap1", "gainPercent": 100 } ] },
+  "transport": {
+    "bpm": 128,
+    "lengthBars": 2,
+    "resolution": 16,
+    "patterns": [
+      { "nodeId": "clap1", "steps": "x...x...x...x...",
+        "locks": [
+          { "step": 0,  "param": "VELOCITY", "value": 0.5 },
+          { "step": 4,  "param": "VELOCITY", "value": 0.7 },
+          { "step": 8,  "param": "VELOCITY", "value": 1.0 },
+          { "step": 12, "param": "VELOCITY", "value": 0.8 },
+          { "step": 0,  "param": "PAN",      "value": -0.4 },
+          { "step": 8,  "param": "PAN",      "value": 0.4 }
+        ]
+      }
+    ]
+  },
+  "connections": [],
+  "commands": []
+}
+
+
