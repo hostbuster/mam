@@ -26,6 +26,7 @@
  - Nodes: `delay`, `meter`, `compressor` (sidechain port), `reverb`, `wiretap`
  - Channel adapters: generalized N↔M adaptation guided by declared port `channels` (mono↔stereo and N→M modulo mapping)
  - Realtime loop stability: exact loop length from transport bars; throttled rolling feeder; interned nodeId strings; seamless 1‑bar looping
+- Realtime parity hardening: SetParam/SetParamRamp before Trigger at identical timestamps; multi‑loop pre‑synthesis to avoid boundary rounding; device‑rate aligned loop length; robust feeder shutdown.
  - Observability: per-node meter printing after offline export and at realtime loop boundaries (`--verbose` + `--meters-per-node`)
  - Docs: `demo.json` refined; new `demo2.json` (16‑bar techno); sidechain cookbook; enhanced `--print-topo` with port channel info
  - Schema: strict validation toggle via `-DMAM_USE_JSON_SCHEMA=ON`
@@ -46,6 +47,7 @@
 - Transport timing: finalize swing behavior and ramp curves; seek/loop ranges and duration hints
 - Parameters: complete name→id coverage across all nodes; stricter load-time validation/clamping using `ParamMap`
 - Observability: lightweight JSON perf trace; per-node counters; optional realtime perf dump
+- Authoring/UX: refine examples (`acid303_sidechain` with LFO locks and clap), document TB‑303 LFO phase/locks; DAW parity notes (sample rate/headroom/bit depth).
 - Validation & tooling: schema-on by default in dev; golden renders; CI with sanitizers and clang-tidy
 
 ### Innovations (candidates)

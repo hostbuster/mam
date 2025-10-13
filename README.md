@@ -22,6 +22,8 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
   - Benefit: versionable, human-editable sessions; easy automation and CI rendering.
 - **Realtime + Offline**: CoreAudio streaming and high-quality file rendering (WAV/AIFF/CAF).
   - Benefit: identical musical results in live and batch contexts; predictable exports.
+- **Instruments: kick, clap, TB‑303 (extended)**: Param maps, modulation, transport locks.
+  - Benefit: classic drum/synth palette with named‑param automation and modulation matrix.
 - **Concurrency scaffolding**: Command queue for sample-accurate control, offline job pool.
   - Benefit: glitch-free control changes in realtime and faster-than-realtime offline renders.
 
@@ -58,6 +60,9 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - Validation/CLI: schema enforcement hook; `--list-node-types` prints supported node types
   - Strict JSON Schema can be enabled at configure time via `-DMAM_USE_JSON_SCHEMA=ON` (requires bundled `third_party/json-schema.hpp`)
   - You can also enforce schema at runtime using `--schema-strict` (both realtime and offline)
+- Realtime parity fixes: apply SetParam/SetParamRamp before Trigger at identical timestamps; precise loop length from bars; multi‑loop pre‑synthesis to avoid boundary drift.
+- Diagnostics: new `--dump-events` prints synthesized commands with time/bar/step; improved `--print-triggers` callback logging.
+- TB‑303 extended: LFO phase routing (`destParam: "LFO.<id>.phase"`) and pseudo‑params `LFO1_FREQ_HZ`/`LFO2_FREQ_HZ` for per‑step LFO rate.
 
 ## Build (macOS)
 
@@ -106,6 +111,7 @@ open build-xcode/mam.xcodeproj
 ./build/mam --validate examples/demo.json
 ./build/mam --list-nodes examples/demo.json
 ./build/mam --list-params kick
+./build/mam --dump-events --graph examples/acid303_sidechain.json   # print command timeline (time/bar/step)
 ```
 
 ### Full-feature example (recommended)
@@ -118,6 +124,7 @@ Use `examples/demo.json` to try multi-pattern transport with swing and tempo ram
 ./build/mam --graph examples/demo.json
 ./build/mam --graph examples/demo.json --verbose                 # loop diagnostics
 ./build/mam --graph examples/demo.json --random-seed 42          # deterministic randomness override
+./build/mam --graph examples/acid303_sidechain.json              # TB-303 + kick sidechain groove
 ```
 
 Longer techno demo (16-bar) in `examples/demo2.json`:
@@ -195,6 +202,7 @@ Examples:
 - `--normalize`: normalize output peak to -1.0 dBFS.
 - `--peak-target dB`: normalize peak to a specific target (e.g., `-0.3`).
 - The exporter prints both pre-/post-peak and applied gain in dB. Normalization is applied prior to file write and never clips.
+ - Tip: for realtime/export parity, render offline at your device sample rate using `--sr <Hz>` and keep peaks ≤ −1 dBFS.
 
 #### Topology and meters
 
@@ -207,6 +215,7 @@ Examples:
 
 LFOs and modulation matrix:
 - See `docs/LFO.md` for a guide to authoring LFOs, routing to params, LFO-on-LFO frequency modulation, per-step transport locks, and mapped routes (`min`/`max`, `map: linear|exp`).
+ - TB‑303 extras: per‑step pseudo‑params `LFO1_FREQ_HZ`/`LFO2_FREQ_HZ` and LFO phase target via `"LFO.<id>.phase"`.
 
 ##### Sidechain routing (MVP)
 
@@ -752,7 +761,8 @@ Current limitations: a single inline pattern per `transport` node (scaffold). Th
 #### Loop diagnostics and trigger printing (realtime)
 
 - `--verbose`: prints "Loop N" exactly at transport loop boundaries in the audio callback, before any triggers in that block.
-- `--print-triggers`: prints sample-accurate trigger lines with absolute time, 1-based bar/step, node id, and command info.
+- `--print-triggers`: prints sample-accurate set/ramp/trigger lines with absolute time, 1-based bar/step, node id, and command info.
+- `--dump-events`: offline/prepare-time dump of the command list with time/bar/step for debugging authoring issues.
 - When `--print-triggers` is active, main-thread loop prints are suppressed to avoid duplicates; boundary printing remains precise in the callback.
 - Bar/step indices are derived from `framesNow % loopLen` and `framesPerBar` for exact musical alignment.
 
