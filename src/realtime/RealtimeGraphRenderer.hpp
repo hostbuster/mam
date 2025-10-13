@@ -106,12 +106,12 @@ private:
       if (L > 0) {
         const uint64_t start = static_cast<uint64_t>(blockStartAbs);
         const uint64_t end = static_cast<uint64_t>(cutoff);
-        if (start > 0 && (start % L) == 0ull) {
+        if ((start % L) == 0ull) {
           const uint64_t loopIdx = start / L;
           std::fprintf(stderr, "Loop %llu\n", static_cast<unsigned long long>(loopIdx));
         } else if (end > start) {
           const uint64_t next = ((start + L - 1ull) / L) * L; // first multiple in [start, ∞)
-          if (next >= start && next < end && next > 0ull) {
+          if (next >= start && next < end) {
             const uint64_t loopIdx = next / L;
             std::fprintf(stderr, "Loop %llu\n", static_cast<unsigned long long>(loopIdx));
           }

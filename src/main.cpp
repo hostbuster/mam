@@ -1011,7 +1011,12 @@ int main(int argc, char** argv) {
       // Build initial command set (explicit + transport)
       std::vector<GraphSpec::CommandSpec> baseCmds = spec.commands;
       if (spec.hasTransport) {
-        auto gen = generateCommandsFromTransport(spec.transport, static_cast<uint32_t>(rt.sampleRate() + 0.5));
+        // Generate a multi-loop chunk in one shot to avoid boundary duplication/rounding artifacts
+        GraphSpec::Transport chunk = spec.transport;
+        const uint32_t baseBarsRT = (spec.transport.lengthBars > 0) ? spec.transport.lengthBars : 1u;
+        const uint32_t chunkLoops = 16u; // initial horizon chunk
+        chunk.lengthBars = baseBarsRT * chunkLoops;
+        auto gen = generateCommandsFromTransport(chunk, static_cast<uint32_t>(rt.sampleRate() + 0.5));
         baseCmds.insert(baseCmds.end(), gen.begin(), gen.end());
       }
       // Resolve named params to IDs based on node type
