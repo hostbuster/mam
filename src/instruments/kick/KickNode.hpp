@@ -5,11 +5,15 @@
 #include "../../core/ParamIds.hpp"
 #include "../../core/ParameterRegistry.hpp"
 #include <cstring>
+#include "../../core/ModMatrix.hpp"
 
 class KickNode : public Node {
 public:
   explicit KickNode(const KickParams& p) : synth_(p, 48000.0) {}
   const char* name() const override { return "KickNode"; }
+  // Public hooks for factory to configure modulation without RTTI outside
+  bool addLfo(uint16_t id, ModLfo::Wave wave, float freqHz, float phase01) { return mod_.addLfo(id, wave, freqHz, phase01); }
+  bool addRoute(uint16_t sourceId, uint16_t destParamId, float depth, float offset = 0.0f) { return mod_.addRoute(sourceId, destParamId, depth, offset); }
   void prepare(double sampleRate, uint32_t /*maxBlock*/) override {
     synth_.setSampleRate(sampleRate);
     params_.prepare(sampleRate);
@@ -22,14 +26,20 @@ public:
     params_.setSmoothing(KickParam::GAIN, ParameterRegistry<>::Smoothing::Linear);
     params_.setSmoothing(KickParam::PITCH_DECAY_MS, ParameterRegistry<>::Smoothing::Expo);
     params_.setSmoothing(KickParam::AMP_DECAY_MS, ParameterRegistry<>::Smoothing::Expo);
+    mod_.prepare(sampleRate);
   }
   void reset() override { synth_.reset(); }
   void process(ProcessContext ctx, float* interleavedOut, uint32_t channels) override {
     // Simple: mono -> copy to all channels
     for (uint32_t i = 0; i < ctx.frames; ++i) {
+      mod_.tick();
       // Smooth params
       nodeGain_ = params_.next(KickParam::GAIN);
-      synth_.params().startFreqHz = params_.next(KickParam::F0);
+      {
+        const float baseF0 = params_.next(KickParam::F0);
+        const float modF0 = baseF0 + mod_.sumFor(KickParam::F0);
+        synth_.params().startFreqHz = modF0;
+      }
       synth_.params().endFreqHz = params_.next(KickParam::FEND);
       synth_.params().pitchDecayMs = params_.next(KickParam::PITCH_DECAY_MS);
       synth_.params().ampDecayMs = params_.next(KickParam::AMP_DECAY_MS);
@@ -72,6 +82,7 @@ public:
 private:
   KickSynth synth_;
   ParameterRegistry<> params_;
+  ModMatrix<> mod_;
   float nodeGain_ = 1.0f;
 };
 

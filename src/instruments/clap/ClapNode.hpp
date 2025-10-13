@@ -4,11 +4,14 @@
 #include "../../core/Node.hpp"
 #include "../../core/ParamIds.hpp"
 #include "../../core/ParameterRegistry.hpp"
+#include "../../core/ModMatrix.hpp"
 
 class ClapNode : public Node {
 public:
   explicit ClapNode(const ClapParams& p) : synth_(p, 48000.0) {}
   const char* name() const override { return "ClapNode"; }
+  bool addLfo(uint16_t id, ModLfo::Wave wave, float freqHz, float phase01) { return mod_.addLfo(id, wave, freqHz, phase01); }
+  bool addRoute(uint16_t sourceId, uint16_t destParamId, float depth, float offset = 0.0f) { return mod_.addRoute(sourceId, destParamId, depth, offset); }
   void prepare(double sampleRate, uint32_t /*maxBlock*/) override {
     synth_.setSampleRate(sampleRate);
     params_.prepare(sampleRate);
@@ -16,12 +19,19 @@ public:
     params_.ensureParam(ClapParam::AMP_DECAY_MS, synth_.params().ampDecayMs);
     params_.setSmoothing(ClapParam::GAIN, ParameterRegistry<>::Smoothing::Linear);
     params_.setSmoothing(ClapParam::AMP_DECAY_MS, ParameterRegistry<>::Smoothing::Expo);
+    mod_.prepare(sampleRate);
   }
   void reset() override { synth_.reset(); }
   void process(ProcessContext ctx, float* interleavedOut, uint32_t channels) override {
     for (uint32_t i = 0; i < ctx.frames; ++i) {
-      nodeGain_ = params_.next(ClapParam::GAIN);
-      synth_.params().ampDecayMs = params_.next(ClapParam::AMP_DECAY_MS);
+      mod_.tick();
+      float baseGain = params_.next(ClapParam::GAIN);
+      float baseDecay = params_.next(ClapParam::AMP_DECAY_MS);
+      const float modGain = mod_.sumFor(ClapParam::GAIN);
+      const float modDecay = mod_.sumFor(ClapParam::AMP_DECAY_MS);
+      // Apply modulation
+      nodeGain_ = baseGain + modGain; if (nodeGain_ < 0.0f) nodeGain_ = 0.0f;
+      float dec = baseDecay + modDecay; if (dec < 1.0f) dec = 1.0f; synth_.params().ampDecayMs = dec;
       const float s = synth_.process();
       for (uint32_t ch = 0; ch < channels; ++ch) interleavedOut[i * channels + ch] = s * nodeGain_;
     }
@@ -48,6 +58,7 @@ public:
 private:
   ClapSynth synth_;
   ParameterRegistry<> params_;
+  ModMatrix<> mod_;
   float nodeGain_ = 1.0f;
 };
 

@@ -3,8 +3,18 @@
   "sampleRate": 48000,
   "channels": 2,
   "nodes": [
-    { "id": "clap", "type": "clap", "params": { "ampDecayMs": 200, "gain": 0.8 } },
-    { "id": "kick", "type": "kick", "params": { "f0": 120, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 1.0 } },
+    { "id": "clap", "type": "clap", "params": { "ampDecayMs": 200, "gain": 0.8 },
+      "mod": {
+        "lfos": [ { "id": 10, "wave": "sine", "freqHz": 120.0, "phase": 0.0 } ],
+        "routes": [ { "sourceId": 10, "destParam": "GAIN", "depth": 0.7, "offset": 0.0 } ]
+      }
+    },
+    { "id": "kick", "type": "kick", "params": { "f0": 120, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 1.0 },
+      "mod": {
+        "lfos": [ { "id": 1, "wave": "sine", "freqHz": 0.25, "phase": 0.0 } ],
+        "routes": [ { "sourceId": 1, "destParam": "F0", "depth": 60.0, "offset": 0.0 } ]
+      }
+    },
     { "id": "compA", "type": "compressor",
       "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ],
                   "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }

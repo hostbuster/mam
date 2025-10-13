@@ -5,6 +5,24 @@
 #include <cstdint>
 
 struct NodeSpec {
+  struct ModLfoSpec {
+    uint16_t id = 0;
+    std::string wave; // "sine"|"triangle"|"saw"|"square"
+    float freqHz = 0.5f;
+    float phase01 = 0.0f;
+  };
+  struct ModRouteSpec {
+    uint16_t sourceId = 0;
+    uint16_t destParamId = 0;
+    std::string destParamName; // optional, resolves to id per node type
+    float depth = 0.0f;
+    float offset = 0.0f;
+  };
+  struct ModSpec {
+    std::vector<ModLfoSpec> lfos;
+    std::vector<ModRouteSpec> routes;
+    bool has = false;
+  };
   struct PortDesc {
     uint32_t index = 0;
     std::string name;
@@ -23,6 +41,7 @@ struct NodeSpec {
   // raw JSON for params will be parsed per type in the factory
   std::string paramsJson;
   PortsSpec ports;
+  ModSpec mod;
 };
 
 struct GraphSpec {

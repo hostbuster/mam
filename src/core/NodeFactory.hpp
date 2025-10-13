@@ -11,14 +11,47 @@
 #include "CompressorNode.hpp"
 #include "ReverbNode.hpp"
 #include "WiretapNode.hpp"
+#include <type_traits>
 // Mixer is not created via NodeFactory; it is set on Graph from GraphSpec.mixer
 
 inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
   if (spec.type == "kick") {
-    return makeKickNodeFromParamsJson(spec.paramsJson);
+    auto node = makeKickNodeFromParamsJson(spec.paramsJson);
+    // Apply optional modulation spec
+    if (node && spec.mod.has) {
+      // Configure LFOs/routes via public hooks
+      for (const auto& l : spec.mod.lfos) {
+        ModLfo::Wave w = ModLfo::Wave::Sine;
+        if (l.wave == "triangle") w = ModLfo::Wave::Triangle;
+        else if (l.wave == "saw") w = ModLfo::Wave::Saw;
+        else if (l.wave == "square") w = ModLfo::Wave::Square;
+        node->addLfo(l.id, w, l.freqHz, l.phase01);
+      }
+      for (const auto& r : spec.mod.routes) {
+        uint16_t dest = r.destParamId;
+        if (dest == 0 && !r.destParamName.empty()) dest = resolveParamIdByName(kKickParamMap, r.destParamName);
+        if (dest != 0) node->addRoute(r.sourceId, dest, r.depth, r.offset);
+      }
+    }
+    return node;
   }
   if (spec.type == "clap") {
-    return makeClapNodeFromParamsJson(spec.paramsJson);
+    auto node = makeClapNodeFromParamsJson(spec.paramsJson);
+    if (node && spec.mod.has) {
+      for (const auto& l : spec.mod.lfos) {
+        ModLfo::Wave w = ModLfo::Wave::Sine;
+        if (l.wave == "triangle") w = ModLfo::Wave::Triangle;
+        else if (l.wave == "saw") w = ModLfo::Wave::Saw;
+        else if (l.wave == "square") w = ModLfo::Wave::Square;
+        node->addLfo(l.id, w, l.freqHz, l.phase01);
+      }
+      for (const auto& r : spec.mod.routes) {
+        uint16_t dest = r.destParamId;
+        if (dest == 0 && !r.destParamName.empty()) dest = resolveParamIdByName(kClapParamMap, r.destParamName);
+        if (dest != 0) node->addRoute(r.sourceId, dest, r.depth, r.offset);
+      }
+    }
+    return node;
   }
   if (spec.type == "transport") {
     auto t = std::make_unique<TransportNode>();

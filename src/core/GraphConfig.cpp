@@ -58,6 +58,32 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
         }
         ns.ports.has = true;
       }
+      // Optional modulation spec per node
+      if (n.contains("mod")) {
+        const auto& md = n.at("mod");
+        if (md.contains("lfos")) {
+          for (const auto& lj : md.at("lfos")) {
+            NodeSpec::ModLfoSpec ls{};
+            ls.id = static_cast<uint16_t>(lj.value("id", 0));
+            ls.wave = lj.value("wave", std::string("sine"));
+            ls.freqHz = lj.value("freqHz", 0.5f);
+            ls.phase01 = lj.value("phase", 0.0f);
+            ns.mod.lfos.push_back(ls);
+          }
+        }
+        if (md.contains("routes")) {
+          for (const auto& rj : md.at("routes")) {
+            NodeSpec::ModRouteSpec rs{};
+            rs.sourceId = static_cast<uint16_t>(rj.value("sourceId", 0));
+            rs.destParamId = static_cast<uint16_t>(rj.value("destParamId", 0));
+            rs.destParamName = rj.value("destParam", std::string());
+            rs.depth = rj.value("depth", 0.0f);
+            rs.offset = rj.value("offset", 0.0f);
+            ns.mod.routes.push_back(rs);
+          }
+        }
+        ns.mod.has = true;
+      }
       spec.nodes.push_back(std::move(ns));
     }
   }
