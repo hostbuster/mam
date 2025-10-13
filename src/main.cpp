@@ -1066,7 +1066,9 @@ int main(int argc, char** argv) {
       gRunning.store(false);
       break;
     }
-    if (verbose && rtLoopLen > 0) {
+    // When --print-triggers is enabled, the render callback prints loop boundaries precisely.
+    // Suppress the coarse main-thread loop print in that case to avoid late/duplicate messages.
+    if (verbose && rtLoopLen > 0 && !printTriggers) {
       const uint64_t frames = static_cast<uint64_t>(rt.sampleCounter());
       const uint64_t loopIdx = frames / rtLoopLen;
       if (loopIdx > lastPrintedLoop) {
