@@ -39,7 +39,7 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - CLI: `--graph`, `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
 - IO: `ExtAudioFile` writer (WAV/AIFF/CAF) with 16/24/32f
 - Docs: auto-generated `docs/ParamTables.md` from `ParamMap.hpp`; expanded README
-- Tools: `gen_params` for docs; JSON examples `two_kicks.json`, `breakbeat.json`, `breakbeat_full.json`
+- Tools: `gen_params` for docs; JSON examples under `examples/` (`demo.json`, `demo2.json`, sidechain variants)
 - Offline scaffolds: `BufferPool` and `OfflineTopoScheduler`
 
 ### What's new (core evolution)
@@ -70,7 +70,7 @@ Optional: generate an Xcode project
 
 ```bash
 cmake -S . -B build-xcode -G Xcode
-open build-xcode/kickdrum.xcodeproj
+open build-xcode/mam.xcodeproj
 ```
 
 ## Run
@@ -103,8 +103,8 @@ open build-xcode/kickdrum.xcodeproj
 
 ```bash
 ./build/mam --help
-./build/mam --validate breakbeat.json
-./build/mam --list-nodes two_kicks.json
+./build/mam --validate examples/demo.json
+./build/mam --list-nodes examples/demo.json
 ./build/mam --list-params kick
 ```
 
@@ -139,16 +139,16 @@ Offline export (auto-duration from transport bars, includes preroll/tail):
 - Offline render to WAV (48 kHz float32), with optional parallelism:
 
 ```bash
-./build/mam --graph demo.json --wav out.wav --sr 48000
-./build/mam --graph demo.json --wav out.wav --random-seed 123  # deterministic export
+./build/mam --graph examples/demo.json --wav out.wav --sr 48000
+./build/mam --graph examples/demo.json --wav out.wav --random-seed 123  # deterministic export
 # Parallel offline rendering (e.g., 4 worker threads):
-./build/mam --graph demo.json --wav out.wav --sr 48000 --offline-threads 4
+./build/mam --graph examples/demo.json --wav out.wav --sr 48000 --offline-threads 4
 ```
 
 - Validate the example graph:
 
 ```bash
-./build/mam --validate demo.json
+./build/mam --validate examples/demo.json
 ```
 
 ### Offline rendering
@@ -181,13 +181,13 @@ Examples:
 
 ```bash
 # Auto-duration from transport (bars + tail)
-./build/mam --graph demo.json --wav demo.wav
+./build/mam --graph examples/demo.json --wav demo.wav
 
 # Force 8 bars with a shorter tail
-./build/mam --graph demo.json --wav demo.wav --bars 8 --tail-ms 100
+./build/mam --graph examples/demo.json --wav demo.wav --bars 8 --tail-ms 100
 
 # Hard 10-second render (overrides everything)
-./build/mam --graph demo.json --wav demo.wav --duration 10
+./build/mam --graph examples/demo.json --wav demo.wav --duration 10
 ```
 
 #### Normalization
@@ -304,13 +304,13 @@ Examples:
 
 ```bash
 # Print topo order without exporting (dry inspection)
-./build/mam --graph demo.json --print-topo --validate demo.json
+./build/mam --graph examples/demo.json --print-topo --validate examples/demo.json
 
 # Export and show meters
-./build/mam --graph demo.json --wav demo.wav --meters
+./build/mam --graph examples/demo.json --wav demo.wav --meters
 
 # Export, show topo order and meters together
-./build/mam --graph demo.json --wav demo.wav --print-topo --meters
+./build/mam --graph examples/demo.json --wav demo.wav --print-topo --meters
 ```
 
 Transport and looping notes (realtime):
@@ -320,7 +320,7 @@ Transport and looping notes (realtime):
 Timed realtime exit:
 
 ```bash
-./build/mam --graph two_kicks.json --quit-after 10
+./build/mam --graph examples/demo.json --quit-after 10
 ```
 
 #### Channel adapters
@@ -746,6 +746,21 @@ Current limitations: a single inline pattern per `transport` node (scaffold). Th
 }
 ```
 
+#### Loop diagnostics and trigger printing (realtime)
+
+- `--verbose`: prints "Loop N" exactly at transport loop boundaries in the audio callback, before any triggers in that block.
+- `--print-triggers`: prints sample-accurate trigger lines with absolute time, 1-based bar/step, node id, and command info.
+- When `--print-triggers` is active, main-thread loop prints are suppressed to avoid duplicates; boundary printing remains precise in the callback.
+- Bar/step indices are derived from `framesNow % loopLen` and `framesPerBar` for exact musical alignment.
+
+Examples:
+
+```bash
+./build/mam --graph examples/sidechain_mono_key.json --verbose --print-triggers
+# Combine with meters at boundaries:
+./build/mam --graph examples/demo2.json --verbose --meters-per-node
+```
+
 Command param addressing:
 
 - You can specify parameters by numeric `paramId` (legacy) or by name using `"param": "F0"` etc.
@@ -844,3 +859,14 @@ Example:
   ]
 }
 ```
+
+## Innovations (next ideas)
+
+- Real-time safe modulation matrix: per-node LFO/envelope/sidechain sources to params with depth and smoothing, zero-alloc in audio thread.
+- Pattern intelligence: auto-generate groove variations and param-lock suggestions from a seed (deterministic via `randomSeed`).
+- Live JSON hot-reload: double-buffer graph state and apply validated diffs sample-accurately without audio dropouts.
+- Spectral nodes: FFT-based filterbank, transient shaper, and sidechain spectral ducking, with reported latency and offline preroll alignment.
+- Wasm micro-nodes: safe, sandboxed nodes for quick prototyping; precompiled and allocation-free at render time.
+- Trace and A/B diff: export lightweight JSON traces and compare renders at boundaries; surface perf counters per node.
+- Tail advisor: suggest `--tail-ms` from detected long-decay nodes (delay/reverb) unless explicitly overridden.
+- Multi-port ergonomics: visual port mapping introspection in CLI (`--print-ports`) and validation that catches dry/wet double-counts by design.

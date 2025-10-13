@@ -48,6 +48,13 @@
 - Observability: lightweight JSON perf trace; per-node counters; optional realtime perf dump
 - Validation & tooling: schema-on by default in dev; golden renders; CI with sanitizers and clang-tidy
 
+### Innovations (candidates)
+- Real-time safe modulation matrix with zero-alloc routing of LFO/env/sidechain to params; per-parameter smoothing strategies.
+- Live graph hot-reload (validated diffs) with double-buffered swap and sample-accurate adoption at loop boundaries.
+- Spectral processors (filterbank, transient shaper) with per-node latency reporting and offline preroll computation.
+- Wasm micro-nodes for sandboxed rapid prototyping; precompiled ahead-of-time; deterministic via `randomSeed`.
+- Tail advisor: detect long-decay nodes and suggest export `tail-ms` unless overridden; print advisory in CLI.
+
 ### Design notes
 
 1) Transport param-locks
