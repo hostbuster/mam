@@ -159,12 +159,18 @@ private:
       // Deliver events that occur exactly at this segment start
       if (self->cmdQueue_ && !self->drained_.empty()) {
         const SampleTime segAbsStart = blockStartAbs + static_cast<SampleTime>(segStart);
+        // 1) Apply SetParam/SetParamRamp first (latch values before triggers), matching offline
         for (const Command& c : self->drained_) {
-          if (c.sampleTime == segAbsStart && c.nodeId) {
+          if (c.sampleTime == segAbsStart && c.nodeId && (c.type == CommandType::SetParam || c.type == CommandType::SetParamRamp)) {
+            if (self->printTriggers_) self->printEvent(c.type == CommandType::SetParam ? "SET" : "RAMP", c);
+            self->graph_->forEachNode([&](const std::string& id, Node& n){ if (id == c.nodeId) n.handleEvent(c); });
+          }
+        }
+        // 2) Then apply Triggers
+        for (const Command& c : self->drained_) {
+          if (c.sampleTime == segAbsStart && c.nodeId && c.type == CommandType::Trigger) {
             if (self->printTriggers_) self->printEvent("TRIGGER", c);
-            self->graph_->forEachNode([&](const std::string& id, Node& n){
-              if (id == c.nodeId) n.handleEvent(c);
-            });
+            self->graph_->forEachNode([&](const std::string& id, Node& n){ if (id == c.nodeId) n.handleEvent(c); });
           }
         }
       }
