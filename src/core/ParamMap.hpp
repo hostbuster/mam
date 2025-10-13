@@ -96,6 +96,9 @@ static constexpr ParamDef kClapParams[] = {
   {2, "GAIN",         "",     0.f,  1.5f,  0.8f, "linear"},
   {3, "BPM",          "",     0.f,  300.f,  0.f, "step"},
   {4, "LOOP",         "bool", 0.f,  1.0f,   0.f, "step"},
+  // Pseudo-parameters for modulation sources (transport/commands can address these)
+  {101, "LFO1_FREQ_HZ", "Hz", 0.1f, 100.0f, 4.0f,  "step"},
+  {102, "LFO2_FREQ_HZ", "Hz", 0.1f, 100.0f, 0.2f, "step"},
 };
 
 static constexpr ParamMap kClapParamMap{ "clap", kClapParams, sizeof(kClapParams)/sizeof(kClapParams[0]) };

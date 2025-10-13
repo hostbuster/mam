@@ -23,4 +23,6 @@ Auto-generated from ParamMap.hpp. Do not edit by hand.
 | 2 | GAIN |  | 0.00 | 1.50 | 0.80 | linear |
 | 3 | BPM |  | 0.00 | 300.00 | 0.00 | step |
 | 4 | LOOP | bool | 0.00 | 1.00 | 0.00 | step |
+| 101 | LFO1_FREQ_HZ | Hz | 0.10 | 100.00 | 4.00 | step |
+| 102 | LFO2_FREQ_HZ | Hz | 0.10 | 100.00 | 0.20 | step |
 

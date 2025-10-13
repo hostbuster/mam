@@ -205,6 +205,9 @@ Examples:
   - When combined with `--verbose` in realtime, per-node meters are printed each time the loop boundary is crossed.
 - `--schema-strict`: enforce JSON Schema `docs/schema.graph.v1.json` on load (realtime/offline). Requires validator available (see build note).
 
+LFOs and modulation matrix:
+- See `docs/LFO.md` for a guide to authoring LFOs, routing to params, LFO-on-LFO frequency modulation, and per-step transport locks.
+
 ##### Sidechain routing (MVP)
 
 - Nodes can declare input/output ports with `ports.inputs[]` / `ports.outputs[]`.
