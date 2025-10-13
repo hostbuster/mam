@@ -16,7 +16,7 @@
     "resolution": 16,
     "patterns": [
       { "nodeId": "kick", "steps": "x...x...x...x..." },
-      { "nodeId": "clap", "steps": "....x.......x..." }
+      { "nodeId": "clap", "steps": "..x...x...x...x." }
     ]
   },
   "connections": [

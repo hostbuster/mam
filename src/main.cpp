@@ -938,7 +938,12 @@ int main(int argc, char** argv) {
   RealtimeGraphRenderer rt;
   SpscCommandQueue<2048> cmdQueue;
   rt.setCommandQueue(&cmdQueue);
-  rt.setDiagnostics(printTriggers, 120.0);
+  // Try to infer transport resolution from graph for diagnostics; default to 16
+  uint32_t diagRes = 16;
+  if (!graphPath.empty()) {
+    try { GraphSpec tmp = loadGraphSpecFromJsonFile(graphPath); if (tmp.hasTransport && tmp.transport.resolution > 0) diagRes = tmp.transport.resolution; } catch (...) {}
+  }
+  rt.setDiagnostics(printTriggers, 120.0, diagRes);
   rt.setTransportEmitEnabled(false); // all triggers come from pre-enqueued commands for parity
   try {
     rt.start(graph, 48000.0, 2);

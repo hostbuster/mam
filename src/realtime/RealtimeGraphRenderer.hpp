@@ -21,8 +21,8 @@ public:
   ~RealtimeGraphRenderer() { stop(); }
 
   void setCommandQueue(SpscCommandQueue<2048>* q) { cmdQueue_ = q; }
-  void setDiagnostics(bool printTriggers, double bpmForBeats) {
-    printTriggers_ = printTriggers; diagBpm_ = bpmForBeats;
+  void setDiagnostics(bool printTriggers, double bpmForBeats, uint32_t resolutionStepsPerBar) {
+    printTriggers_ = printTriggers; diagBpm_ = bpmForBeats; diagResolution_ = (resolutionStepsPerBar == 0 ? 16u : resolutionStepsPerBar);
   }
   void setTransportEmitEnabled(bool enabled) { transportEmitEnabled_ = enabled; }
 
@@ -141,12 +141,7 @@ private:
         const SampleTime segAbsStart = blockStartAbs + static_cast<SampleTime>(segStart);
         for (const Command& c : self->drained_) {
           if (c.sampleTime == segAbsStart && c.nodeId) {
-            if (self->printTriggers_) {
-              const double tSec = static_cast<double>(c.sampleTime) / self->sampleRate_;
-              const double beat = (self->diagBpm_ > 0.0) ? (tSec * self->diagBpm_ / 60.0) : 0.0;
-              std::fprintf(stderr, "TRIGGER t=%.6fs beat=%.3f node=%s type=%u pid=%u val=%.3f\n",
-                           tSec, beat, c.nodeId, static_cast<unsigned>(c.type), c.paramId, static_cast<double>(c.value));
-            }
+            if (self->printTriggers_) self->printEvent("TRIGGER", c);
             self->graph_->forEachNode([&](const std::string& id, Node& n){
               if (id == c.nodeId) n.handleEvent(c);
             });
@@ -166,12 +161,7 @@ private:
             if (next < cursor) break; // already emitted earlier in this block
             if (next >= segAbsEnd) break;
             t->emitIfMatch(next, [&](const Command& c){
-              if (self->printTriggers_) {
-                const double tSec = static_cast<double>(c.sampleTime) / self->sampleRate_;
-                const double beat = (self->diagBpm_ > 0.0) ? (tSec * self->diagBpm_ / 60.0) : 0.0;
-                std::fprintf(stderr, "TRANSPORT t=%.6fs beat=%.3f node=%s type=%u pid=%u val=%.3f\n",
-                             tSec, beat, c.nodeId ? c.nodeId : "", static_cast<unsigned>(c.type), c.paramId, static_cast<double>(c.value));
-              }
+              if (self->printTriggers_) self->printEvent("TRANSPORT", c);
               self->graph_->forEachNode([&](const std::string& nid, Node& nn){ if (nid == c.nodeId) nn.handleEvent(c); });
             });
             cursor = next + 1;
@@ -198,7 +188,22 @@ private:
   std::vector<Command> drained_;
   bool printTriggers_ = false;
   double diagBpm_ = 120.0;
+  uint32_t diagResolution_ = 16;
   bool transportEmitEnabled_ = false;
+
+  void printEvent(const char* tag, const Command& c) const {
+    const double tSec = static_cast<double>(c.sampleTime) / sampleRate_;
+    double beat = (diagBpm_ > 0.0) ? (tSec * diagBpm_ / 60.0) : 0.0;
+    if (beat < 0.0) beat = 0.0;
+    const double beatsPerBar = 4.0;
+    const uint64_t barIdx = static_cast<uint64_t>(beat / beatsPerBar);
+    const double beatInBar = beat - static_cast<double>(barIdx) * beatsPerBar;
+    const double stepLenBeats = beatsPerBar / static_cast<double>(diagResolution_);
+    const uint32_t stepIdx = static_cast<uint32_t>(std::floor(beatInBar / stepLenBeats + 1e-9));
+    std::fprintf(stderr, "%s t=%.6fs bar=%llu step=%u node=%s type=%u pid=%u val=%.3f\n",
+                 tag, tSec, static_cast<unsigned long long>(barIdx), stepIdx, c.nodeId ? c.nodeId : "",
+                 static_cast<unsigned>(c.type), c.paramId, static_cast<double>(c.value));
+  }
 };
 
 
