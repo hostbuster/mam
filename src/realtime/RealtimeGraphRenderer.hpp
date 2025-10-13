@@ -147,6 +147,11 @@ private:
         const SampleTime segAbsStart = blockStartAbs + static_cast<SampleTime>(segStart);
         for (const Command& c : self->drained_) {
           if (c.sampleTime == segAbsStart && c.nodeId) {
+            // If this exact event lies on a loop boundary, print Loop N before any triggers
+            if (self->printTriggers_ && self->diagLoopFrames_ > 0 && (static_cast<uint64_t>(c.sampleTime) % self->diagLoopFrames_) == 0ull && c.sampleTime > 0) {
+              const uint64_t loopIdx = static_cast<uint64_t>(c.sampleTime) / self->diagLoopFrames_;
+              std::fprintf(stderr, "Loop %llu\n", static_cast<unsigned long long>(loopIdx));
+            }
             if (self->printTriggers_) self->printEvent("TRIGGER", c);
             self->graph_->forEachNode([&](const std::string& id, Node& n){
               if (id == c.nodeId) n.handleEvent(c);
