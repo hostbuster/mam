@@ -235,6 +235,66 @@ Wiretap (debugging):
 }
 ```
 
+Sidechain cookbook (more examples):
+
+- Mono key into stereo compressor (2→1 sidechain, already supported):
+
+```json
+{
+  "nodes": [
+    { "id": "compA", "type": "compressor",
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" },
+                                 { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ],
+                  "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
+  ],
+  "connections": [
+    { "from": "bass", "to": "compA", "fromPort": 0, "toPort": 0 },
+    { "from": "kick", "to": "compA", "fromPort": 0, "toPort": 1 }
+  ]
+}
+```
+
+- One key, many listeners (kick sidechains both pad and bass):
+
+```json
+{
+  "nodes": [
+    { "id": "compPad",  "type": "compressor", "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ], "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } },
+    { "id": "compBass", "type": "compressor", "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ], "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
+  ],
+  "connections": [
+    { "from": "pad",  "to": "compPad",  "fromPort": 0, "toPort": 0 },
+    { "from": "bass", "to": "compBass", "fromPort": 0, "toPort": 0 },
+    { "from": "kick", "to": "compPad",  "fromPort": 0, "toPort": 1 },
+    { "from": "kick", "to": "compBass", "fromPort": 0, "toPort": 1 }
+  ]
+}
+```
+
+- Post-effect keying (duck reverb tail with pre-fader tap via wiretap):
+
+```json
+{
+  "nodes": [
+    { "id": "wtKick", "type": "wiretap", "params": { "path": "kick_key.wav", "enabled": true },
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" } ],
+                  "outputs": [ { "index": 0, "type": "audio", "role": "main", "channels": 1 } ] } },
+    { "id": "compRev", "type": "compressor",
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ],
+                  "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } },
+    { "id": "rev", "type": "reverb",
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" } ],
+                  "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
+  ],
+  "connections": [
+    { "from": "vocals", "to": "rev",     "fromPort": 0, "toPort": 0 },
+    { "from": "rev",    "to": "compRev", "fromPort": 0, "toPort": 0 },
+    { "from": "kick",   "to": "wtKick",  "fromPort": 0, "toPort": 0 },
+    { "from": "wtKick", "to": "compRev", "fromPort": 0, "toPort": 1 }
+  ]
+}
+```
+
 Examples:
 
 ```bash
