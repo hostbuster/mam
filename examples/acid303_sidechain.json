@@ -10,12 +10,10 @@
       "params": { "waveform": 0, "tune": 0, "glideMs": 18, "cutoff": 900, "resonance": 0.55, "envMod": 0.55, "decay": 220, "ampDecayMs": 220, "gain": 0.9 },
       "mod": {
         "lfos": [
-          { "id": 1, "wave": "sine",     "freqHz": 0.33, "phase": 0.0 },
-          { "id": 2, "wave": "triangle", "freqHz": 0.08, "phase": 0.0 }
+          { "id": 1, "wave": "sine", "freqHz": 0.5333333333, "phase": 0.0 }
         ],
         "routes": [
-          { "sourceId": 1, "destParam": "CUTOFF_HZ", "min": 300, "max": 2400, "map": "exp" },
-          { "sourceId": 2, "destParam": "LFO.1.freqHz", "min": 0.2, "max": 1.2, "map": "linear" }
+          { "sourceId": 1, "destParam": "CUTOFF_HZ", "min": 300, "max": 2400, "map": "exp" }
         ]
       }
     },
