@@ -39,9 +39,6 @@ float ClapSynth::process() {
     } else {
       framesUntilNextTrigger_--;
     }
-  } else if (!triggeredOnce_) {
-    trigger();
-    triggeredOnce_ = true;
   }
 
   float sample = 0.0f;
