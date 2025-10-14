@@ -7,6 +7,9 @@
 #include <atomic>
 #include <algorithm>
 #include <cstring>
+#include <string>
+#include <cstdio>
+#include <chrono>
 #include "../core/Graph.hpp"
 #include "../core/ScopedAudioUnit.hpp"
 #include "../core/OsStatusUtils.hpp"
@@ -25,6 +28,17 @@ public:
   void setCommandQueue(SpscCommandQueue<N>* q) { cmdQueue_ = reinterpret_cast<void*>(q); queueDrain_ = [](void* p, SampleTime cutoff, std::vector<Command>& out){ static_cast<SpscCommandQueue<N>*>(p)->drainUpTo(cutoff, out); }; }
   void setDiagnostics(bool printTriggers) { printTriggers_ = printTriggers; }
   void setMeters(bool enabled, double intervalSec) { metersEnabled_ = enabled; metersIntervalSec_ = (intervalSec > 0.05 ? intervalSec : 1.0); }
+  void setMetricsNdjson(const char* path, bool includeRacks, bool includeBuses) {
+    metricsIncludeRacks_ = includeRacks; metricsIncludeBuses_ = includeBuses;
+    if (metricsFile_) { std::fclose(metricsFile_); metricsFile_ = nullptr; }
+    if (path && *path) {
+      metricsFile_ = std::fopen(path, "w");
+      metricsEnabled_ = (metricsFile_ != nullptr);
+      if (metricsEnabled_) startWallUnix_ = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
+    } else {
+      metricsEnabled_ = false;
+    }
+  }
 
   void start(const std::vector<Rack>& racks, const std::vector<SessionSpec::BusRef>& buses, const std::vector<SessionSpec::RouteRef>& routes, double requestedSampleRate, uint32_t channels) {
     if (channels == 0) throw std::invalid_argument("channels must be > 0");
@@ -63,7 +77,7 @@ public:
     sampleCounter_.store(0, std::memory_order_relaxed);
   }
 
-  void stop() { unit_.release(); }
+  void stop() { if (metricsFile_) { std::fclose(metricsFile_); metricsFile_ = nullptr; } unit_.release(); }
   double sampleRate() const noexcept { return sampleRate_; }
   SampleTime sampleCounter() const noexcept { return sampleCounter_.load(std::memory_order_relaxed); }
 
@@ -207,6 +221,8 @@ private:
       if (self->metersEnabled_) {
         const double nowSec = static_cast<double>(cutoff) / self->sampleRate_;
         if (nowSec - self->lastMetersPrintSec_ >= self->metersIntervalSec_) {
+          const double tRel = nowSec;
+          const double tsUnix = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
           for (size_t ri = 0; ri < self->racks_.size(); ++ri) {
             const Meter& m = self->rackMeters_[ri];
             if (m.frames == 0) continue;
@@ -214,6 +230,11 @@ private:
             const double rmsLin = std::sqrt(m.sumSq / static_cast<double>(m.frames));
             const double rmsDb = (rmsLin > 0.0) ? (20.0 * std::log10(rmsLin)) : -std::numeric_limits<double>::infinity();
             std::fprintf(stderr, "Meters\track=%s\tpeak_dBFS=%.2f\trms_dBFS=%.2f\n", self->racks_[ri].id.c_str(), peakDb, rmsDb);
+            if (self->metricsEnabled_ && self->metricsFile_ && self->metricsIncludeRacks_) {
+              std::fprintf(self->metricsFile_,
+                           "{\"event\":\"meters\",\"ts_unix\":%.6f,\"t_rel\":%.6f,\"interval_s\":%.3f,\"sr\":%.0f,\"channels\":%u,\"kind\":\"rack\",\"id\":\"%s\",\"peak_dbfs\":%.3f,\"rms_dbfs\":%.3f}\n",
+                           tsUnix, tRel, self->metersIntervalSec_, self->sampleRate_, self->channels_, self->racks_[ri].id.c_str(), peakDb, rmsDb);
+            }
           }
           for (size_t bi = 0; bi < self->buses_.size(); ++bi) {
             const Meter& m = self->busMeters_[bi];
@@ -222,7 +243,13 @@ private:
             const double rmsLin = std::sqrt(m.sumSq / static_cast<double>(m.frames));
             const double rmsDb = (rmsLin > 0.0) ? (20.0 * std::log10(rmsLin)) : -std::numeric_limits<double>::infinity();
             std::fprintf(stderr, "Meters\tbus=%s\tpeak_dBFS=%.2f\trms_dBFS=%.2f\n", self->buses_[bi].id.c_str(), peakDb, rmsDb);
+            if (self->metricsEnabled_ && self->metricsFile_ && self->metricsIncludeBuses_) {
+              std::fprintf(self->metricsFile_,
+                           "{\"event\":\"meters\",\"ts_unix\":%.6f,\"t_rel\":%.6f,\"interval_s\":%.3f,\"sr\":%.0f,\"channels\":%u,\"kind\":\"bus\",\"id\":\"%s\",\"peak_dbfs\":%.3f,\"rms_dbfs\":%.3f}\n",
+                           tsUnix, tRel, self->metersIntervalSec_, self->sampleRate_, self->channels_, self->buses_[bi].id.c_str(), peakDb, rmsDb);
+            }
           }
+          if (self->metricsEnabled_ && self->metricsFile_) std::fflush(self->metricsFile_);
           // reset
           for (auto& m : self->rackMeters_) { m = Meter{}; }
           for (auto& m : self->busMeters_) { m = Meter{}; }
@@ -258,6 +285,8 @@ private:
   std::vector<Meter> rackMeters_{};
   std::vector<Meter> busMeters_{};
   bool metersEnabled_ = false; double metersIntervalSec_ = 1.0; double lastMetersPrintSec_ = 0.0;
+  // NDJSON metrics
+  bool metricsEnabled_ = false; FILE* metricsFile_ = nullptr; bool metricsIncludeRacks_ = true; bool metricsIncludeBuses_ = true; double startWallUnix_ = 0.0;
 };
 
 

@@ -211,6 +211,7 @@ Examples:
 
 - `--print-topo`: print a simple topological order derived from `connections` (MVP). Helpful to validate routing intent.
 - `--meters`: realtime sessions print periodic per-rack and per-bus meters (when buses are defined); offline export prints a concise mix line with peak and RMS in dBFS. Adjust interval with `--meters-interval SEC` (min 0.05s, default 1.0s).
+- `--metrics-ndjson path.ndjson`: write NDJSON metrics each interval for tooling (one line per rack/bus). Scope with `--metrics-scope racks,buses`.
 - `--verbose`: in realtime, print loop counter and elapsed time at loop boundaries.
 - `--meters-per-node`: print per-node peak/RMS and mark nodes with no audio as `inactive`.
   - When combined with `--verbose` in realtime, per-node meters are printed each time the loop boundary is crossed.
@@ -781,6 +782,9 @@ Examples:
 
 # Faster realtime meters (e.g., every 0.25s):
 ./build/mam --session examples/session_minimal.json --meters --meters-interval 0.25
+
+# Emit NDJSON metrics (racks+buses):
+./build/mam --session examples/session_minimal.json --meters --metrics-ndjson meters.ndjson --metrics-scope racks,buses
 ```
 
 Command param addressing:

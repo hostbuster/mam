@@ -158,8 +158,10 @@ static void printUsage(const char* exe) {
                "Examples:\n"
                "  %s                       # one-shot, defaults (real-time)\n"
                "  %s --bpm 120            # 120 BPM continuous till Ctrl-C (real-time)\n"
-               "  %s --graph demo.json --wav demo.wav         # export using auto-duration\n",
-               exe, exe, exe, exe);
+               "  %s --graph demo.json --wav demo.wav         # export using auto-duration\n"
+               "  --metrics-ndjson path.ndjson  Write NDJSON metrics per interval (racks/buses)\n"
+               "  --metrics-scope scopes       Comma list: racks,buses (default both)\n",
+               exe, exe, exe);
 }
 // Generate a simple Mermaid flowchart for a SessionSpec (racks/buses/routes)
 static std::string generateMermaidForSession(const SessionSpec& s) {
@@ -645,6 +647,7 @@ int main(int argc, char** argv) {
   bool verbose = false;              // realtime loop diagnostics
   uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
   bool metersPerNode = false;
+  std::string metricsNdjsonPath; bool metricsScopeRacks = true; bool metricsScopeBuses = true; // nodes later
   std::string exportMermaidSessionPath;
   std::string exportMermaidGraphPath;
   bool cpuStats = false;
@@ -731,6 +734,14 @@ int main(int argc, char** argv) {
       need(1); graphPath = argv[++i];
     } else if (std::strcmp(a, "--session") == 0) {
       need(1); sessionPath = argv[++i];
+    } else if (std::strcmp(a, "--metrics-ndjson") == 0) {
+      need(1); metricsNdjsonPath = argv[++i];
+    } else if (std::strcmp(a, "--metrics-scope") == 0) {
+      need(1); {
+        std::string sc = argv[++i];
+        metricsScopeRacks = (sc.find("racks") != std::string::npos);
+        metricsScopeBuses = (sc.find("buses") != std::string::npos);
+      }
     } else if (std::strcmp(a, "--export-mermaid-session") == 0) {
       need(1); exportMermaidSessionPath = argv[++i];
     } else if (std::strcmp(a, "--export-mermaid-graph") == 0) {
@@ -928,6 +939,7 @@ int main(int argc, char** argv) {
       // Start realtime renderer
       RealtimeSessionRenderer srt; SpscCommandQueue<16384> cmdQueue;
       srt.setCommandQueue(&cmdQueue); srt.setDiagnostics(printTriggers); srt.setMeters(printMeters || metersPerNode, metersIntervalSec);
+      if (!metricsNdjsonPath.empty()) srt.setMetricsNdjson(metricsNdjsonPath.c_str(), metricsScopeRacks, metricsScopeBuses);
       std::vector<RealtimeSessionRenderer::Rack> rracks; rracks.reserve(graphsOwned.size()); for (size_t i = 0; i < graphsOwned.size(); ++i) rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain});
       srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
       // Adjust pre-synthesized command timing to actual device sample rate if needed
@@ -1507,6 +1519,7 @@ int main(int argc, char** argv) {
       srt.setDiagnostics(printTriggers);
       // Enable periodic per-rack meters when --meters is provided (or keep per-node flag compatibility)
       srt.setMeters(printMeters || metersPerNode, metersIntervalSec);
+      if (!metricsNdjsonPath.empty()) srt.setMetricsNdjson(metricsNdjsonPath.c_str(), metricsScopeRacks, metricsScopeBuses);
       // Build racks vector with per-rack gain (from session routes we still route to buses; use 1.0 here)
       std::vector<RealtimeSessionRenderer::Rack> rracks;
       rracks.reserve(graphsOwned.size());
