@@ -126,6 +126,8 @@ static void printUsage(const char* exe) {
                "  --print-triggers   Print realtime event deliveries (set/ramps/triggers) at render-time\n"
                "  --dump-events      Print synthesized command events (time/bar/step) before playback/export\n"
                "  --meters-per-node  Print per-node peak/RMS after run/export\n"
+               "  --cpu-stats        Print block CPU avg/max and xrun count at end\n"
+               "  --cpu-stats-per-node  Print per-node avg/max us at end\n"
                "  --loop-minutes M   Repeat transport to reach at least M minutes (offline)\n"
                "  --loop-seconds S   Repeat transport to reach at least S seconds (offline)\n"
                "  --random-seed N    Override JSON randomSeed for deterministic randomness (0 to skip)\n"
@@ -557,6 +559,8 @@ int main(int argc, char** argv) {
   bool verbose = false;              // realtime loop diagnostics
   uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
   bool metersPerNode = false;
+  bool cpuStats = false;
+  bool cpuStatsPerNode = false;
   bool printTriggers = false;
   bool dumpEvents = false;
   bool schemaStrict = false;         // enforce JSON Schema on load
@@ -636,6 +640,10 @@ int main(int argc, char** argv) {
       printMeters = true;
     } else if (std::strcmp(a, "--meters-per-node") == 0) {
       metersPerNode = true;
+    } else if (std::strcmp(a, "--cpu-stats") == 0) {
+      cpuStats = true;
+    } else if (std::strcmp(a, "--cpu-stats-per-node") == 0) {
+      cpuStatsPerNode = true;
     } else if (std::strcmp(a, "--random-seed") == 0) {
       need(1); randomSeedOverride = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--print-triggers") == 0) {
@@ -758,7 +766,8 @@ int main(int argc, char** argv) {
         }
       if (printTopo) printTopoOrderFromSpec(spec);
       if (metersPerNode) graph.enableStats(true);
-      if (metersPerNode) graph.enableStats(true);
+      if (cpuStats || cpuStatsPerNode) graph.enableCpuStats(true);
+      if (cpuStats || cpuStatsPerNode) graph.enableCpuStats(true);
       } catch (const std::exception& e) {
         std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
         return 1;
@@ -1154,6 +1163,16 @@ int main(int argc, char** argv) {
             const uint64_t preroll = computeGraphPrerollSamples(spec, static_cast<uint32_t>(rt.sampleRate() + 0.5));
             std::fprintf(stderr, "Graph preroll: %.3f ms\n", 1000.0 * static_cast<double>(preroll) / rt.sampleRate());
           } catch (...) {}
+        }
+        if (cpuStats || cpuStatsPerNode) {
+          const auto s = graph.getCpuSummary();
+          std::fprintf(stderr, "CPU block avg=%.3fms max=%.3fms (avg=%.1f%% max=%.1f%%) xruns=%llu blocks=%llu\n",
+                       s.avgMs, s.maxMs, s.avgPercent, s.maxPercent,
+                       static_cast<unsigned long long>(s.overruns), static_cast<unsigned long long>(s.blocks));
+          if (cpuStatsPerNode) {
+            const auto per = graph.getPerNodeCpu();
+            for (const auto& n : per) std::fprintf(stderr, "  %s: avg=%.1fus max=%.1fus\n", n.id.c_str(), n.avgUs, n.maxUs);
+          }
         }
         if (metersPerNode) {
           const auto meters = graph.getNodeMeters(2);

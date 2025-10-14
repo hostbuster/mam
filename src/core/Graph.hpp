@@ -12,6 +12,7 @@
 #include "GraphConfig.hpp"
 #include <unordered_map>
 #include <unordered_set>
+#include <chrono>
 
 class Graph {
 public:
@@ -53,6 +54,7 @@ public:
 
   void process(ProcessContext ctx, float* interleavedOut, uint32_t channels) {
     if (nodes_.empty()) return;
+    const auto tBlockStart = cpuStatsEnabled_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
     if (topoDirty_ || (topoOrder_.empty() && insertionOrder_.empty())) rebuildTopology();
     const size_t total = static_cast<size_t>(ctx.frames) * channels;
     if (outBuffers_.size() != nodes_.size()) outBuffers_.assign(nodes_.size(), std::vector<float>());
@@ -67,6 +69,7 @@ public:
     }
 
     for (size_t ni : order) {
+      const auto tNodeStart = cpuStatsEnabled_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
       // Sum upstream edges into work_, honoring toPort (future multi-port semantics)
       std::fill(work_.begin(), work_.end(), 0.0f);
       auto upIt = upstream_.find(ni);
@@ -121,6 +124,18 @@ public:
         node->process(ctx, outBuffers_[ni].data(), channels);
         if (statsEnabled_) accumulateStats(ni, outBuffers_[ni].data(), ctx.frames, channels);
       }
+      if (cpuStatsEnabled_) {
+        const auto tNodeEnd = std::chrono::steady_clock::now();
+        const double ns = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(tNodeEnd - tNodeStart).count());
+        if (ni >= nodeNsSum_.size()) {
+          nodeNsSum_.resize(ni + 1, 0.0L);
+          nodeNsMax_.resize(ni + 1, 0.0);
+          nodeCalls_.resize(ni + 1, 0u);
+        }
+        nodeNsSum_[ni] += static_cast<long double>(ns);
+        if (ns > nodeNsMax_[ni]) nodeNsMax_[ni] = ns;
+        nodeCalls_[ni] += 1u;
+      }
     }
 
     // Mix sinks to interleavedOut
@@ -151,6 +166,20 @@ public:
       for (size_t i = 0; i < total; ++i) interleavedOut[i] += src[i] * gain;
     }
     if (mixer_) mixer_->process(ctx, interleavedOut, channels);
+    if (cpuStatsEnabled_) {
+      const auto tBlockEnd = std::chrono::steady_clock::now();
+      const double ns = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(tBlockEnd - tBlockStart).count());
+      const double budgetNs = (ctx.sampleRate > 0.0)
+        ? (1e9 * static_cast<double>(ctx.frames) / ctx.sampleRate)
+        : 0.0;
+      const double pct = (budgetNs > 0.0) ? (ns / budgetNs * 100.0) : 0.0;
+      cpuNsSum_ += static_cast<long double>(ns);
+      cpuPctSum_ += pct;
+      cpuBlocks_ += 1u;
+      if (ns > cpuNsMax_) cpuNsMax_ = ns;
+      if (pct > cpuPctMax_) cpuPctMax_ = pct;
+      if (budgetNs > 0.0 && ns > budgetNs) cpuOverruns_ += 1u;
+    }
   }
 
 private:
@@ -178,6 +207,10 @@ private:
   bool statsEnabled_ = false;
   struct NodeAccum { double peak = 0.0; long double sumSq = 0.0L; uint64_t count = 0; };
   std::vector<NodeAccum> nodeAccums_{};
+  // CPU stats
+  bool cpuStatsEnabled_ = false;
+  long double cpuNsSum_ = 0.0L; double cpuNsMax_ = 0.0; double cpuPctSum_ = 0.0; double cpuPctMax_ = 0.0; uint64_t cpuBlocks_ = 0; uint64_t cpuOverruns_ = 0;
+  std::vector<long double> nodeNsSum_{}; std::vector<double> nodeNsMax_{}; std::vector<uint64_t> nodeCalls_{};
 
   void initStats() {
     nodeAccums_.assign(nodes_.size(), NodeAccum{});
@@ -197,6 +230,13 @@ private:
 
 public:
   void enableStats(bool on) { statsEnabled_ = on; if (on) initStats(); }
+  void enableCpuStats(bool on) {
+    cpuStatsEnabled_ = on;
+    if (on) {
+      cpuNsSum_ = 0.0L; cpuNsMax_ = 0.0; cpuPctSum_ = 0.0; cpuPctMax_ = 0.0; cpuBlocks_ = 0; cpuOverruns_ = 0;
+      nodeNsSum_.assign(nodes_.size(), 0.0L); nodeNsMax_.assign(nodes_.size(), 0.0); nodeCalls_.assign(nodes_.size(), 0u);
+    }
+  }
   struct NodeMeter { std::string id; double peakDb; double rmsDb; };
   std::vector<NodeMeter> getNodeMeters(uint32_t /*channels*/) const {
     std::vector<NodeMeter> out;
@@ -212,6 +252,24 @@ public:
       out.push_back(NodeMeter{nodes_[i].id, peakDb, rmsDb});
     }
     return out;
+  }
+
+  struct CpuSummary { double avgMs; double maxMs; double avgPercent; double maxPercent; uint64_t blocks; uint64_t overruns; };
+  CpuSummary getCpuSummary() const {
+    const double avgNs = (cpuBlocks_ > 0) ? static_cast<double>(cpuNsSum_ / static_cast<long double>(cpuBlocks_)) : 0.0;
+    const double avgPct = (cpuBlocks_ > 0) ? (cpuPctSum_ / static_cast<double>(cpuBlocks_)) : 0.0;
+    return CpuSummary{ avgNs / 1e6, cpuNsMax_ / 1e6, avgPct, cpuPctMax_, cpuBlocks_, cpuOverruns_ };
+  }
+  struct NodeCpu { std::string id; double avgUs; double maxUs; };
+  std::vector<NodeCpu> getPerNodeCpu() const {
+    std::vector<NodeCpu> v; v.reserve(nodes_.size());
+    for (size_t i = 0; i < nodes_.size(); ++i) {
+      const double avgNs = (nodeCalls_.size() > i && nodeCalls_[i] > 0)
+        ? static_cast<double>(nodeNsSum_[i] / static_cast<long double>(nodeCalls_[i])) : 0.0;
+      const double maxNs = (nodeNsMax_.size() > i) ? nodeNsMax_[i] : 0.0;
+      v.push_back(NodeCpu{nodes_[i].id, avgNs / 1e3, maxNs / 1e3});
+    }
+    return v;
   }
 
   void rebuildTopology() {
