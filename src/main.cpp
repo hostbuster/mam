@@ -134,7 +134,9 @@ static void printUsage(const char* exe) {
                "  --print-triggers   Print realtime event deliveries (set/ramps/triggers) at render-time\n"
                "  --dump-events      Print synthesized command events (time/bar/step) before playback/export\n"
                "  --meters           Realtime: print per-rack meters periodically; Offline: print mix meters after export\n"
+               "  --meters-interval S  Realtime meters print interval in seconds (min 0.05, default 1.0)\n"
                "  --meters-per-node  Print per-node peak/RMS after run/export (realtime at loop boundaries; offline after export)\n"
+               "                      Realtime also prints per-bus meters when buses are defined in session.\n"
                "  --cpu-stats        Print block CPU avg/max and xrun count at end\n"
                "  --cpu-stats-per-node  Print per-node avg/max us at end\n"
                "  --rt-debug-feed   Debug realtime feeder (queue pushes, offsets)\n"
@@ -572,6 +574,7 @@ int main(int argc, char** argv) {
   double peakTargetDb = -1.0;        // default peak target when normalizing
   bool printTopo = false;            // print topo order from connections
   bool printMeters = false;          // print meter summary explicitly
+  double metersIntervalSec = 1.0;    // realtime meters print interval
   bool tailOverridden = false;
   bool verbose = false;              // realtime loop diagnostics
   uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
@@ -664,6 +667,10 @@ int main(int argc, char** argv) {
       printTopo = true;
     } else if (std::strcmp(a, "--meters") == 0) {
       printMeters = true;
+    } else if (std::strcmp(a, "--meters-interval") == 0) {
+      need(1);
+      metersIntervalSec = std::atof(argv[++i]);
+      if (!(metersIntervalSec > 0.05)) metersIntervalSec = 1.0; // clamp to sane default
     } else if (std::strcmp(a, "--meters-per-node") == 0) {
       metersPerNode = true;
     } else if (std::strcmp(a, "--cpu-stats") == 0) {
@@ -824,7 +831,7 @@ int main(int argc, char** argv) {
       size_t totalCmds = 0; for (const auto& r : rackRTs) totalCmds += r.baseCmds.size(); if (totalCmds == 0) std::fprintf(stderr, "[rt-session] error: synthesized zero commands across racks\n");
       // Start realtime renderer
       RealtimeSessionRenderer srt; SpscCommandQueue<16384> cmdQueue;
-      srt.setCommandQueue(&cmdQueue); srt.setDiagnostics(printTriggers); srt.setMeters(printMeters || metersPerNode, 1.0);
+      srt.setCommandQueue(&cmdQueue); srt.setDiagnostics(printTriggers); srt.setMeters(printMeters || metersPerNode, metersIntervalSec);
       std::vector<RealtimeSessionRenderer::Rack> rracks; rracks.reserve(graphsOwned.size()); for (size_t i = 0; i < graphsOwned.size(); ++i) rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain});
       srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
       // Adjust pre-synthesized command timing to actual device sample rate if needed
@@ -1403,7 +1410,7 @@ int main(int argc, char** argv) {
       srt.setCommandQueue(&cmdQueue);
       srt.setDiagnostics(printTriggers);
       // Enable periodic per-rack meters when --meters is provided (or keep per-node flag compatibility)
-      srt.setMeters(printMeters || metersPerNode, 1.0);
+      srt.setMeters(printMeters || metersPerNode, metersIntervalSec);
       // Build racks vector with per-rack gain (from session routes we still route to buses; use 1.0 here)
       std::vector<RealtimeSessionRenderer::Rack> rracks;
       rracks.reserve(graphsOwned.size());

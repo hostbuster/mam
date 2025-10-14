@@ -55,6 +55,7 @@ public:
     for (const auto& r : racks_) { if (r.graph) { r.graph->prepare(sampleRate_, 1024); r.graph->reset(); } }
     // Prepare meters accumulators
     rackMeters_.assign(racks_.size(), Meter{});
+    busMeters_.assign(buses_.size(), Meter{});
     lastMetersPrintSec_ = 0.0;
 
     err = AudioOutputUnitStart(unit_.get());
@@ -179,6 +180,22 @@ private:
           }
         }
       }
+      // Accumulate meters on buses after inserts
+      if (self->metersEnabled_) {
+        for (size_t bi = 0; bi < self->busScratch_.size(); ++bi) {
+          Meter& m = self->busMeters_[bi];
+          const size_t n = static_cast<size_t>(segFrames) * self->channels_;
+          const float* src = self->busScratch_[bi].data();
+          for (size_t i = 0; i < n; ++i) {
+            const float s = src[i];
+            const float a = std::fabs(s);
+            if (a > m.peak) m.peak = a;
+            m.sumSq += static_cast<double>(s) * static_cast<double>(s);
+          }
+          m.frames += segFrames * self->channels_;
+        }
+      }
+
       // Sum buses to output
       for (size_t bi = 0; bi < self->busScratch_.size(); ++bi) {
         const size_t n = static_cast<size_t>(segFrames) * self->channels_;
@@ -198,8 +215,17 @@ private:
             const double rmsDb = (rmsLin > 0.0) ? (20.0 * std::log10(rmsLin)) : -std::numeric_limits<double>::infinity();
             std::fprintf(stderr, "Meters\track=%s\tpeak_dBFS=%.2f\trms_dBFS=%.2f\n", self->racks_[ri].id.c_str(), peakDb, rmsDb);
           }
+          for (size_t bi = 0; bi < self->buses_.size(); ++bi) {
+            const Meter& m = self->busMeters_[bi];
+            if (m.frames == 0) continue;
+            const double peakDb = (m.peak > 0.0) ? (20.0 * std::log10(static_cast<double>(m.peak))) : -std::numeric_limits<double>::infinity();
+            const double rmsLin = std::sqrt(m.sumSq / static_cast<double>(m.frames));
+            const double rmsDb = (rmsLin > 0.0) ? (20.0 * std::log10(rmsLin)) : -std::numeric_limits<double>::infinity();
+            std::fprintf(stderr, "Meters\tbus=%s\tpeak_dBFS=%.2f\trms_dBFS=%.2f\n", self->buses_[bi].id.c_str(), peakDb, rmsDb);
+          }
           // reset
           for (auto& m : self->rackMeters_) { m = Meter{}; }
+          for (auto& m : self->busMeters_) { m = Meter{}; }
           self->lastMetersPrintSec_ = nowSec;
         }
       }
@@ -230,6 +256,7 @@ private:
   // meters
   struct Meter { double sumSq = 0.0; double peak = 0.0; uint64_t frames = 0; };
   std::vector<Meter> rackMeters_{};
+  std::vector<Meter> busMeters_{};
   bool metersEnabled_ = false; double metersIntervalSec_ = 1.0; double lastMetersPrintSec_ = 0.0;
 };
 

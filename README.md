@@ -57,7 +57,7 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - Realtime loop diagnostics gated by `--verbose`
 - New nodes: `compressor` (port-1 sidechain detector) and `reverb` (Schroeder-style, demo-quality)
 - Ports (MVP): nodes can declare `ports.inputs[]`/`ports.outputs[]` and route via `fromPort`→`toPort`
-- Per-rack meters in realtime: `--meters` prints periodic rack peak/RMS. Offline, `--meters` prints mix meters after export.
+- Per-rack and per-bus meters in realtime: `--meters` prints periodic rack and bus peak/RMS. Offline, `--meters` prints mix meters after export.
 - Per-node meters: `--meters-per-node` prints peak/RMS per node; nodes with no audio are marked `inactive`
 - Looping UX: `--loop-minutes` / `--loop-seconds` auto-derives loop-count; export prints planned duration (incl. preroll/tail)
 - Validation/CLI: schema enforcement hook; `--list-node-types` prints supported node types
@@ -210,7 +210,7 @@ Examples:
 #### Topology and meters
 
 - `--print-topo`: print a simple topological order derived from `connections` (MVP). Helpful to validate routing intent.
-- `--meters`: realtime sessions print periodic per-rack meters; offline export prints a concise mix line with peak and RMS in dBFS.
+- `--meters`: realtime sessions print periodic per-rack and per-bus meters (when buses are defined); offline export prints a concise mix line with peak and RMS in dBFS. Adjust interval with `--meters-interval SEC` (min 0.05s, default 1.0s).
 - `--verbose`: in realtime, print loop counter and elapsed time at loop boundaries.
 - `--meters-per-node`: print per-node peak/RMS and mark nodes with no audio as `inactive`.
   - When combined with `--verbose` in realtime, per-node meters are printed each time the loop boundary is crossed.
@@ -778,6 +778,9 @@ Examples:
 
 # Realtime session with rack meters every ~1s:
 ./build/mam --session examples/session_minimal.json --meters
+
+# Faster realtime meters (e.g., every 0.25s):
+./build/mam --session examples/session_minimal.json --meters --meters-interval 0.25
 ```
 
 Command param addressing:
