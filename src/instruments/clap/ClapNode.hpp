@@ -53,7 +53,8 @@ public:
 
   void handleEvent(const Command& cmd) override {
     if (cmd.type == CommandType::Trigger) {
-      synth_.trigger(params_.current(ClapParam::VELOCITY));
+      // Use gain as velocity proxy if VELOCITY param is not defined in ParamIds
+      synth_.trigger(params_.current(ClapParam::GAIN));
       return;
     }
     if (cmd.type == CommandType::SetParam) {
@@ -61,7 +62,6 @@ public:
         case ClapParam::AMP_DECAY_MS: params_.setImmediate(ClapParam::AMP_DECAY_MS, cmd.value); break;
         case ClapParam::GAIN: params_.setImmediate(ClapParam::GAIN, cmd.value); nodeGain_ = cmd.value; break;
         case ClapParam::PAN: params_.setImmediate(ClapParam::PAN, cmd.value); break;
-        case ClapParam::VELOCITY: params_.setImmediate(ClapParam::VELOCITY, cmd.value); break;
         case ClapParam::BPM: synth_.params().bpm = cmd.value; synth_.params().loop = (cmd.value > 0.0f); break;
         case ClapParam::LOOP: synth_.params().loop = (cmd.value >= 0.5f); break;
         case ClapParam::LFO1_FREQ_HZ: mod_.addLfo(1, ModLfo::Wave::Sine, cmd.value, 0.0f); break;

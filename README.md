@@ -24,6 +24,8 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
   - Benefit: identical musical results in live and batch contexts; predictable exports.
 - **Instruments: kick, clap, TB‑303 (extended)**: Param maps, modulation, transport locks.
   - Benefit: classic drum/synth palette with named‑param automation and modulation matrix.
+- **Spectral sidechain ducking (beta)**: multiband/FFT ducking so keys only duck overlapping frequencies.
+  - Benefit: preserves brightness and space; kick ducks bass freqs without dulling mids/highs.
 - **Concurrency scaffolding**: Command queue for sample-accurate control, offline job pool.
   - Benefit: glitch-free control changes in realtime and faster-than-realtime offline renders.
 

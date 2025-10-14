@@ -1,0 +1,83 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+
+  "nodes": [
+    {
+      "id": "bass303",
+      "type": "tb303_ext",
+      "params": { "waveform": 0, "tune": 0, "glideMs": 18, "cutoff": 900, "resonance": 0.55, "envMod": 0.65,
+                   "decay": 220, "ampDecayMs": 180, "gain": 0.9, "drive": 0.15 },
+      "mod": {
+        "lfos": [ { "id": 1, "wave": "sine", "freqHz": 0.5333333333, "phase": 0.0 } ],
+        "routes": [ { "sourceId": 1, "destParam": "CUTOFF_HZ", "min": 350, "max": 2200, "map": "exp" } ]
+      }
+    },
+    { "id": "kick1", "type": "kick", "params": { "f0": 120, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 1.0 } },
+    { "id": "clap1", "type": "clap", "params": { "ampDecayMs": 180, "gain": 0.85 },
+      "mod": { "lfos": [ { "id": 10, "wave": "sine", "freqHz": 4.0, "phase": 0.0 } ],
+                "routes": [ { "sourceId": 10, "destParam": "GAIN", "depth": 0.5, "offset": 0.0 } ] } },
+    { "id": "comp303", "type": "compressor",
+      "params": { "thresholdDb": -12.0, "ratio": 4.0, "attackMs": 5.0, "releaseMs": 140.0, "makeupDb": 0.0 },
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ],
+                  "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
+  ],
+
+  "mixer": {
+    "masterPercent": 90,
+    "softClip": true,
+    "inputs": [
+      { "id": "comp303", "gainPercent": 100 },
+      { "id": "kick1",   "gainPercent": 85 }
+    ]
+  },
+
+  "transport": {
+    "bpm": 128,
+    "lengthBars": 8,
+    "resolution": 16,
+    "patterns": [
+      { "nodeId": "bass303", "steps": "x..xx..x.x..x.x.",
+        "locks": [
+          { "step": 0,  "param": "NOTE_SEMITONES",    "value": 36 },
+          { "step": 0,  "param": "VELOCITY",          "value": 0.85 },
+          { "step": 0,  "param": "ENV_MODE",          "value": 1.0 },
+          { "step": 0,  "param": "FILTER_ATTACK_MS",  "value": 10 },
+          { "step": 0,  "param": "FILTER_SUSTAIN",    "value": 0.15 },
+          { "step": 0,  "param": "FILTER_RELEASE_MS", "value": 180 },
+          { "step": 0,  "param": "AMP_ATTACK_MS",     "value": 0 },
+          { "step": 0,  "param": "AMP_SUSTAIN",       "value": 0.6 },
+          { "step": 0,  "param": "AMP_RELEASE_MS",    "value": 160 },
+          { "step": 2,  "param": "NOTE_SEMITONES",    "value": 43 },
+          { "step": 2,  "param": "GLIDE_MS",          "value": 45 },
+          { "step": 3,  "param": "ACCENT",            "value": 1.0 },
+          { "step": 5,  "param": "NOTE_SEMITONES",    "value": 41 },
+          { "step": 5,  "param": "VELOCITY",          "value": 0.75 },
+          { "step": 7,  "param": "NOTE_SEMITONES",    "value": 43 },
+          { "step": 7,  "param": "GLIDE_MS",          "value": 30 },
+          { "step": 9,  "param": "NOTE_SEMITONES",    "value": 48 },
+          { "step": 9,  "param": "ACCENT",            "value": 1.0 },
+          { "step": 32, "param": "FILTER_ALGO",       "value": 1.0 },
+          { "step": 32, "param": "FILTER_TYPE",       "value": 0.0 },
+          { "step": 36, "param": "CUTOFF_HZ",         "value": 1400 },
+          { "step": 36, "param": "KEYTRACK",          "value": 0.5 },
+          { "step": 40, "param": "FILTER_TYPE",       "value": 1.0 },
+          { "step": 40, "param": "CUTOFF_HZ",         "value": 1800 },
+          { "step": 44, "param": "FILTER_TYPE",       "value": 2.0 },
+          { "step": 44, "param": "CUTOFF_HZ",         "value": 1200 }
+        ] },
+      { "nodeId": "kick1", "steps": "x...x...x...x..." },
+      { "nodeId": "clap1", "steps": "..x...x...x...x." }
+    ]
+  },
+
+  "connections": [
+    { "from": "bass303", "to": "comp303", "fromPort": 0, "toPort": 0 },
+    { "from": "kick1",   "to": "comp303", "fromPort": 0, "toPort": 1 },
+    { "from": "clap1",   "to": "comp303", "fromPort": 0, "toPort": 0 }
+  ],
+  "commands": []
+}
+
+

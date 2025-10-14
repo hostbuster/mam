@@ -11,6 +11,7 @@
 #include "CompressorNode.hpp"
 #include "ReverbNode.hpp"
 #include "WiretapNode.hpp"
+#include "SpectralDuckerNode.hpp"
 #include "../instruments/tb303/Tb303ExtNode.hpp"
 #include <type_traits>
 // Mixer is not created via NodeFactory; it is set on Graph from GraphSpec.mixer
@@ -44,7 +45,7 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
           const auto secondDot = r.destParamName.find('.', dotPos + 1);
           const std::string idStr = r.destParamName.substr(dotPos + 1, secondDot - (dotPos + 1));
           const uint16_t lfoId = static_cast<uint16_t>(std::atoi(idStr.c_str()));
-          node->addLfoPhaseRoute(r.sourceId, lfoId, r.depth, r.offset);
+          node->addLfoFreqRoute(r.sourceId, lfoId, r.depth, r.offset);
           continue;
         }
         uint16_t dest = r.destParamId;
@@ -161,6 +162,30 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
     } catch (...) {}
     return c;
   }
+  if (spec.type == "spectral_ducker") {
+    auto s = std::make_unique<SpectralDuckerNode>();
+    try {
+      nlohmann::json j = nlohmann::json::parse(spec.paramsJson);
+      s->thresholdDb = static_cast<float>(j.value("thresholdDb", -12.0));
+      s->ratio = static_cast<float>(j.value("ratio", 2.0));
+      s->attackMs = static_cast<float>(j.value("attackMs", 4.0));
+      s->releaseMs = static_cast<float>(j.value("releaseMs", 180.0));
+      s->makeupDb = static_cast<float>(j.value("makeupDb", 0.0));
+      s->lookaheadMs = static_cast<float>(j.value("lookaheadMs", 5.0));
+      s->mix = static_cast<float>(j.value("mix", 1.0));
+      if (j.contains("bands")) {
+        s->bands.clear();
+        for (const auto& b : j.at("bands")) {
+          SpectralDuckerNode::Band B{};
+          B.centerHz = static_cast<float>(b.value("centerHz", 100.0));
+          B.q = static_cast<float>(b.value("q", 1.0));
+          B.depthDb = static_cast<float>(b.value("depthDb", -6.0));
+          s->bands.push_back(B);
+        }
+      }
+    } catch (...) {}
+    return s;
+  }
   if (spec.type == "reverb") {
     auto r = std::make_unique<ReverbNode>();
     try {
@@ -216,7 +241,7 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
           const auto secondDot = r.destParamName.find('.', dotPos + 1);
           const std::string idStr = r.destParamName.substr(dotPos + 1, secondDot - (dotPos + 1));
           const uint16_t lfoId = static_cast<uint16_t>(std::atoi(idStr.c_str()));
-          node->addLfoPhaseRoute(r.sourceId, lfoId, r.depth, r.offset);
+          node->addLfoFreqRoute(r.sourceId, lfoId, r.depth, r.offset);
           continue;
         }
         uint16_t dest = r.destParamId;

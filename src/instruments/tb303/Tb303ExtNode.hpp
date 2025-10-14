@@ -74,8 +74,23 @@ public:
       synth_.params().ampSustain = params_.current(205);
       synth_.params().ampReleaseMs = params_.current(206);
       synth_.params().gateLenMs = params_.current(207);
+      // Filter algo/type/keytracking
+      synth_.params().filterAlgo = params_.current(300);
+      synth_.params().filterType = params_.current(301);
+      synth_.params().keytrack = params_.current(302);
       float s = synth_.process();
-      for (uint32_t ch = 0; ch < channels; ++ch) interleavedOut[i * channels + ch] = s;
+      // Optional equal-power pan when channels >= 2
+      float pan = params_.current(14 /* PAN */);
+      if (pan < -1.0f) pan = -1.0f; else if (pan > 1.0f) pan = 1.0f;
+      if (channels >= 2) {
+        const float l = std::cos(0.25f * 3.14159265f * (pan + 1.0f));
+        const float r = std::sin(0.25f * 3.14159265f * (pan + 1.0f));
+        interleavedOut[i * channels + 0] = s * l;
+        interleavedOut[i * channels + 1] = s * r;
+        for (uint32_t ch = 2; ch < channels; ++ch) interleavedOut[i * channels + ch] = s * 0.5f;
+      } else {
+        for (uint32_t ch = 0; ch < channels; ++ch) interleavedOut[i * channels + ch] = s;
+      }
     }
   }
 
@@ -112,6 +127,9 @@ public:
         case 205 /* AMP_SUSTAIN */: params_.setImmediate(205, cmd.value); break;
         case 206 /* AMP_RELEASE_MS */: params_.setImmediate(206, cmd.value); break;
         case 207 /* GATE_LEN_MS */: params_.setImmediate(207, cmd.value); break;
+        case 300 /* FILTER_ALGO */: params_.setImmediate(300, cmd.value); break;
+        case 301 /* FILTER_TYPE */: params_.setImmediate(301, cmd.value); break;
+        case 302 /* KEYTRACK */: params_.setImmediate(302, cmd.value); break;
         // MIDI CC simulation
         case 101 /* CC1 */: synth_.params().envMod = cmd.value; break;
         case 102 /* CC74 */: synth_.params().cutoffHz = cmd.value * 18000.0f; break;

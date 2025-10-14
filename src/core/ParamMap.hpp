@@ -130,6 +130,10 @@ static constexpr ParamDef kTb303Params[] = {
   {205, "AMP_SUSTAIN",      "",     0.f,   1.f,   0.7f,  "linear"},
   {206, "AMP_RELEASE_MS",   "ms",   0.f, 800.f,  200.f,  "linear"},
   {207, "GATE_LEN_MS",      "ms",   1.f,1000.f, 120.f,   "step"},
+  // Filter algorithm/type/keytracking (optional)
+  {300, "FILTER_ALGO",      "",     0.f,   1.f,   0.0f,  "step"},   // 0=legacy 3-pole, 1=SVF
+  {301, "FILTER_TYPE",      "",     0.f,   2.f,   0.0f,  "step"},   // 0=LP,1=BP,2=HP
+  {302, "KEYTRACK",         "",     0.f,   1.f,   0.0f,  "linear"}, // 0..1 (0 = off)
   // CC pseudo-params (mapped to above):
   {101, "CC1",             "",     0.f,   1.f,   0.0f,  "linear"}, // Mod Wheel → env mod depth
   {102, "CC74",            "",     0.f,   1.f,   0.0f,  "linear"}, // Cutoff (normalized)

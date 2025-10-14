@@ -29,7 +29,7 @@ public:
     applySidechain(ctx, interleaved, interleaved, channels);
   }
 
-  void applySidechain(ProcessContext ctx, float* mainInterleaved, const float* scInterleaved, uint32_t channels) {
+  virtual void applySidechain(ProcessContext ctx, float* mainInterleaved, const float* scInterleaved, uint32_t channels) {
     const uint32_t frames = ctx.frames;
     const float thrLin = std::pow(10.0f, thresholdDb / 20.0f);
     const float makeupLin = std::pow(10.0f, makeupDb / 20.0f);
@@ -71,7 +71,7 @@ public:
     attackMs = std::max(0.1f, attMs); releaseMs = std::max(0.1f, relMs); makeupDb = mkDb; updateCoefs();
   }
 
-private:
+protected:
   void updateCoefs() {
     const float attT = std::max(0.0001f, attackMs / 1000.0f);
     const float relT = std::max(0.0001f, releaseMs / 1000.0f);

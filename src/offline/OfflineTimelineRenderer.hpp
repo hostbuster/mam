@@ -57,16 +57,19 @@ inline std::vector<float> renderGraphWithCommands(Graph& graph,
       // Deliver events exactly at segAbs
       size_t di = cmdIndex;
       while (di < commands.size() && commands[di].sampleTime < segAbs) ++di;
-      for (; di < commands.size() && commands[di].sampleTime == segAbs; ++di) {
-        Command c{};
-        c.sampleTime = segAbs;
-        c.nodeId = commands[di].nodeId.c_str();
-        if (commands[di].type == std::string("Trigger")) c.type = CommandType::Trigger;
-        else if (commands[di].type == std::string("SetParam")) c.type = CommandType::SetParam;
-        else if (commands[di].type == std::string("SetParamRamp")) c.type = CommandType::SetParamRamp;
-        c.paramId = commands[di].paramId;
-        c.value = commands[di].value;
-        c.rampMs = commands[di].rampMs;
+      // 1) Apply SetParam/SetParamRamp first
+      for (size_t dj = di; dj < commands.size() && commands[dj].sampleTime == segAbs; ++dj) {
+        if (commands[dj].type != std::string("SetParam") && commands[dj].type != std::string("SetParamRamp")) continue;
+        Command c{}; c.sampleTime = segAbs; c.nodeId = commands[dj].nodeId.c_str();
+        c.type = (commands[dj].type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp;
+        c.paramId = commands[dj].paramId; c.value = commands[dj].value; c.rampMs = commands[dj].rampMs;
+        graph.forEachNode([&](const std::string& id, Node& n){ if (c.nodeId && id == c.nodeId) n.handleEvent(c); });
+      }
+      // 2) Then apply Triggers
+      for (size_t dj = di; dj < commands.size() && commands[dj].sampleTime == segAbs; ++dj) {
+        if (commands[dj].type != std::string("Trigger")) continue;
+        Command c{}; c.sampleTime = segAbs; c.nodeId = commands[dj].nodeId.c_str();
+        c.type = CommandType::Trigger; c.paramId = 0; c.value = commands[dj].value; c.rampMs = 0.0f;
         graph.forEachNode([&](const std::string& id, Node& n){ if (c.nodeId && id == c.nodeId) n.handleEvent(c); });
       }
 

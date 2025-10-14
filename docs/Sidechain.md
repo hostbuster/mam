@@ -192,3 +192,83 @@ See ready-to-run JSON files under `examples/`:
 - `examples/sidechain_post_effect_duck.json`
 - `examples/sidechain_stereo_key_to_mono.json`
 - `examples/sidechain_bus_key.json`
+
+### Spectral sidechain ducking (frequency‑selective)
+
+Use `spectral_ducker` to duck only the frequency bands that overlap with your key (e.g., a kick), preserving mid/high detail while clearing space for low‑end.
+
+Conceptually, the node bandpass‑filters the sidechain into a few bands, follows an envelope per band, and combines per‑band gains to apply a minimal gain across the main signal. This is a light, zero‑alloc multiband approach (no FFT) tuned for realtime.
+
+Node type: `spectral_ducker`
+
+- Ports
+  - inputs[0] role `main`: program material to be ducked
+  - inputs[1] role `sidechain` (recommended `channels: 1`): key signal
+  - outputs[0] role `main`: processed signal
+
+- Parameters (JSON `params` on the node)
+  - `thresholdDb` (float, dBFS): detector threshold (shared with base compressor curve)
+  - `ratio` (float ≥ 1): strength of static curve (shared)
+  - `attackMs`, `releaseMs` (float, ms): envelope times for band detectors
+  - `makeupDb` (float, dB): output makeup (shared)
+  - `lookaheadMs` (float, ms): reserved; parsed but not yet adding latency/compensation
+  - `mix` (0..1): dry/wet mix (0 = dry passthrough, 1 = fully ducked)
+  - `bands`: array of bands
+    - `centerHz` (float): band center frequency
+    - `q` (float): quality factor (bandwidth)
+    - `depthDb` (float ≤ 0): maximum attenuation when this band is strongly keyed
+
+- Behavior
+  - Sidechain is mono‑averaged if necessary.
+  - Each band runs: bandpass → rectifier → attack/release follower → maps to a per‑band linear gain (limited by `depthDb`).
+  - Combined gain is the minimum across bands per sample for transparent low‑end clearing.
+  - Final output = dry*(1−mix) + wet*mix.
+
+- JSON shape
+
+```json
+{
+  "id": "specduck",
+  "type": "spectral_ducker",
+  "params": {
+    "lookaheadMs": 5.0,
+    "attackMs": 4.0,
+    "releaseMs": 180.0,
+    "makeupDb": 0.0,
+    "mix": 1.0,
+    "bands": [
+      { "centerHz": 60,  "q": 1.00, "depthDb": -9.0 },
+      { "centerHz": 120, "q": 1.00, "depthDb": -6.0 },
+      { "centerHz": 250, "q": 0.80, "depthDb": -3.0 }
+    ]
+  },
+  "ports": {
+    "inputs": [
+      { "index": 0, "type": "audio", "role": "main" },
+      { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 }
+    ],
+    "outputs": [ { "index": 0, "type": "audio", "role": "main" } ]
+  }
+}
+```
+
+- Wiring example
+
+```json
+{
+  "connections": [
+    { "from": "bass303", "to": "specduck", "fromPort": 0, "toPort": 0 },
+    { "from": "clap1",   "to": "specduck", "fromPort": 0, "toPort": 0 },
+    { "from": "kick1",   "to": "specduck", "fromPort": 0, "toPort": 1 }
+  ]
+}
+```
+
+See a complete, ready‑to‑run project in `examples/acid303_sidechain_spectral.json`.
+
+Notes and limitations
+
+- Current implementation is multiband IIR‑based (no FFT); CPU‑light and realtime‑safe.
+- `lookaheadMs` is parsed but no latency/compensation is added yet (future enhancement).
+- Band parameters are static from JSON; real‑time parameter locks are not exposed yet for this node type.
+- Engine‑level channel adaptation rules apply identically as with the standard compressor.

@@ -27,6 +27,10 @@ struct Tb303ExtParams {
   float ampSustain = 0.7f;
   float ampReleaseMs = 200.0f;
   float gateLenMs = 120.0f;  // gate length for auto release in ADSR
+  // Filter algorithm/type/keytracking
+  float filterAlgo = 0.0f;   // 0=legacy, 1=SVF
+  float filterType = 0.0f;   // 0=LP, 1=BP, 2=HP
+  float keytrack = 0.0f;     // 0..1
 };
 
 class Tb303ExtSynth {
@@ -93,6 +97,9 @@ public:
     const float envPush = params_.envMod * envF_;
     float cutoff = params_.cutoffHz * (1.0f + envPush);
     if (cutoff < 20.0f) cutoff = 20.0f; if (cutoff > 18000.0f) cutoff = 18000.0f;
+    // Keytracking
+    const float noteHz = noteToHz(params_.noteSemitones);
+    cutoff *= (1.0f + params_.keytrack * ((noteHz / 440.0f) - 1.0f));
     const float a = std::exp(-2.0f * static_cast<float>(M_PI) * cutoff / static_cast<float>(sampleRate_));
     const float b = 1.0f - a;
     const float res = params_.resonance;
@@ -102,10 +109,23 @@ public:
     const float driveGain = 1.0f + 4.0f * driveAmt;
     const float norm = std::tanh(driveGain);
     const float oscDriven = (norm > 0.0f) ? (std::tanh(osc * driveGain) / norm) : osc;
-    const float in = oscDriven - res * y3_; // feedback from last pole
-    y1_ = a * y1_ + b * in;
-    y2_ = a * y2_ + b * y1_;
-    y3_ = a * y3_ + b * y2_;
+    float in = oscDriven;
+    if (params_.filterAlgo < 0.5f) {
+      // Legacy 3-pole with feedback
+      in = oscDriven - res * y3_;
+      y1_ = a * y1_ + b * in;
+      y2_ = a * y2_ + b * y1_;
+      y3_ = a * y3_ + b * y2_;
+    } else {
+      // Simple SVF (Chamberlin) for LP/BP/HP
+      const float g = std::tan(static_cast<float>(M_PI) * cutoff / static_cast<float>(sampleRate_));
+      const float R = 1.0f - res; // crude mapping
+      // Integrators
+      float hp = (in - (R * bp_) - lp_) / (1.0f + g);
+      bp_ += g * hp;
+      lp_ += g * bp_;
+      if (params_.filterType < 0.5f) y3_ = lp_; else if (params_.filterType < 1.5f) y3_ = bp_; else y3_ = hp;
+    }
 
     // Output gain; scale by amp ADSR only when ADSR mode is enabled
     const float gainBase = params_.ampGain * (0.6f + 0.4f * params_.velocity) * (1.0f + 0.5f * params_.accent);
@@ -163,6 +183,9 @@ private:
   Stage fStage_ = Stage::Idle;
   Stage aStage_ = Stage::Idle;
   float stageSamples_ = 0.0f;
+  // SVF integrators
+  float lp_ = 0.0f;
+  float bp_ = 0.0f;
   // future: pan per-voice if stereo processing is added
 };
 

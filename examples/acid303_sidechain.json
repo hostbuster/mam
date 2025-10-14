@@ -101,7 +101,9 @@
           { "step": 0,  "param": "LFO1_FREQ_HZ", "value": 4.0 },
           { "step": 8,  "param": "LFO1_FREQ_HZ", "value": 8.0 },
           { "step": 0,  "param": "AMP_DECAY_MS", "value": 180 },
-          { "step": 8,  "param": "AMP_DECAY_MS", "value": 140 }
+          { "step": 8,  "param": "AMP_DECAY_MS", "value": 140 },
+          { "step": 0,  "param": "PAN",          "value": -0.35 },
+          { "step": 8,  "param": "PAN",          "value": 0.35 }
         ]
       }
     ]
