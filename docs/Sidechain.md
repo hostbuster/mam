@@ -211,7 +211,7 @@ Node type: `spectral_ducker`
   - `ratio` (float ≥ 1): strength of static curve (shared)
   - `attackMs`, `releaseMs` (float, ms): envelope times for band detectors
   - `makeupDb` (float, dB): output makeup (shared)
-  - `lookaheadMs` (float, ms): reserved; parsed but not yet adding latency/compensation
+  - `lookaheadMs` (float, ms): detector lookahead time; introduces algorithmic latency equal to `lookaheadMs`
   - `mix` (0..1): dry/wet mix (0 = dry passthrough, 1 = fully ducked)
   - `bands`: array of bands
     - `centerHz` (float): band center frequency
@@ -269,6 +269,6 @@ See a complete, ready‑to‑run project in `examples/acid303_sidechain_spectral
 Notes and limitations
 
 - Current implementation is multiband IIR‑based (no FFT); CPU‑light and realtime‑safe.
-- `lookaheadMs` is parsed but no latency/compensation is added yet (future enhancement).
+- Lookahead adds latency equal to `lookaheadMs` (reported via `latencySamples()`); plan preroll accordingly for offline exports.
 - Band parameters are static from JSON; real‑time parameter locks are not exposed yet for this node type.
 - Engine‑level channel adaptation rules apply identically as with the standard compressor.

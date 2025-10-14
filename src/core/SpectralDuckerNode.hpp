@@ -21,17 +21,24 @@ public:
   void prepare(double sampleRate, uint32_t maxBlock) override {
     CompressorNode::prepare(sampleRate, maxBlock);
     sampleRate_ = (sampleRate > 0.0) ? sampleRate : 48000.0;
+    maxBlock_ = maxBlock;
+    lookaheadSamples_ = static_cast<uint32_t>(std::max(0.0, std::floor((lookaheadMs / 1000.0f) * static_cast<float>(sampleRate_) + 0.5)));
+    ensureDelayCapacity(lastChannels_ == 0 ? 2u : lastChannels_);
     setupBands();
   }
   void reset() override {
     CompressorNode::reset();
     for (auto& s : states_) s = BiquadState{};
     for (auto& e : envs_) e = 0.0f;
+    std::fill(delay_.begin(), delay_.end(), 0.0f);
+    writeIndexFrames_ = 0;
   }
 
   void applySidechain(ProcessContext ctx, float* mainInterleaved, const float* scInterleaved, uint32_t channels) override {
     const uint32_t frames = ctx.frames;
     if (channels == 0 || frames == 0) return;
+    if (lastChannels_ != channels || delay_.empty()) ensureDelayCapacity(channels);
+    lastChannels_ = channels;
     // Build mono sidechain
     scMono_.assign(frames, 0.0f);
     for (uint32_t i = 0; i < frames; ++i) {
@@ -67,11 +74,21 @@ public:
     const float dry = 1.0f - wet;
     for (uint32_t i = 0; i < frames; ++i) {
       const float g = gains_[i] * wet + dry;
+      // write current frame into delay, read back delayed frame
+      const uint32_t writeF = static_cast<uint32_t>(writeIndexFrames_ % capacityFrames_);
+      const uint32_t readF  = (writeIndexFrames_ + capacityFrames_ - std::min(lookaheadSamples_, capacityFrames_ - 1)) % capacityFrames_;
       for (uint32_t c = 0; c < channels; ++c) {
-        mainInterleaved[static_cast<size_t>(i)*channels + c] *= g;
+        const size_t wi = static_cast<size_t>(writeF) * channels + c;
+        const size_t ri = static_cast<size_t>(readF) * channels + c;
+        delay_[wi] = mainInterleaved[static_cast<size_t>(i)*channels + c];
+        float x = delay_[ri];
+        mainInterleaved[static_cast<size_t>(i)*channels + c] = x * g;
       }
+      writeIndexFrames_++;
     }
   }
+
+  uint32_t latencySamples() const override { return lookaheadSamples_; }
 
 private:
   // Simple biquad peaking EQ structure
@@ -105,12 +122,26 @@ private:
     envs_.assign(bands.size(), 0.0f);
   }
 
+  void ensureDelayCapacity(uint32_t channels) {
+    if (channels == 0) channels = 2;
+    capacityFrames_ = std::max<uint32_t>(lookaheadSamples_ + std::max<uint32_t>(maxBlock_, 1u), 2u);
+    delay_.assign(static_cast<size_t>(capacityFrames_) * channels, 0.0f);
+    writeIndexFrames_ = 0;
+  }
+
   double sampleRate_ = 48000.0;
+  uint32_t maxBlock_ = 0;
   std::vector<float> scMono_{};
   std::vector<float> gains_{};
   std::vector<Biquad> filters_{};
   std::vector<BiquadState> states_{};
   std::vector<float> envs_{};
+  // Lookahead delay line (interleaved)
+  std::vector<float> delay_{};
+  uint32_t lookaheadSamples_ = 0;
+  uint32_t capacityFrames_ = 0;
+  uint64_t writeIndexFrames_ = 0;
+  uint32_t lastChannels_ = 0;
 };
 
 inline float SpectralDuckerNode::Biquad::process(float x, SpectralDuckerNode::BiquadState& s) const {
