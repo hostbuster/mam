@@ -213,6 +213,8 @@ Node type: `spectral_ducker`
   - `makeupDb` (float, dB): output makeup (shared)
   - `lookaheadMs` (float, ms): detector lookahead time; introduces algorithmic latency equal to `lookaheadMs`
   - `mix` (0..1): dry/wet mix (0 = dry passthrough, 1 = fully ducked)
+  - `applyMode` ("multiply" | "dynamicEq"): apply full-band gain or per-band peaking filters on the main signal
+  - `detectorHpfHz` (float, Hz): high-pass the sidechain before detection to ignore sub‑bass rumble
   - `bands`: array of bands
     - `centerHz` (float): band center frequency
     - `q` (float): quality factor (bandwidth)
@@ -265,6 +267,31 @@ Node type: `spectral_ducker`
 ```
 
 See a complete, ready‑to‑run project in `examples/acid303_sidechain_spectral.json`.
+
+Dynamic EQ example
+
+```json
+{
+  "id": "specduck",
+  "type": "spectral_ducker",
+  "params": {
+    "applyMode": "dynamicEq",
+    "detectorHpfHz": 80.0,
+    "lookaheadMs": 6.0,
+    "attackMs": 4.0,
+    "releaseMs": 180.0,
+    "mix": 1.0,
+    "bands": [
+      { "centerHz": 60,  "q": 1.00, "depthDb": -9.0 },
+      { "centerHz": 120, "q": 1.00, "depthDb": -6.0 },
+      { "centerHz": 250, "q": 0.80, "depthDb": -3.0 }
+    ]
+  },
+  "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ], "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] }
+}
+```
+
+See `examples/acid303_sidechain_spectral_dynamicEq.json` for a full patch.
 
 Notes and limitations
 

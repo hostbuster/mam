@@ -1,0 +1,139 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+
+  "nodes": [
+    {
+      "id": "bass303",
+      "type": "tb303_ext",
+      "params": { "waveform": 0, "tune": 0, "glideMs": 18, "cutoff": 900, "resonance": 0.55, "envMod": 0.55, "decay": 220, "ampDecayMs": 220, "gain": 0.9 },
+      "mod": {
+        "lfos": [ { "id": 1, "wave": "sine", "freqHz": 0.5333333333, "phase": 0.0 } ],
+        "routes": [ { "sourceId": 1, "destParam": "CUTOFF_HZ", "min": 300, "max": 2400, "map": "exp" } ]
+      }
+    },
+    { "id": "kick1", "type": "kick", "params": { "f0": 120, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 1.0 } },
+    { "id": "clap1", "type": "clap", "params": { "ampDecayMs": 180, "gain": 0.85 },
+      "mod": {
+        "lfos": [
+          { "id": 10, "wave": "sine",     "freqHz": 4.0,  "phase": 0.0 },
+          { "id": 20, "wave": "triangle", "freqHz": 0.20, "phase": 0.0 }
+        ],
+        "routes": [
+          { "sourceId": 10, "destParam": "GAIN",          "depth": 0.6, "offset": 0.0 },
+          { "sourceId": 20, "destParam": "LFO.10.freqHz", "min": 2.0,  "max": 12.0, "map": "exp" }
+        ]
+      }
+    },
+    { "id": "specduck", "type": "spectral_ducker",
+      "params": {
+        "applyMode": "dynamicEq",
+        "detectorHpfHz": 80.0,
+        "lookaheadMs": 6.0,
+        "attackMs": 4.0,
+        "releaseMs": 180.0,
+        "makeupDb": 0.0,
+        "mix": 1.0,
+        "bands": [
+          { "centerHz": 60,  "q": 1.00, "depthDb": -9.0 },
+          { "centerHz": 120, "q": 1.00, "depthDb": -6.0 },
+          { "centerHz": 250, "q": 0.80, "depthDb": -3.0 }
+        ]
+      },
+      "ports": {
+        "inputs": [
+          { "index": 0, "type": "audio", "role": "main" },
+          { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 }
+        ],
+        "outputs": [ { "index": 0, "type": "audio", "role": "main" } ]
+      }
+    }
+  ],
+
+  "mixer": {
+    "masterPercent": 90,
+    "softClip": true,
+    "inputs": [
+      { "id": "specduck", "gainPercent": 100 },
+      { "id": "kick1",    "gainPercent": 85 }
+    ]
+  },
+
+  "transport": {
+    "bpm": 128,
+    "lengthBars": 8,
+    "resolution": 16,
+    "patterns": [
+      {
+        "nodeId": "bass303",
+        "steps": "x..xx..x.x..x.x.",
+        "locks": [
+          { "step": 0,  "param": "NOTE_SEMITONES", "value": 36 },
+          { "step": 0,  "param": "VELOCITY",       "value": 0.85 },
+          { "step": 2,  "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 2,  "param": "GLIDE_MS",       "value": 45 },
+          { "step": 3,  "param": "ACCENT",         "value": 1.0 },
+          { "step": 5,  "param": "NOTE_SEMITONES", "value": 41 },
+          { "step": 5,  "param": "VELOCITY",       "value": 0.75 },
+          { "step": 7,  "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 7,  "param": "GLIDE_MS",       "value": 30 },
+          { "step": 9,  "param": "NOTE_SEMITONES", "value": 48 },
+          { "step": 9,  "param": "ACCENT",         "value": 1.0 },
+          { "step": 11, "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 13, "param": "NOTE_SEMITONES", "value": 41 },
+          { "step": 15, "param": "NOTE_SEMITONES", "value": 38 },
+
+          { "step": 0,  "param": "LFO1_FREQ_HZ",   "value": 0.5333333333 },
+          { "step": 8,  "param": "LFO1_FREQ_HZ",   "value": 1.0666666667 },
+          { "step": 16,  "param": "NOTE_SEMITONES", "value": 36 },
+          { "step": 19,  "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 19,  "param": "GLIDE_MS",       "value": 50 },
+          { "step": 22,  "param": "NOTE_SEMITONES", "value": 46 },
+          { "step": 22,  "param": "ACCENT",         "value": 1.0 },
+          { "step": 25,  "param": "NOTE_SEMITONES", "value": 48 },
+          { "step": 28,  "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 32,  "param": "VELOCITY",       "value": 0.9 },
+          { "step": 32,  "param": "ACCENT",         "value": 1.0 },
+          { "step": 36,  "param": "CUTOFF_HZ",      "value": 1400 },
+          { "step": 40,  "param": "CUTOFF_HZ",      "value": 1800 },
+          { "step": 44,  "param": "CUTOFF_HZ",      "value": 1200 },
+
+          { "step": 32,  "param": "LFO1_FREQ_HZ",   "value": 0.5333333333 },
+          { "step": 40,  "param": "LFO1_FREQ_HZ",   "value": 1.0666666667 },
+          { "step": 32,  "param": "DRIVE",          "value": 0.15 },
+          { "step": 40,  "param": "DRIVE",          "value": 0.30 },
+          { "step": 64,  "param": "NOTE_SEMITONES", "value": 48 },
+          { "step": 64,  "param": "GLIDE_MS",       "value": 25 },
+          { "step": 72,  "param": "NOTE_SEMITONES", "value": 50 },
+          { "step": 76,  "param": "NOTE_SEMITONES", "value": 48 },
+          { "step": 84,  "param": "NOTE_SEMITONES", "value": 46 },
+          { "step": 88,  "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 88,  "param": "GLIDE_MS",       "value": 50 },
+          { "step": 88,  "param": "DRIVE",          "value": 0.25 },
+          { "step": 92,  "param": "NOTE_SEMITONES", "value": 36 }
+        ]
+      },
+      { "nodeId": "kick1", "steps": "x...x...x...x..." },
+      { "nodeId": "clap1", "steps": "..x...x...x...x.",
+        "locks": [
+          { "step": 0,  "param": "LFO1_FREQ_HZ", "value": 4.0 },
+          { "step": 8,  "param": "LFO1_FREQ_HZ", "value": 8.0 },
+          { "step": 0,  "param": "AMP_DECAY_MS", "value": 180 },
+          { "step": 8,  "param": "AMP_DECAY_MS", "value": 140 },
+          { "step": 0,  "param": "PAN",          "value": -0.35 },
+          { "step": 8,  "param": "PAN",          "value": 0.35 }
+        ]
+      }
+    ]
+  },
+
+  "connections": [
+    { "from": "bass303", "to": "specduck", "fromPort": 0, "toPort": 0 },
+    { "from": "kick1",   "to": "specduck", "fromPort": 0, "toPort": 1 },
+    { "from": "clap1",   "to": "specduck", "fromPort": 0, "toPort": 0 }
+  ],
+  "commands": []
+}
+
+
