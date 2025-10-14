@@ -1,0 +1,2 @@
+/usr/bin/ar qc libmam_render.a
+/usr/bin/ranlib libmam_render.a

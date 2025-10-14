@@ -1,0 +1,8 @@
+/Users/ulli/Library/CloudStorage/Dropbox-Hostbuster/Kunden/Pandi-Wolve-Love/code/mam/build/CMakeFiles/mam_core.dir
+/Users/ulli/Library/CloudStorage/Dropbox-Hostbuster/Kunden/Pandi-Wolve-Love/code/mam/build/CMakeFiles/mam_dsp.dir
+/Users/ulli/Library/CloudStorage/Dropbox-Hostbuster/Kunden/Pandi-Wolve-Love/code/mam/build/CMakeFiles/mam_io.dir
+/Users/ulli/Library/CloudStorage/Dropbox-Hostbuster/Kunden/Pandi-Wolve-Love/code/mam/build/CMakeFiles/mam.dir
+/Users/ulli/Library/CloudStorage/Dropbox-Hostbuster/Kunden/Pandi-Wolve-Love/code/mam/build/CMakeFiles/gen_params.dir
+/Users/ulli/Library/CloudStorage/Dropbox-Hostbuster/Kunden/Pandi-Wolve-Love/code/mam/build/CMakeFiles/docs.dir
+/Users/ulli/Library/CloudStorage/Dropbox-Hostbuster/Kunden/Pandi-Wolve-Love/code/mam/build/CMakeFiles/edit_cache.dir
+/Users/ulli/Library/CloudStorage/Dropbox-Hostbuster/Kunden/Pandi-Wolve-Love/code/mam/build/CMakeFiles/rebuild_cache.dir

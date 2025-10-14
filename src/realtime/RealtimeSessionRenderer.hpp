@@ -13,6 +13,7 @@
 #include "../core/Command.hpp"
 #include "../session/SessionSpec.hpp"
 #include "../core/SpectralDuckerNode.hpp"
+#include <cmath>
 
 class RealtimeSessionRenderer {
 public:
@@ -23,6 +24,7 @@ public:
   template <size_t N>
   void setCommandQueue(SpscCommandQueue<N>* q) { cmdQueue_ = reinterpret_cast<void*>(q); queueDrain_ = [](void* p, SampleTime cutoff, std::vector<Command>& out){ static_cast<SpscCommandQueue<N>*>(p)->drainUpTo(cutoff, out); }; }
   void setDiagnostics(bool printTriggers) { printTriggers_ = printTriggers; }
+  void setMeters(bool enabled, double intervalSec) { metersEnabled_ = enabled; metersIntervalSec_ = (intervalSec > 0.05 ? intervalSec : 1.0); }
 
   void start(const std::vector<Rack>& racks, const std::vector<SessionSpec::BusRef>& buses, const std::vector<SessionSpec::RouteRef>& routes, double requestedSampleRate, uint32_t channels) {
     if (channels == 0) throw std::invalid_argument("channels must be > 0");
@@ -51,6 +53,9 @@ public:
     err = AudioUnitGetProperty(unit_.get(), kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &asbd, &size);
     sampleRate_ = (err == noErr && asbd.mSampleRate > 0.0) ? asbd.mSampleRate : requestedSampleRate;
     for (const auto& r : racks_) { if (r.graph) { r.graph->prepare(sampleRate_, 1024); r.graph->reset(); } }
+    // Prepare meters accumulators
+    rackMeters_.assign(racks_.size(), Meter{});
+    lastMetersPrintSec_ = 0.0;
 
     err = AudioOutputUnitStart(unit_.get());
     if (err != noErr) throw std::runtime_error(std::string("AudioOutputUnitStart failed: ") + osstatusToString(err));
@@ -108,6 +113,18 @@ private:
         float* dst = self->rackScratch_[ri].data();
         for (size_t i = 0; i < static_cast<size_t>(segFrames) * self->channels_; ++i) dst[i] = 0.0f;
         g->process(ctx, dst, self->channels_);
+        // Update meters accumulators
+        if (self->metersEnabled_) {
+          Meter& m = self->rackMeters_[ri];
+          const size_t n = static_cast<size_t>(segFrames) * self->channels_;
+          for (size_t i = 0; i < n; ++i) {
+            const float s = dst[i];
+            const float a = std::fabs(s);
+            if (a > m.peak) m.peak = a;
+            m.sumSq += static_cast<double>(s) * static_cast<double>(s);
+          }
+          m.frames += segFrames * self->channels_;
+        }
       }
       // Zero bus scratch
       for (auto& bbuf : self->busScratch_) {
@@ -168,6 +185,24 @@ private:
         const float* src = self->busScratch_[bi].data();
         for (size_t i = 0; i < n; ++i) outPtr[i] += src[i];
       }
+
+      // Periodic meters print
+      if (self->metersEnabled_) {
+        const double nowSec = static_cast<double>(cutoff) / self->sampleRate_;
+        if (nowSec - self->lastMetersPrintSec_ >= self->metersIntervalSec_) {
+          for (size_t ri = 0; ri < self->racks_.size(); ++ri) {
+            const Meter& m = self->rackMeters_[ri];
+            if (m.frames == 0) continue;
+            const double peakDb = (m.peak > 0.0) ? (20.0 * std::log10(static_cast<double>(m.peak))) : -std::numeric_limits<double>::infinity();
+            const double rmsLin = std::sqrt(m.sumSq / static_cast<double>(m.frames));
+            const double rmsDb = (rmsLin > 0.0) ? (20.0 * std::log10(rmsLin)) : -std::numeric_limits<double>::infinity();
+            std::fprintf(stderr, "Meters\track=%s\tpeak_dBFS=%.2f\trms_dBFS=%.2f\n", self->racks_[ri].id.c_str(), peakDb, rmsDb);
+          }
+          // reset
+          for (auto& m : self->rackMeters_) { m = Meter{}; }
+          self->lastMetersPrintSec_ = nowSec;
+        }
+      }
     }
 
     self->sampleCounter_.store(cutoff, std::memory_order_relaxed);
@@ -177,7 +212,8 @@ private:
   void printEvent(const Command& c, SampleTime segAbsStart) const {
     const double tSec = static_cast<double>(segAbsStart) / sampleRate_;
     const char* tag = (c.type == CommandType::Trigger) ? "TRIGGER" : (c.type == CommandType::SetParam ? "SET" : "RAMP");
-    std::fprintf(stderr, "%s t=%.6fs node=%s pid=%u val=%.3f\n", tag, tSec, c.nodeId ? c.nodeId : "", c.paramId, static_cast<double>(c.value));
+    // Tab-delimited for stable visual columns
+    std::fprintf(stderr, "%.6f\t%s\tnode=%s\tpid=%u\tval=%.3f\n", tSec, tag, c.nodeId ? c.nodeId : "", c.paramId, static_cast<double>(c.value));
   }
 
   AudioUnitHandle unit_{};
@@ -191,6 +227,10 @@ private:
   bool printTriggers_ = false;
   std::vector<std::vector<float>> rackScratch_{};
   std::vector<std::vector<float>> busScratch_{};
+  // meters
+  struct Meter { double sumSq = 0.0; double peak = 0.0; uint64_t frames = 0; };
+  std::vector<Meter> rackMeters_{};
+  bool metersEnabled_ = false; double metersIntervalSec_ = 1.0; double lastMetersPrintSec_ = 0.0;
 };
 
 

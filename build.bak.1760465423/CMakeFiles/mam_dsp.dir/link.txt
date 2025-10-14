@@ -1,0 +1,2 @@
+/usr/bin/ar qc libmam_dsp.a CMakeFiles/mam_dsp.dir/src/instruments/kick/KickSynth.cpp.o CMakeFiles/mam_dsp.dir/src/instruments/clap/ClapSynth.cpp.o
+/usr/bin/ranlib libmam_dsp.a

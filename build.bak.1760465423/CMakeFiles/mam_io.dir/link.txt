@@ -1,0 +1,2 @@
+/usr/bin/ar qc libmam_io.a CMakeFiles/mam_io.dir/src/io/AudioFileWriter.cpp.o
+/usr/bin/ranlib libmam_io.a

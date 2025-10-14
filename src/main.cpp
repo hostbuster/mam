@@ -133,12 +133,13 @@ static void printUsage(const char* exe) {
                "  --verbose          Print realtime loop diagnostics (loop counter and elapsed time)\n"
                "  --print-triggers   Print realtime event deliveries (set/ramps/triggers) at render-time\n"
                "  --dump-events      Print synthesized command events (time/bar/step) before playback/export\n"
-               "  --meters-per-node  Print per-node peak/RMS after run/export\n"
+               "  --meters           Realtime: print per-rack meters periodically; Offline: print mix meters after export\n"
+               "  --meters-per-node  Print per-node peak/RMS after run/export (realtime at loop boundaries; offline after export)\n"
                "  --cpu-stats        Print block CPU avg/max and xrun count at end\n"
                "  --cpu-stats-per-node  Print per-node avg/max us at end\n"
                "  --rt-debug-feed   Debug realtime feeder (queue pushes, offsets)\n"
                "  --rt-debug-session Debug realtime session (initial/feeder enqueues)\n"
-               "  --session path.json  Run a multi-rack session (offline render for now)\n"
+               "  --session path.json  Run a multi-rack session (realtime or offline when combined with --wav)\n"
                "  --loop-minutes M   Repeat transport to reach at least M minutes (offline)\n"
                "  --loop-seconds S   Repeat transport to reach at least S seconds (offline)\n"
                "  --random-seed N    Override JSON randomSeed for deterministic randomness (0 to skip)\n"
@@ -823,7 +824,7 @@ int main(int argc, char** argv) {
       size_t totalCmds = 0; for (const auto& r : rackRTs) totalCmds += r.baseCmds.size(); if (totalCmds == 0) std::fprintf(stderr, "[rt-session] error: synthesized zero commands across racks\n");
       // Start realtime renderer
       RealtimeSessionRenderer srt; SpscCommandQueue<16384> cmdQueue;
-      srt.setCommandQueue(&cmdQueue); srt.setDiagnostics(printTriggers);
+      srt.setCommandQueue(&cmdQueue); srt.setDiagnostics(printTriggers); srt.setMeters(printMeters || metersPerNode, 1.0);
       std::vector<RealtimeSessionRenderer::Rack> rracks; rracks.reserve(graphsOwned.size()); for (size_t i = 0; i < graphsOwned.size(); ++i) rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain});
       srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
       // Adjust pre-synthesized command timing to actual device sample rate if needed
@@ -1401,6 +1402,8 @@ int main(int argc, char** argv) {
       RealtimeSessionRenderer srt;
       srt.setCommandQueue(&cmdQueue);
       srt.setDiagnostics(printTriggers);
+      // Enable periodic per-rack meters when --meters is provided (or keep per-node flag compatibility)
+      srt.setMeters(printMeters || metersPerNode, 1.0);
       // Build racks vector with per-rack gain (from session routes we still route to buses; use 1.0 here)
       std::vector<RealtimeSessionRenderer::Rack> rracks;
       rracks.reserve(graphsOwned.size());

@@ -240,9 +240,11 @@ private:
       : 0ull;
     const uint64_t stepClamped = (stepIdx >= diagResolution_) ? (diagResolution_ - 1) : stepIdx;
     const double tSec = static_cast<double>(within) / sampleRate_;
-    std::fprintf(stderr, "%s t=%.6fs bar=%llu step=%llu node=%s type=%u pid=%u val=%.3f\n",
-                 tag, tSec, static_cast<unsigned long long>(barIdx + 1ull), static_cast<unsigned long long>(stepClamped + 1ull),
-                 c.nodeId ? c.nodeId : "", static_cast<unsigned>(c.type), c.paramId, static_cast<double>(c.value));
+    // New tab-delimited format: time_s \t CMD \t bar \t step \t node \t pid \t val
+    std::fprintf(stderr, "%.6f\t%s\tbar=%llu\tstep=%llu\tnode=%s\tpid=%u\tval=%.3f\n",
+                 tSec, tag,
+                 static_cast<unsigned long long>(barIdx + 1ull), static_cast<unsigned long long>(stepClamped + 1ull),
+                 c.nodeId ? c.nodeId : "", c.paramId, static_cast<double>(c.value));
   }
 };
 

@@ -1,0 +1,2 @@
+/usr/bin/ar qc libmam_core.a CMakeFiles/mam_core.dir/src/core/GraphConfig.cpp.o CMakeFiles/mam_core.dir/src/core/SchemaValidate.cpp.o
+/usr/bin/ranlib libmam_core.a

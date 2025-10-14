@@ -57,6 +57,7 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - Realtime loop diagnostics gated by `--verbose`
 - New nodes: `compressor` (port-1 sidechain detector) and `reverb` (Schroeder-style, demo-quality)
 - Ports (MVP): nodes can declare `ports.inputs[]`/`ports.outputs[]` and route via `fromPort`→`toPort`
+- Per-rack meters in realtime: `--meters` prints periodic rack peak/RMS. Offline, `--meters` prints mix meters after export.
 - Per-node meters: `--meters-per-node` prints peak/RMS per node; nodes with no audio are marked `inactive`
 - Looping UX: `--loop-minutes` / `--loop-seconds` auto-derives loop-count; export prints planned duration (incl. preroll/tail)
 - Validation/CLI: schema enforcement hook; `--list-node-types` prints supported node types
@@ -209,7 +210,7 @@ Examples:
 #### Topology and meters
 
 - `--print-topo`: print a simple topological order derived from `connections` (MVP). Helpful to validate routing intent.
-- `--meters`: after export, print a concise line with peak and RMS in dBFS.
+- `--meters`: realtime sessions print periodic per-rack meters; offline export prints a concise mix line with peak and RMS in dBFS.
 - `--verbose`: in realtime, print loop counter and elapsed time at loop boundaries.
 - `--meters-per-node`: print per-node peak/RMS and mark nodes with no audio as `inactive`.
   - When combined with `--verbose` in realtime, per-node meters are printed each time the loop boundary is crossed.
@@ -320,7 +321,7 @@ Examples:
 # Print topo order without exporting (dry inspection)
 ./build/mam --graph examples/demo.json --print-topo --validate examples/demo.json
 
-# Export and show meters
+# Export and show meters (offline)
 ./build/mam --graph examples/demo.json --wav demo.wav --meters
 
 # Export, show topo order and meters together
@@ -772,8 +773,11 @@ Examples:
 
 ```bash
 ./build/mam --graph examples/sidechain_mono_key.json --verbose --print-triggers
-# Combine with meters at boundaries:
+# Combine with per-node meters at realtime loop boundaries:
 ./build/mam --graph examples/demo2.json --verbose --meters-per-node
+
+# Realtime session with rack meters every ~1s:
+./build/mam --session examples/session_minimal.json --meters
 ```
 
 Command param addressing:
