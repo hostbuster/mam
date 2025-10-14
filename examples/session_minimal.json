@@ -3,8 +3,8 @@
   "sampleRate": 48000,
   "channels": 2,
   "racks": [
-    { "id": "rack1", "path": "examples/mamic_song.json", "startOffsetFrames": 0, "gain": 0.1, "loopSeconds": 30 },
-    { "id": "rack2", "path": "examples/acid303_sidechain_spectral.json", "startOffsetFrames": 0, "gain": 1.0, "bars": 32, "loopCount": 1 }
+    { "id": "rack1", "path": "examples/acid303_sidechain_spectral.json", "startOffsetFrames": 0, "gain": 1.0, "loopSeconds": 30 },
+    { "id": "rack2", "path": "examples/mamic_song.json", "startOffsetFrames": 0, "gain": 0.1, "bars": 32, "loopCount": 1 }
   ]
 }
 

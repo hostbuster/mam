@@ -14,6 +14,7 @@
 #include <vector>
 #include <fstream>
 #include <algorithm>
+#include <queue>
 #include <memory>
 #include <iostream>
 #include <unistd.h>
@@ -821,16 +822,70 @@ int main(int argc, char** argv) {
       if (rackRTs.empty()) { std::fprintf(stderr, "[rt-session] error: no racks\n"); return 1; }
       size_t totalCmds = 0; for (const auto& r : rackRTs) totalCmds += r.baseCmds.size(); if (totalCmds == 0) std::fprintf(stderr, "[rt-session] error: synthesized zero commands across racks\n");
       // Start realtime renderer
-      RealtimeSessionRenderer srt; SpscCommandQueue<2048> cmdQueue;
+      RealtimeSessionRenderer srt; SpscCommandQueue<16384> cmdQueue;
       srt.setCommandQueue(&cmdQueue); srt.setDiagnostics(printTriggers);
-      std::vector<RealtimeSessionRenderer::Rack> rracks; rracks.reserve(graphsOwned.size()); for (size_t i = 0; i < graphsOwned.size(); ++i) rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, 1.0f});
+      std::vector<RealtimeSessionRenderer::Rack> rracks; rracks.reserve(graphsOwned.size()); for (size_t i = 0; i < graphsOwned.size(); ++i) rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain});
       srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
-      // Initial enqueue
-      for (const auto& r : rackRTs) { size_t pushed = 0; for (const auto& c : r.baseCmds) { Command cmd{}; cmd.sampleTime = c.sampleTime; cmd.nodeId = internNodeId(c.nodeId); cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs; (void)cmdQueue.push(cmd); ++pushed;} std::fprintf(stderr, "[rt-session] init enqueued rack=%s cmds=%zu\n", r.rackId.c_str(), pushed);}        
+      // Adjust pre-synthesized command timing to actual device sample rate if needed
+      {
+        const uint32_t srActual = static_cast<uint32_t>(srt.sampleRate() + 0.5);
+        if (srActual != sessionSrU32) {
+          const double scale = static_cast<double>(srActual) / static_cast<double>(sessionSrU32);
+          for (auto& r : rackRTs) {
+            for (auto& c : r.baseCmds) {
+              c.sampleTime = static_cast<uint64_t>(std::llround(static_cast<double>(c.sampleTime) * scale));
+            }
+            r.loopLen = static_cast<uint64_t>(std::llround(static_cast<double>(r.loopLen) * scale));
+          }
+          std::fprintf(stderr, "[rt-session] rescaled commands to device sr=%u (scale=%.6f)\n", srActual, scale);
+        }
+      }
+      // Initial enqueue (globally time-sorted merge across racks)
+      {
+        struct Item { uint64_t t; size_t ri; size_t ci; };
+        auto cmp = [](const Item& a, const Item& b){ return a.t > b.t; };
+        std::priority_queue<Item, std::vector<Item>, decltype(cmp)> pq(cmp);
+        for (size_t i = 0; i < rackRTs.size(); ++i) if (!rackRTs[i].baseCmds.empty()) pq.push(Item{rackRTs[i].baseCmds[0].sampleTime, i, 0});
+        size_t totalPushed = 0;
+        while (!pq.empty() && gRunning.load()) {
+          Item it = pq.top(); pq.pop(); const auto& c = rackRTs[it.ri].baseCmds[it.ci];
+          Command cmd{}; cmd.sampleTime = c.sampleTime; cmd.nodeId = internNodeId(c.nodeId);
+          cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp;
+          cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
+          while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+          if (!gRunning.load()) break; totalPushed++;
+          const size_t nextCi = it.ci + 1; if (nextCi < rackRTs[it.ri].baseCmds.size()) pq.push(Item{rackRTs[it.ri].baseCmds[nextCi].sampleTime, it.ri, nextCi});
+        }
+        std::fprintf(stderr, "[rt-session] init enqueued total cmds=%zu across %zu racks (time-sorted)\n", totalPushed, rackRTs.size());
+      }
       // Feeder thread
       std::thread feeder([&cmdQueue, &rackRTs, &srt]() mutable {
-        const uint64_t desiredAhead = static_cast<uint64_t>(5.0 * srt.sampleRate()); std::vector<uint64_t> nextOffset(rackRTs.size(), 0ull); for (size_t i = 0; i < rackRTs.size(); ++i) nextOffset[i] = rackRTs[i].loopLen;
-        while (gRunning.load()) { const uint64_t now = static_cast<uint64_t>(srt.sampleCounter()); for (size_t i = 0; i < rackRTs.size(); ++i) { if (rackRTs[i].loopLen == 0) continue; if (nextOffset[i] <= now + desiredAhead) { for (auto c : rackRTs[i].baseCmds) { Command cmd{}; cmd.sampleTime = c.sampleTime + nextOffset[i]; cmd.nodeId = internNodeId(c.nodeId); cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs; while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1)); if (!gRunning.load()) break; } nextOffset[i] += rackRTs[i].loopLen; } } std::this_thread::sleep_for(std::chrono::milliseconds(20)); }
+        const uint64_t desiredAhead = static_cast<uint64_t>(3.0 * srt.sampleRate());
+        std::vector<uint64_t> nextOffset(rackRTs.size(), 0ull); for (size_t i = 0; i < rackRTs.size(); ++i) nextOffset[i] = rackRTs[i].loopLen;
+        while (gRunning.load()) {
+          const uint64_t now = static_cast<uint64_t>(srt.sampleCounter());
+          // collect eligible racks
+          std::vector<size_t> elig; elig.reserve(rackRTs.size());
+          for (size_t i = 0; i < rackRTs.size(); ++i) if (rackRTs[i].loopLen > 0 && nextOffset[i] <= now + desiredAhead) elig.push_back(i);
+          if (!elig.empty()) {
+            struct Item { uint64_t t; size_t ri; size_t ci; };
+            auto cmp = [](const Item& a, const Item& b){ return a.t > b.t; };
+            std::priority_queue<Item, std::vector<Item>, decltype(cmp)> pq(cmp);
+            for (size_t idx : elig) {
+              if (!rackRTs[idx].baseCmds.empty()) pq.push(Item{rackRTs[idx].baseCmds[0].sampleTime + nextOffset[idx], idx, 0});
+            }
+            while (!pq.empty() && gRunning.load()) {
+              Item it = pq.top(); pq.pop(); const auto& c = rackRTs[it.ri].baseCmds[it.ci];
+              Command cmd{}; cmd.sampleTime = c.sampleTime + nextOffset[it.ri]; cmd.nodeId = internNodeId(c.nodeId);
+              cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp;
+              cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
+              while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1)); if (!gRunning.load()) break;
+              const size_t nextCi = it.ci + 1; if (nextCi < rackRTs[it.ri].baseCmds.size()) pq.push(Item{rackRTs[it.ri].baseCmds[nextCi].sampleTime + nextOffset[it.ri], it.ri, nextCi});
+            }
+            for (size_t idx : elig) nextOffset[idx] += rackRTs[idx].loopLen;
+          }
+          std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
       });
       // Wait loop with optional quit-after
       const double sr = srt.sampleRate();

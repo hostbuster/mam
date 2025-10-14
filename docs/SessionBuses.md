@@ -42,6 +42,14 @@ See `examples/session_buses_samples.json` for a runnable sample.
 ```
 2) At MVP stage, inserts are placeholders; bus routing and summing works. Next milestones add working inserts (e.g., spectral_ducker) with latency compensation.
 
+### Realtime sessions with buses
+```bash
+./build/mam --session examples/session_buses_samples.json --print-triggers --quit-after 5
+```
+- Prints a startup banner and per‑rack command counts.
+- Racks are rendered in realtime and routed to buses. If a rack has no route, its output is summed to main (fallback).
+- Spectral ducker insert runs in realtime on bus buffers.
+
 ### Roadmap
 - Implement bus graph: build inserts as a dedicated Graph mixed with rack outputs.
 - Latency compensation: account for insert/bus latency.

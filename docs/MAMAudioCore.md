@@ -115,3 +115,26 @@ An innovative, realtime-first audio core that unifies live performance and studi
 - Studio-strong: deterministic playback, editability, offline parity.
 - Modular: existing graphs drop in as racks without change.
 - Extensible: clean surfaces for new nodes, racks, controllers, and UIs.
+
+## Realtime Sessions (MVP)
+The session runtime now supports realtime playback with multiple racks mixed together and basic bus inserts.
+
+- Run a minimal session realtime:
+  - `./build/mam --session examples/session_minimal.json`
+  - Add `--print-triggers` to see realtime deliveries on stderr
+  - Use `--quit-after SEC` to auto-stop without keyboard input
+
+- Debug flags:
+  - `--rt-debug-session`: prints session startup, per‑rack command counts, and feeder activity
+  - `--rt-debug-feed`: prints realtime feed queue status and horizons
+  - Startup banner: `mam -- version X.Y.Z starting up (built …)` confirms binary version
+
+- Timing/parity:
+  - Pre‑synthesized command timestamps and loop lengths are rescaled to the device sample rate to avoid tempo drift
+  - Initial commands are merged across racks in time order; a background feeder extends the horizon per rack
+
+- Mixing/gain:
+  - If a rack has no explicit route to a session bus, its output is summed directly to the main output (MVP fallback)
+  - Per‑rack `gain` is applied for both direct output and bus‑routed paths
+
+See also `docs/SessionBuses.md` for bus routing and insert details.

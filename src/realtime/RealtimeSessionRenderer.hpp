@@ -19,10 +19,11 @@ public:
   RealtimeSessionRenderer() = default;
   ~RealtimeSessionRenderer() { stop(); }
 
-  void setCommandQueue(SpscCommandQueue<2048>* q) { cmdQueue_ = q; }
+  struct Rack { Graph* graph=nullptr; std::string id; float gain=1.0f; };
+  template <size_t N>
+  void setCommandQueue(SpscCommandQueue<N>* q) { cmdQueue_ = reinterpret_cast<void*>(q); queueDrain_ = [](void* p, SampleTime cutoff, std::vector<Command>& out){ static_cast<SpscCommandQueue<N>*>(p)->drainUpTo(cutoff, out); }; }
   void setDiagnostics(bool printTriggers) { printTriggers_ = printTriggers; }
 
-  struct Rack { Graph* graph=nullptr; std::string id; float gain=1.0f; };
   void start(const std::vector<Rack>& racks, const std::vector<SessionSpec::BusRef>& buses, const std::vector<SessionSpec::RouteRef>& routes, double requestedSampleRate, uint32_t channels) {
     if (channels == 0) throw std::invalid_argument("channels must be > 0");
     racks_ = racks; buses_ = buses; routes_ = routes; channels_ = channels;
@@ -69,7 +70,7 @@ private:
 
     // Drain commands up to cutoff
     std::vector<Command> drained; drained.clear();
-    if (self->cmdQueue_) self->cmdQueue_->drainUpTo(cutoff, drained);
+    if (self->cmdQueue_) self->queueDrain_(self->cmdQueue_, cutoff, drained);
 
     // Determine split offsets
     std::vector<uint32_t> splits; splits.reserve(8); splits.push_back(0); splits.push_back(inNumberFrames);
@@ -114,6 +115,7 @@ private:
         for (size_t i = 0; i < count; ++i) bbuf[i] = 0.0f;
       }
       // Route racks to buses
+      std::vector<bool> rackHadRoute(self->racks_.size(), false);
       for (const auto& rt : self->routes_) {
         // find rack index
         size_t ri = 0; bool foundRack = false; for (; ri < self->racks_.size(); ++ri) if (self->racks_[ri].id == rt.from) { foundRack = true; break; }
@@ -124,6 +126,15 @@ private:
         const float* src = self->rackScratch_[ri].data(); float* dst = self->busScratch_[bi].data();
         const size_t n = static_cast<size_t>(segFrames) * self->channels_;
         for (size_t i = 0; i < n; ++i) dst[i] += src[i] * gain;
+        rackHadRoute[ri] = true;
+      }
+      // Fallback: if a rack has no route, sum it directly to output (MVP behavior like offline)
+      for (size_t ri = 0; ri < self->racks_.size(); ++ri) {
+        if (ri >= rackHadRoute.size() || rackHadRoute[ri]) continue;
+        const float* src = self->rackScratch_[ri].data();
+        float* dst = outPtr;
+        const size_t n = static_cast<size_t>(segFrames) * self->channels_;
+        for (size_t i = 0; i < n; ++i) dst[i] += src[i] * self->racks_[ri].gain;
       }
       // Apply inserts (spectral_ducker) on each bus
       for (size_t bi = 0; bi < self->buses_.size(); ++bi) {
@@ -176,7 +187,7 @@ private:
   uint32_t channels_ = 2;
   double sampleRate_ = 48000.0;
   std::atomic<SampleTime> sampleCounter_{0};
-  SpscCommandQueue<2048>* cmdQueue_ = nullptr;
+  void* cmdQueue_ = nullptr; using DrainFn = void(*)(void*, SampleTime, std::vector<Command>&); DrainFn queueDrain_ = nullptr;
   bool printTriggers_ = false;
   std::vector<std::vector<float>> rackScratch_{};
   std::vector<std::vector<float>> busScratch_{};
