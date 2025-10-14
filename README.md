@@ -417,11 +417,11 @@ Example:
     "bpm": 130,
     "lengthBars": 4,
     "resolution": 16,
-    "swingPercent": 12,
-    "tempoRamps": [ { "bar": 2, "bpm": 138 } ],
+    "swingPercent": 10,
+    "tempoRamps": [ { "bar": 2, "bpm": 140 } ],
     "patterns": [
-      { "nodeId": "kick1", "steps": "x...x...x...x..." },
-      { "nodeId": "snr1",  "steps": "....x.......x..." },
+      { "nodeId": "kick1", "steps": "x...x..x..x..." },
+      { "nodeId": "snr1",  "steps": "..x...x...x..." },
       { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x." }
     ]
   }
@@ -998,3 +998,23 @@ Example:
 - Offline parallelism (timeline)
   - Status: baseline single‑thread timeline and parallel prototypes; progress + speedup printing; CPU stats in offline.
   - Plan: topo‑level scheduler with persistent thread pool; segment (event‑split) → level execution with barriers; heuristic gating to avoid parallel overhead on small graphs; stable reduction order option for deterministic summing.
+
+## Diagram export (Mermaid)
+You can print Mermaid diagrams for documentation and paste them into README/wiki.
+
+- Session (racks/buses/routes):
+```bash
+./build/mam --export-mermaid-session examples/session_minimal.json > session.mmd
+```
+
+- Graph (nodes/connections/mixer):
+```bash
+./build/mam --export-mermaid-graph examples/demo.json > graph_topo.mmd
+```
+
+Render in GitHub/Markdown using a mermaid code block:
+```markdown
+```mermaid
+(flowchart content here)
+```
+```

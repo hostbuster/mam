@@ -21,6 +21,7 @@
 #include <sys/select.h>
 #include <cassert>
 #include <mutex>
+#include <sstream>
 #include "instruments/kick/KickSynth.hpp"
 #include "offline/OfflineRenderer.hpp"
 #include "offline/OfflineGraphRenderer.hpp"
@@ -142,6 +143,9 @@ static void printUsage(const char* exe) {
                "  --rt-debug-feed   Debug realtime feeder (queue pushes, offsets)\n"
                "  --rt-debug-session Debug realtime session (initial/feeder enqueues)\n"
                "  --session path.json  Run a multi-rack session (realtime or offline when combined with --wav)\n"
+               "\nDiagram export (Mermaid):\n"
+               "  --export-mermaid-session path.json   Print session (racks/buses/routes) as Mermaid flowchart to stdout\n"
+               "  --export-mermaid-graph path.json     Print graph (nodes/connections) as Mermaid flowchart to stdout\n"
                "  --loop-minutes M   Repeat transport to reach at least M minutes (offline)\n"
                "  --loop-seconds S   Repeat transport to reach at least S seconds (offline)\n"
                "  --random-seed N    Override JSON randomSeed for deterministic randomness (0 to skip)\n"
@@ -157,6 +161,68 @@ static void printUsage(const char* exe) {
                "  %s --graph demo.json --wav demo.wav         # export using auto-duration\n",
                exe, exe, exe, exe);
 }
+// Generate a simple Mermaid flowchart for a SessionSpec (racks/buses/routes)
+static std::string generateMermaidForSession(const SessionSpec& s) {
+  std::ostringstream out;
+  out << "flowchart LR\n";
+  // Declare rack nodes
+  for (const auto& r : s.racks) {
+    out << "  " << r.id << "[\"Rack " << r.id << "\"]\n";
+  }
+  // Declare bus nodes (if any)
+  for (const auto& b : s.buses) {
+    out << "  " << b.id << "[(\"Bus " << b.id << "\")]\n";
+  }
+  // Declare master mix sink
+  out << "  Mix[(\"Master Mix\")]\n";
+  // Routes from racks to buses
+  std::unordered_set<std::string> racksWithRoute;
+  for (const auto& rt : s.routes) {
+    racksWithRoute.insert(rt.from);
+    out << "  " << rt.from << " -- \"gain=" << rt.gain << "\" --> " << rt.to << "\n";
+  }
+  // Any rack without a route goes directly to Mix
+  for (const auto& r : s.racks) {
+    if (racksWithRoute.find(r.id) == racksWithRoute.end()) {
+      out << "  " << r.id << " --> Mix\n";
+    }
+  }
+  // Buses go to Mix
+  for (const auto& b : s.buses) {
+    out << "  " << b.id << " --> Mix\n";
+  }
+  return out.str();
+}
+
+// Generate a simple Mermaid flowchart for a GraphSpec (nodes/connections)
+static std::string generateMermaidForGraph(const GraphSpec& g) {
+  std::ostringstream out;
+  out << "flowchart LR\n";
+  // Nodes
+  for (const auto& n : g.nodes) {
+    out << "  " << n.id << "[\"" << n.type << ": " << n.id << "\"]\n";
+  }
+  // Connections
+  for (const auto& c : g.connections) {
+    out << "  " << c.from << " -- \"g=" << c.gainPercent;
+    if (c.fromPort != 0 || c.toPort != 0) {
+      out << ", p" << c.fromPort << "->" << c.toPort;
+    }
+    if (c.dryPercent > 0.0f) {
+      out << ", dry=" << c.dryPercent;
+    }
+    out << "\" --> " << c.to << "\n";
+  }
+  // Mixer (if any) — show inputs to Mix
+  if (g.hasMixer) {
+    out << "  Mix[(\"Graph Mix\")]\n";
+    for (const auto& mi : g.mixer.inputs) {
+      out << "  " << mi.id << " -- \"g=" << mi.gainPercent << "\" --> Mix\n";
+    }
+  }
+  return out.str();
+}
+
 
 static const char* dupStr(const std::string& s) {
   char* p = static_cast<char*>(std::malloc(s.size() + 1));
@@ -579,6 +645,8 @@ int main(int argc, char** argv) {
   bool verbose = false;              // realtime loop diagnostics
   uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
   bool metersPerNode = false;
+  std::string exportMermaidSessionPath;
+  std::string exportMermaidGraphPath;
   bool cpuStats = false;
   bool cpuStatsPerNode = false;
   bool rtDebugFeed = false;
@@ -663,6 +731,10 @@ int main(int argc, char** argv) {
       need(1); graphPath = argv[++i];
     } else if (std::strcmp(a, "--session") == 0) {
       need(1); sessionPath = argv[++i];
+    } else if (std::strcmp(a, "--export-mermaid-session") == 0) {
+      need(1); exportMermaidSessionPath = argv[++i];
+    } else if (std::strcmp(a, "--export-mermaid-graph") == 0) {
+      need(1); exportMermaidGraphPath = argv[++i];
     } else if (std::strcmp(a, "--print-topo") == 0) {
       printTopo = true;
     } else if (std::strcmp(a, "--meters") == 0) {
@@ -706,6 +778,30 @@ int main(int argc, char** argv) {
     } else {
       std::fprintf(stderr, "Unknown option: %s\n", a);
       printUsage(argv[0]);
+      return 1;
+    }
+  }
+
+  // Diagram export early-outs
+  if (!exportMermaidSessionPath.empty()) {
+    try {
+      SessionSpec sess = loadSessionSpecFromJsonFile(exportMermaidSessionPath);
+      const std::string mmd = generateMermaidForSession(sess);
+      std::fwrite(mmd.data(), 1, mmd.size(), stdout);
+      return 0;
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "Diagram export failed: %s\n", e.what());
+      return 1;
+    }
+  }
+  if (!exportMermaidGraphPath.empty()) {
+    try {
+      GraphSpec spec = loadGraphSpecFromJsonFile(exportMermaidGraphPath);
+      const std::string mmd = generateMermaidForGraph(spec);
+      std::fwrite(mmd.data(), 1, mmd.size(), stdout);
+      return 0;
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "Diagram export failed: %s\n", e.what());
       return 1;
     }
   }

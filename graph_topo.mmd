@@ -1,0 +1,23 @@
+flowchart LR
+  kick1["kick: kick1"]
+  bass303["tb303_ext: bass303"]
+  snr1["clap: snr1"]
+  delay1["delay: delay1"]
+  delay2["delay: delay2"]
+  meter1["meter: meter1"]
+  rev1["reverb: rev1"]
+  comp1["compressor: comp1"]
+  wtMono["wiretap: wtMono"]
+  kick1 -- "g=70" --> delay1
+  snr1 -- "g=60" --> delay1
+  delay1 -- "g=100" --> delay2
+  snr1 -- "g=100" --> wtMono
+  wtMono -- "g=100" --> rev1
+  kick1 -- "g=60, p0->1" --> comp1
+  Mix[("Graph Mix")]
+  kick1 -- "g=90" --> Mix
+  bass303 -- "g=80" --> Mix
+  snr1 -- "g=65" --> Mix
+  delay2 -- "g=30" --> Mix
+  comp1 -- "g=100" --> Mix
+  rev1 -- "g=35" --> Mix
