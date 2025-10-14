@@ -787,6 +787,87 @@ Command param addressing:
 - Offline: `JobPool` threads for parallel graph level execution (to be enabled)
 - No allocation or locks on audio thread; preallocate all buffers/queues
 
+## Performance and Performance Tuning
+
+This project is designed for realtime playback and identical offline exports. This section explains how to measure performance, how to interpret the numbers, and what levers you can pull to stay glitch‑free in live setups.
+
+### Realtime model
+
+- Single realtime audio thread renders the graph in the CoreAudio callback.
+  - No locks, no heap allocations, no syscalls in the callback.
+  - Control is fed via a bounded SPSC command queue (pre‑synthesized events).
+- Background threads handle non‑RT work (event generation, logging, file I/O).
+- Latency‑adding nodes report algorithmic latency via `latencySamples()`; the engine prints a graph preroll estimate at first loop boundary.
+
+### Measuring CPU in realtime and offline
+
+- Flags:
+  - `--cpu-stats`: print block CPU avg/max time (ms) and average/max load (% of deadline), block count, and xrun count.
+  - `--cpu-stats-per-node`: additionally print per‑node average/max processing time (µs).
+- Realtime:
+  - Stats are printed at loop boundaries (regardless of `--verbose`) so they’re musically aligned.
+- Offline:
+  - A summary is printed at the end of the render.
+
+Example (realtime):
+
+```bash
+./build/mam --graph examples/acid303_sidechain_spectral_midSide.json --cpu-stats --cpu-stats-per-node
+```
+
+Interpretation:
+
+- Avg block time ≈ average CPU cost per audio block.
+- Max block time and max % reflect worst‑case spikes; if a block exceeds its deadline, `xruns` increments.
+- Per‑node times help identify hot nodes.
+
+Rules of thumb for live:
+
+- Aim for avg CPU < 50% of the deadline and max < 80%, with `xruns=0` over long runs.
+- Occasional spikes can be hidden by the device buffer, but sustained overruns will crackle.
+
+### Tuning strategies (realtime)
+
+- Lower algorithmic cost:
+  - Reduce complexity of heavy nodes. For `spectral_ducker`:
+    - Prefer `"applyMode": "multiply"` (cheaper) over `"dynamicEq"`.
+    - Reduce the number of bands (e.g., 3 → 2) and/or lower `q`.
+    - Reduce `lookaheadMs` (e.g., 6 → 3–4 ms) to cut memory traffic and delay.
+    - Use `"stereoMode": "LR"` vs `"MidSide"`, or reduce `"msSideScale"`.
+  - Keep sample rate and block size sane; higher SR costs more.
+- Increase tolerance:
+  - Raise the hardware/IO buffer size in your audio device settings (e.g., 256 → 512 frames).
+  - Avoid background CPU spikes (browsers, spotlight indexing, app nap).
+- Engine knobs:
+  - Event horizon is pre‑synthesized (multi‑loop) to avoid RT stalls; keep it that way.
+  - Flush denormals to zero; keep DSP branch‑light and SIMD‑friendly when possible.
+
+### Parallelism and threading guidance
+
+- Realtime: keep a single audio thread. Fanning out DSP to general worker threads inside the callback risks OS scheduling jitter and missed deadlines.
+- If you must parallelize realtime, use a dedicated audio workgroup and a lock‑free job system with preallocated buffers; pin threads. Measure carefully—overhead can outweigh gains on small graphs.
+- Offline: use `--offline-threads N` to leverage the parallel renderer when enabled.
+
+### Latency and preroll
+
+- Nodes can introduce algorithmic latency (e.g., lookahead). The graph’s preroll is computed and printed, and offline exports automatically include preroll so transients start fully formed.
+- Realtime latency is the sum of device IO + algorithmic latencies; reduce lookahead on live rigs if needed.
+
+### Troubleshooting checklist
+
+- Watch `--cpu-stats` over several minutes. If `xruns` grows or max % approaches the deadline:
+  - Reduce node complexity (bands, Q, lookahead; pick cheaper modes).
+  - Increase device buffer size.
+  - Prefer `stereoMode: "LR"` over `"MidSide"` for heavy patches.
+  - Switch to offline export for pristine results.
+
+### Quick recipes
+
+- Lighten spectral ducking:
+  - `"applyMode": "multiply"`, 2 bands, `q ≈ 0.8–1.0`, `lookaheadMs ≈ 3–4`.
+- Preserve width while ducking lows:
+  - `"stereoMode": "MidSide"`, `"msSideScale": 0.3–0.5`, bands centered at 60–120 Hz.
+
 ## Future
 
 - State model

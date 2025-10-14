@@ -27,6 +27,7 @@
 #include "offline/OfflineTimelineRenderer.hpp"
 #include "offline/TransportGenerator.hpp"
 #include "io/AudioFileWriter.hpp"
+#include "offline/OfflineProgress.hpp"
 #include "realtime/RealtimeRenderer.hpp"
 #include "realtime/RealtimeGraphRenderer.hpp"
 #include "core/Graph.hpp"
@@ -122,6 +123,8 @@ static void printUsage(const char* exe) {
                "  --bars N           Force N bars from transport (if present)\n"
                "  --loop-count N     Repeat transport sequence N times (default 1)\n"
                "  --tail-ms MS       Decay tail appended (default 250)\n"
+               "  --normalize        Normalize to peak target (default -1.0 dBFS unless changed)\n"
+               "  --peak-target dB   Peak target for normalization (e.g., -0.3)\n"
                "  --verbose          Print realtime loop diagnostics (loop counter and elapsed time)\n"
                "  --print-triggers   Print realtime event deliveries (set/ramps/triggers) at render-time\n"
                "  --dump-events      Print synthesized command events (time/bar/step) before playback/export\n"
@@ -132,6 +135,10 @@ static void printUsage(const char* exe) {
                "  --loop-seconds S   Repeat transport to reach at least S seconds (offline)\n"
                "  --random-seed N    Override JSON randomSeed for deterministic randomness (0 to skip)\n"
                "          [--validate path.json] [--list-nodes path.json] [--list-params kick|clap] [--list-node-types]\n"
+               "\nProgress (offline):\n"
+               "  --progress-ms N    Progress print interval in ms (0=disable)\n"
+               "  --no-progress      Disable progress prints\n"
+               "  --no-summary       Disable final speedup summary\n"
                "\n"
                "Examples:\n"
                "  %s                       # one-shot, defaults (real-time)\n"
@@ -646,6 +653,12 @@ int main(int argc, char** argv) {
       cpuStatsPerNode = true;
     } else if (std::strcmp(a, "--random-seed") == 0) {
       need(1); randomSeedOverride = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--progress-ms") == 0) {
+      need(1); gOfflineProgressMs = std::atoi(argv[++i]);
+    } else if (std::strcmp(a, "--no-progress") == 0) {
+      gOfflineProgressEnabled = false;
+    } else if (std::strcmp(a, "--no-summary") == 0) {
+      gOfflineSummaryEnabled = false;
     } else if (std::strcmp(a, "--print-triggers") == 0) {
       printTriggers = true;
     } else if (std::strcmp(a, "--dump-events") == 0) {
@@ -939,6 +952,16 @@ int main(int argc, char** argv) {
           }
         }
       }
+      if (cpuStats || cpuStatsPerNode) {
+        const auto s = graph.getCpuSummary();
+        std::fprintf(stderr, "CPU block avg=%.3fms max=%.3fms (avg=%.1f%% max=%.1f%%) xruns=%llu blocks=%llu\n",
+                     s.avgMs, s.maxMs, s.avgPercent, s.maxPercent,
+                     static_cast<unsigned long long>(s.overruns), static_cast<unsigned long long>(s.blocks));
+        if (cpuStatsPerNode) {
+          const auto per = graph.getPerNodeCpu();
+          for (const auto& n : per) std::fprintf(stderr, "  %s: avg=%.1fus max=%.1fus\n", n.id.c_str(), n.avgUs, n.maxUs);
+        }
+      }
     } catch (const std::exception& e) {
       std::fprintf(stderr, "Audio file write failed: %s\n", e.what());
       return 1;
@@ -980,6 +1003,7 @@ int main(int argc, char** argv) {
       // Provide port descriptors to graph (for future adapters)
       graph.setPortDescriptors(spec.nodes);
       if (metersPerNode) graph.enableStats(true);
+      if (cpuStats || cpuStatsPerNode) graph.enableCpuStats(true);
     } catch (const std::exception& e) {
       std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
       return 1;
@@ -1148,13 +1172,15 @@ int main(int argc, char** argv) {
     }
     // When --print-triggers is enabled, the render callback prints loop boundaries precisely.
     // Suppress the coarse main-thread loop print in that case to avoid late/duplicate messages.
-    if (verbose && rtLoopLen > 0 && !printTriggers) {
+    if (rtLoopLen > 0 && !printTriggers) {
       const uint64_t frames = static_cast<uint64_t>(rt.sampleCounter());
       const uint64_t loopIdx = frames / rtLoopLen;
       if (loopIdx > lastPrintedLoop) {
-        const double seconds = static_cast<double>(frames) / rt.sampleRate();
-        std::fprintf(stderr, "Loop %llu at %s (%.3fs)\n",
-                     static_cast<unsigned long long>(loopIdx), formatDuration(seconds).c_str(), seconds);
+        if (verbose) {
+          const double seconds = static_cast<double>(frames) / rt.sampleRate();
+          std::fprintf(stderr, "Loop %llu at %s (%.3fs)\n",
+                       static_cast<unsigned long long>(loopIdx), formatDuration(seconds).c_str(), seconds);
+        }
         lastPrintedLoop = loopIdx;
         // Print estimated graph preroll (latency) once at first loop boundary
         if (loopIdx == 1 && !graphPath.empty()) {

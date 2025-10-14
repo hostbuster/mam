@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <string>
 #include "../core/Graph.hpp"
+#include "OfflineProgress.hpp"
 #include "../core/GraphConfig.hpp"
 #include "../core/Command.hpp"
 
@@ -24,6 +25,8 @@ inline std::vector<float> renderGraphWithCommands(Graph& graph,
   std::sort(commands.begin(), commands.end(), [](const auto& a, const auto& b){ return a.sampleTime < b.sampleTime; });
 
   const uint32_t block = 1024;
+  const auto tStart = std::chrono::steady_clock::now();
+  uint64_t processed = 0; (void)processed;
   size_t cmdIndex = 0;
   for (uint64_t f = 0; f < frames; f += block) {
     const uint32_t thisBlock = static_cast<uint32_t>(std::min<uint64_t>(block, frames - f));
@@ -80,7 +83,21 @@ inline std::vector<float> renderGraphWithCommands(Graph& graph,
 
     // Advance cmdIndex beyond this block
     while (cmdIndex < commands.size() && commands[cmdIndex].sampleTime < cutoff) ++cmdIndex;
+    processed += block;
+    if (gOfflineProgressEnabled && gOfflineProgressMs > 0) {
+      static auto last = tStart; const auto now = std::chrono::steady_clock::now();
+      const auto msSince = std::chrono::duration_cast<std::chrono::milliseconds>(now - last).count();
+      if (msSince >= gOfflineProgressMs) {
+        const double frac = static_cast<double>(std::min<uint64_t>(f + block, frames)) / static_cast<double>(frames);
+        std::fprintf(stderr, "[offline-cmd] %3.0f%%\r", frac * 100.0);
+        last = now;
+      }
+    }
   }
+  const auto tEnd = std::chrono::steady_clock::now();
+  const double sec = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(tEnd - tStart).count()) / 1e9;
+  const double rtSec = static_cast<double>(frames) / static_cast<double>(sampleRate);
+  if (gOfflineSummaryEnabled && rtSec > 0.0) std::fprintf(stderr, "[offline-cmd] done in %.3fs (speedup %.1fx)    \n", sec, rtSec / sec);
 
   return out;
 }
