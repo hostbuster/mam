@@ -176,6 +176,9 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
       s->scHpfHz = static_cast<float>(j.value("detectorHpfHz", 0.0));
       const std::string mode = j.value("applyMode", "multiply");
       s->applyMode = (mode == "dynamicEq") ? SpectralDuckerNode::ApplyMode::DynamicEq : SpectralDuckerNode::ApplyMode::Multiply;
+      const std::string sm = j.value("stereoMode", "LR");
+      s->stereoMode = (sm == "MidSide" || sm == "midSide") ? SpectralDuckerNode::StereoMode::MidSide : SpectralDuckerNode::StereoMode::LR;
+      s->msSideScale = static_cast<float>(j.value("msSideScale", 0.5));
       if (j.contains("bands")) {
         s->bands.clear();
         for (const auto& b : j.at("bands")) {
@@ -183,6 +186,10 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
           B.centerHz = static_cast<float>(b.value("centerHz", 100.0));
           B.q = static_cast<float>(b.value("q", 1.0));
           B.depthDb = static_cast<float>(b.value("depthDb", -6.0));
+          B.thresholdDb = static_cast<float>(b.value("thresholdDb", -18.0));
+          B.ratio = static_cast<float>(b.value("ratio", 2.0));
+          B.kneeDb = static_cast<float>(b.value("kneeDb", 6.0));
+          B.holdMs = static_cast<float>(b.value("holdMs", 0.0));
           s->bands.push_back(B);
         }
       }

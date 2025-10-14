@@ -215,6 +215,9 @@ Node type: `spectral_ducker`
   - `mix` (0..1): dry/wet mix (0 = dry passthrough, 1 = fully ducked)
   - `applyMode` ("multiply" | "dynamicEq"): apply full-band gain or per-band peaking filters on the main signal
   - `detectorHpfHz` (float, Hz): high-pass the sidechain before detection to ignore sub‑bass rumble
+- `stereoMode` ("LR" | "MidSide"): apply ducking in standard L/R or Mid/Side domain
+- `msSideScale` (0..1): when in Mid/Side, how much ducking to apply to Sides relative to Mid (0 = none, 1 = equal)
+- Band extras: `thresholdDb`, `ratio`, `kneeDb`, `holdMs` per band
   - `bands`: array of bands
     - `centerHz` (float): band center frequency
     - `q` (float): quality factor (bandwidth)
@@ -299,6 +302,31 @@ Notes and limitations
 - Lookahead adds latency equal to `lookaheadMs` (reported via `latencySamples()`); plan preroll accordingly for offline exports.
 - Band parameters are static from JSON; real‑time parameter locks are not exposed yet for this node type.
 - Engine‑level channel adaptation rules apply identically as with the standard compressor.
+
+Mid/Side example
+
+```json
+{
+  "id": "specduck",
+  "type": "spectral_ducker",
+  "params": {
+    "stereoMode": "MidSide",
+    "msSideScale": 0.4,
+    "lookaheadMs": 6.0,
+    "attackMs": 4.0,
+    "releaseMs": 180.0,
+    "mix": 1.0,
+    "bands": [
+      { "centerHz": 60,  "q": 1.00, "depthDb": -9.0,  "thresholdDb": -20.0, "ratio": 2.0, "kneeDb": 6.0, "holdMs": 20 },
+      { "centerHz": 120, "q": 1.00, "depthDb": -6.0,  "thresholdDb": -18.0, "ratio": 2.0, "kneeDb": 6.0, "holdMs": 10 },
+      { "centerHz": 250, "q": 0.80, "depthDb": -3.0,  "thresholdDb": -16.0, "ratio": 1.5, "kneeDb": 4.0, "holdMs": 0 }
+    ]
+  },
+  "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ], "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] }
+}
+```
+
+See `examples/acid303_sidechain_spectral_midSide.json` for a full patch.
 
 Upgrade path (planned)
 

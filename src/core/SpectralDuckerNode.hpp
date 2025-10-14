@@ -10,13 +10,24 @@
 class SpectralDuckerNode : public CompressorNode {
 public:
   enum class ApplyMode { Multiply, DynamicEq };
-  struct Band { float centerHz = 100.0f; float q = 1.0f; float depthDb = -6.0f; };
+  enum class StereoMode { LR, MidSide };
+  struct Band {
+    float centerHz = 100.0f;
+    float q = 1.0f;
+    float depthDb = -6.0f;    // max attenuation
+    float thresholdDb = -18.0f; // detector threshold (per-band)
+    float ratio = 2.0f;       // >=1
+    float kneeDb = 6.0f;      // soft knee width
+    float holdMs = 0.0f;      // hold time after GR starts
+  };
 
   // Parameters
   float lookaheadMs = 5.0f; // reserved for future use
   float mix = 1.0f;         // 0..1
   float scHpfHz = 0.0f;     // detector high-pass
   ApplyMode applyMode = ApplyMode::Multiply;
+  StereoMode stereoMode = StereoMode::LR;
+  float msSideScale = 0.5f; // proportion of ducking applied to Side when in MidSide mode
   std::vector<Band> bands{{60.0f,1.0f,-9.0f},{120.0f,1.0f,-6.0f},{250.0f,0.8f,-3.0f}};
 
   const char* name() const override { return "spectral_ducker"; }
@@ -38,6 +49,8 @@ public:
     writeIndexFrames_ = 0;
     scPrevX_ = 0.0f; scPrevY_ = 0.0f;
     for (auto& perBand : mainStates_) for (auto& st : perBand) st = BiquadState{};
+    std::fill(lastBandGain_.begin(), lastBandGain_.end(), 1.0f);
+    std::fill(holdRemain_.begin(), holdRemain_.end(), 0u);
   }
 
   void applySidechain(ProcessContext ctx, float* mainInterleaved, const float* scInterleaved, uint32_t channels) override {
@@ -60,28 +73,56 @@ public:
         scPrevX_ = x; scPrevY_ = y; scMono_[i] = y;
       }
     }
-    // For each band: filter detector -> envelope -> gain curve
+    // For each band: filter detector -> envelope -> per-band gain via threshold/ratio/knee/hold; combine via min
     if (filters_.size() != bands.size()) setupBands();
     if (envs_.size() != bands.size()) envs_.assign(bands.size(), 0.0f);
     if (states_.size() != bands.size()) states_.assign(bands.size(), BiquadState{});
+    if (lastBandGain_.size() != bands.size()) lastBandGain_.assign(bands.size(), 1.0f);
+    if (holdRemain_.size() != bands.size()) holdRemain_.assign(bands.size(), 0u);
 
     gains_.assign(frames, 1.0f);
     for (size_t bi = 0; bi < bands.size(); ++bi) {
-      const auto& b = bands[bi];
-      const float depthLin = std::pow(10.0f, b.depthDb / 20.0f); // < 1.0
+      const Band& b = bands[bi];
+      const float depthLin = std::pow(10.0f, b.depthDb / 20.0f);
       const Biquad& q = filters_[bi];
       BiquadState& st = states_[bi];
       float env = envs_[bi];
+      uint32_t hold = holdRemain_[bi];
       for (uint32_t i = 0; i < frames; ++i) {
-        float x = scMono_[i];
-        float y = q.process(x, st);
-        float rect = std::fabs(y);
+        const float rect = std::fabs(q.process(scMono_[i], st));
         const float coef = (rect > env) ? attackCoef_ : releaseCoef_;
         env = rect + coef * (env - rect);
-        const float k = (env >= 1e-3f) ? depthLin + (1.0f - depthLin) * (1.0f - std::min(env, 1.0f)) : 1.0f;
-        gains_[i] = std::min(gains_[i], k);
+        float g = 1.0f;
+        // Convert to dB for static curve
+        const float envDb = (env > 1e-8f) ? 20.0f * std::log10(env) : -80.0f;
+        const float knee = std::max(0.0f, b.kneeDb);
+        const float thr = b.thresholdDb;
+        const float over = envDb - thr;
+        if (hold > 0) {
+          g = lastBandGain_[bi];
+          hold--;
+        } else if (over > -0.5f * knee) {
+          float effRatio = b.ratio;
+          if (knee > 0.0f) {
+            const float t = std::clamp((over + 0.5f * knee) / knee, 0.0f, 1.0f);
+            effRatio = 1.0f + (b.ratio - 1.0f) * t;
+          }
+          if (effRatio > 1.0f) {
+            const float grDb = -std::max(0.0f, over) * (1.0f - 1.0f / effRatio);
+            g = std::pow(10.0f, grDb / 20.0f);
+          }
+          // Hold if we engaged GR
+          if (g < 1.0f && b.holdMs > 0.0f) {
+            hold = holdSamplesPerBand_[bi];
+            lastBandGain_[bi] = g;
+          }
+        }
+        // Clamp by depth
+        g = std::max(depthLin, g);
+        gains_[i] = std::min(gains_[i], g);
       }
       envs_[bi] = env;
+      holdRemain_[bi] = hold;
     }
     // Apply per-sample band-combined gain to main signal (two modes)
     const float wet = std::clamp(mix, 0.0f, 1.0f);
@@ -91,12 +132,34 @@ public:
         const float g = gains_[i] * wet + dry;
         const uint32_t writeF = static_cast<uint32_t>(writeIndexFrames_ % capacityFrames_);
         const uint32_t readF  = (writeIndexFrames_ + capacityFrames_ - std::min(lookaheadSamples_, capacityFrames_ - 1)) % capacityFrames_;
-        for (uint32_t c = 0; c < channels; ++c) {
-          const size_t wi = static_cast<size_t>(writeF) * channels + c;
-          const size_t ri = static_cast<size_t>(readF) * channels + c;
-          delay_[wi] = mainInterleaved[static_cast<size_t>(i)*channels + c];
-          float x = delay_[ri];
-          mainInterleaved[static_cast<size_t>(i)*channels + c] = x * g;
+        if (channels == 2 && stereoMode == StereoMode::MidSide) {
+          const size_t wiL = static_cast<size_t>(writeF) * 2;
+          const size_t wiR = wiL + 1;
+          const size_t riL = static_cast<size_t>(readF) * 2;
+          const size_t riR = riL + 1;
+          // write
+          delay_[wiL] = mainInterleaved[static_cast<size_t>(i)*2];
+          delay_[wiR] = mainInterleaved[static_cast<size_t>(i)*2 + 1];
+          // read delayed
+          const float xL = delay_[riL];
+          const float xR = delay_[riR];
+          float M = 0.5f * (xL + xR);
+          float S = 0.5f * (xL - xR);
+          const float gMid = g;
+          const float gSide = 1.0f - (1.0f - g) * std::clamp(msSideScale, 0.0f, 1.0f);
+          M *= gMid; S *= gSide;
+          const float yL = M + S;
+          const float yR = M - S;
+          mainInterleaved[static_cast<size_t>(i)*2]     = yL;
+          mainInterleaved[static_cast<size_t>(i)*2 + 1] = yR;
+        } else {
+          for (uint32_t c = 0; c < channels; ++c) {
+            const size_t wi = static_cast<size_t>(writeF) * channels + c;
+            const size_t ri = static_cast<size_t>(readF) * channels + c;
+            delay_[wi] = mainInterleaved[static_cast<size_t>(i)*channels + c];
+            float x = delay_[ri];
+            mainInterleaved[static_cast<size_t>(i)*channels + c] = x * g;
+          }
         }
         writeIndexFrames_++;
       }
@@ -116,7 +179,7 @@ public:
             auto& st = mainStates_[bi][c];
             const float bp = q.process(x, st);
             const float depthLin = std::pow(10.0f, bands[bi].depthDb / 20.0f);
-            const float gBand = (gains_[i] <= 1.0f) ? std::max(depthLin, gains_[i]) : 1.0f; // clamp
+            const float gBand = (gains_[i] <= 1.0f) ? std::max(depthLin, gains_[i]) : 1.0f; // approximate per-band
             adj += (gBand - 1.0f) * bp;
           }
           const float y = x + adj;
@@ -159,6 +222,13 @@ private:
     for (const auto& b : bands) filters_.push_back(designBandpass(static_cast<float>(sampleRate_), b.centerHz, std::max(0.1f, b.q)));
     states_.assign(bands.size(), BiquadState{});
     envs_.assign(bands.size(), 0.0f);
+    lastBandGain_.assign(bands.size(), 1.0f);
+    holdRemain_.assign(bands.size(), 0u);
+    holdSamplesPerBand_.assign(bands.size(), 0u);
+    for (size_t i = 0; i < bands.size(); ++i) {
+      const float ms = std::max(0.0f, bands[i].holdMs);
+      holdSamplesPerBand_[i] = static_cast<uint32_t>(std::floor((ms / 1000.0f) * sampleRate_ + 0.5));
+    }
   }
 
   void ensureDelayCapacity(uint32_t channels) {
@@ -197,6 +267,10 @@ private:
   // Detector HPF state
   float scPrevX_ = 0.0f, scPrevY_ = 0.0f;
   float scHpfAlpha_ = 0.0f;
+  // Per-band hold and last gain
+  std::vector<float> lastBandGain_{};
+  std::vector<uint32_t> holdRemain_{};
+  std::vector<uint32_t> holdSamplesPerBand_{};
 };
 
 inline float SpectralDuckerNode::Biquad::process(float x, SpectralDuckerNode::BiquadState& s) const {
