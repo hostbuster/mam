@@ -34,6 +34,9 @@ add_library(mam_core STATIC
     src/core/WiretapNode.hpp
     src/core/SchemaValidate.hpp
     src/core/SchemaValidate.cpp
+    src/session/SessionSpec.hpp
+    src/session/SessionRuntime.hpp
+    src/realtime/RealtimeSessionRenderer.hpp
 )
 
 if (MAM_USE_JSON_SCHEMA)

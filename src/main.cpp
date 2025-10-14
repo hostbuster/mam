@@ -24,12 +24,16 @@
 #include "offline/OfflineRenderer.hpp"
 #include "offline/OfflineGraphRenderer.hpp"
 #include "offline/OfflineParallelGraphRenderer.hpp"
+#include "session/SessionSpec.hpp"
+#include "session/SessionRuntime.hpp"
 #include "offline/OfflineTimelineRenderer.hpp"
 #include "offline/TransportGenerator.hpp"
 #include "io/AudioFileWriter.hpp"
 #include "offline/OfflineProgress.hpp"
 #include "realtime/RealtimeRenderer.hpp"
 #include "realtime/RealtimeGraphRenderer.hpp"
+#include "realtime/RealtimeSessionRenderer.hpp"
+#include <fstream>
 #include "core/Graph.hpp"
 #include "core/GraphConfig.hpp"
 #include "core/NodeFactory.hpp"
@@ -132,6 +136,8 @@ static void printUsage(const char* exe) {
                "  --cpu-stats        Print block CPU avg/max and xrun count at end\n"
                "  --cpu-stats-per-node  Print per-node avg/max us at end\n"
                "  --rt-debug-feed   Debug realtime feeder (queue pushes, offsets)\n"
+               "  --rt-debug-session Debug realtime session (initial/feeder enqueues)\n"
+               "  --session path.json  Run a multi-rack session (offline render for now)\n"
                "  --loop-minutes M   Repeat transport to reach at least M minutes (offline)\n"
                "  --loop-seconds S   Repeat transport to reach at least S seconds (offline)\n"
                "  --random-seed N    Override JSON randomSeed for deterministic randomness (0 to skip)\n"
@@ -544,6 +550,7 @@ int main(int argc, char** argv) {
   FileFormat outFormat = FileFormat::Wav;
   BitDepth outDepth = BitDepth::Float32;
   std::string graphPath;
+  std::string sessionPath;
   std::string validatePath;
   std::string listNodesPath;
   std::string listParamsType;
@@ -570,9 +577,15 @@ int main(int argc, char** argv) {
   bool cpuStats = false;
   bool cpuStatsPerNode = false;
   bool rtDebugFeed = false;
+  bool rtDebugSession = false;
   bool printTriggers = false;
   bool dumpEvents = false;
   bool schemaStrict = false;         // enforce JSON Schema on load
+  // Startup banner (binary identity)
+  {
+    static const char* kMamVersion = "0.0.1";
+    std::fprintf(stderr, "mam -- version %s starting up (built %s %s)\n", kMamVersion, __DATE__, __TIME__);
+  }
   for (int i = 1; i < argc; ++i) {
     const char* a = argv[i];
     auto need = [&](int remain) {
@@ -643,6 +656,8 @@ int main(int argc, char** argv) {
       verbose = true;
     } else if (std::strcmp(a, "--graph") == 0) {
       need(1); graphPath = argv[++i];
+    } else if (std::strcmp(a, "--session") == 0) {
+      need(1); sessionPath = argv[++i];
     } else if (std::strcmp(a, "--print-topo") == 0) {
       printTopo = true;
     } else if (std::strcmp(a, "--meters") == 0) {
@@ -655,6 +670,8 @@ int main(int argc, char** argv) {
       cpuStatsPerNode = true;
     } else if (std::strcmp(a, "--rt-debug-feed") == 0) {
       rtDebugFeed = true;
+    } else if (std::strcmp(a, "--rt-debug-session") == 0) {
+      rtDebugSession = true;
     } else if (std::strcmp(a, "--random-seed") == 0) {
       need(1); randomSeedOverride = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--progress-ms") == 0) {
@@ -751,6 +768,35 @@ int main(int argc, char** argv) {
     const uint32_t channels = 2;
     const uint32_t sr = static_cast<uint32_t>(offlineSr + 0.5);
     uint64_t totalFrames = 0;
+
+    // Session offline path
+    if (!sessionPath.empty()) {
+      try {
+        SessionSpec sess = loadSessionSpecFromJsonFile(sessionPath);
+        if (offlineSr > 0.0) sess.sampleRate = sr;
+        SessionRuntime runtime; runtime.loadFromSpec(sess);
+        totalFrames = runtime.planTotalFrames(tailMs);
+        if (overrideDurationSec >= 0.0) totalFrames = static_cast<uint64_t>(overrideDurationSec * static_cast<double>(sr) + 0.5);
+        // Enable per-rack meters if requested
+        std::vector<SessionRuntime::RackStats> rstats;
+        runtime.setPerRackMeters(printMeters);
+        runtime.setPerRackCpu(cpuStats || cpuStatsPerNode);
+        auto interleaved = runtime.renderOffline(totalFrames, printMeters ? &rstats : nullptr);
+        AudioFileSpec spec; spec.format = outFormat; spec.bitDepth = pcm16 ? BitDepth::Pcm16 : outDepth; spec.sampleRate = sr; spec.channels = channels;
+        writeWithExtAudioFile(wavPath, spec, interleaved);
+        const double seconds = static_cast<double>(totalFrames) / static_cast<double>(sr);
+        std::fprintf(stderr, "Exported session to %s (frames=%llu, %.3fs)\n", wavPath.c_str(), (unsigned long long)interleaved.size()/channels, seconds);
+        if (printMeters && !rstats.empty()) {
+          for (const auto& st : rstats) {
+            std::fprintf(stderr, "  Rack %s: peak=%.2f dBFS rms=%.2f dBFS\n", st.id.c_str(), st.peakDb, st.rmsDb);
+          }
+        }
+        return 0;
+      } catch (const std::exception& e) {
+        std::fprintf(stderr, "Session render failed: %s\n", e.what());
+        return 1;
+      }
+    }
 
     Graph graph;
     if (!graphPath.empty()) {
@@ -973,11 +1019,14 @@ int main(int argc, char** argv) {
     return 0;
   }
 
-  // Realtime renderer path via graph
+  // Realtime renderer path via session OR graph
   Graph graph;
   std::thread transportFeeder;
   uint64_t rtLoopLen = 0; // frames
-  if (!graphPath.empty()) {
+  if (!sessionPath.empty()) {
+    // Defer: the session realtime branch is handled below in this control flow.
+  } else if (!graphPath.empty()) {
+    std::fprintf(stderr, "[rt-graph] starting: path=%s\n", graphPath.c_str());
     try {
       if (schemaStrict) {
         std::string diag;
@@ -1114,7 +1163,167 @@ int main(int argc, char** argv) {
       // For realtime with feeder, enqueue exactly one full loop now; feeder extends horizon later
       if (startFeeder) {
         realtimeCmds = baseCmds; // single loop
-      } else {
+  } else if (!sessionPath.empty()) {
+    // Early file existence check for better UX
+    {
+      std::ifstream sf(sessionPath);
+      if (!sf.good()) { std::fprintf(stderr, "Session file not found: %s\n", sessionPath.c_str()); return 1; }
+    }
+    std::fprintf(stderr, "[rt-session] starting: path=%s\n", sessionPath.c_str());
+    // Realtime session: build graphs per rack and unified command feeder
+    try {
+      SessionSpec sess = loadSessionSpecFromJsonFile(sessionPath);
+      std::vector<std::unique_ptr<Graph>> graphsOwned;
+      std::vector<Graph*> graphsPtrs;
+      struct RackRT { std::string rackId; std::vector<GraphSpec::CommandSpec> baseCmds; uint64_t loopLen=0; };
+      std::vector<RackRT> rackRTs;
+
+      const uint32_t sessionSrU32 = static_cast<uint32_t>((offlineSr > 0.0 ? offlineSr : 48000.0) + 0.5);
+      std::fprintf(stderr, "[rt-session] racks=%zu sr=%u\n", sess.racks.size(), sessionSrU32);
+      // Build graphs with rack-prefixed node ids; build base commands per rack
+      for (const auto& rr : sess.racks) {
+        GraphSpec gs = loadGraphSpecFromJsonFile(rr.path);
+        auto g = std::make_unique<Graph>();
+        // Add nodes with prefixed ids
+        for (const auto& ns : gs.nodes) {
+          auto node = createNodeFromSpec(ns);
+          if (node) {
+            const std::string nid = rr.id + ":" + ns.id;
+            g->addNode(nid, std::move(node));
+          }
+        }
+        // Mixer with prefixed channels
+        if (gs.hasMixer) {
+          std::vector<MixerChannel> chans;
+          for (const auto& inp : gs.mixer.inputs) {
+            MixerChannel mc; mc.id = rr.id + ":" + inp.id; mc.gain = inp.gainPercent * (1.0f/100.0f);
+            chans.push_back(mc);
+          }
+          const float master = gs.mixer.masterPercent * (1.0f/100.0f);
+          g->setMixer(std::make_unique<MixerNode>(std::move(chans), master, gs.mixer.softClip));
+        }
+        // Connections with prefix
+        if (!gs.connections.empty()) {
+          std::vector<GraphSpec::Connection> conns = gs.connections;
+          for (auto& c : conns) { c.from = rr.id + ":" + c.from; c.to = rr.id + ":" + c.to; }
+          g->setConnections(conns);
+        }
+        graphsPtrs.push_back(g.get());
+        graphsOwned.push_back(std::move(g));
+
+        // Build base commands (transport + explicit) with prefixed nodeIds and overrides
+        std::vector<GraphSpec::CommandSpec> cmds = gs.commands;
+        if (gs.hasTransport) {
+          // For realtime, generate exactly one transport loop chunk. Replication is handled by the feeder.
+          GraphSpec::Transport tgen = gs.transport;
+          uint32_t baseBars = (gs.transport.lengthBars > 0) ? gs.transport.lengthBars : 1u;
+          if (rr.bars > 0) baseBars = rr.bars;
+          tgen.lengthBars = baseBars;
+          auto gen = generateCommandsFromTransport(tgen, sessionSrU32);
+          cmds.insert(cmds.end(), gen.begin(), gen.end());
+        }
+        // Resolve named params and prefix nodeIds
+        std::unordered_map<std::string, std::string> nodeIdToType;
+        for (const auto& ns : gs.nodes) nodeIdToType.emplace(ns.id, ns.type);
+        auto mapParam = [](const std::string& type, const std::string& name) -> uint16_t {
+          if (type == std::string("kick")) return resolveParamIdByName(kKickParamMap, name);
+          if (type == std::string("clap")) return resolveParamIdByName(kClapParamMap, name);
+          if (type == std::string("tb303_ext")) return resolveParamIdByName(kTb303ParamMap, name);
+          if (type == std::string("mam_chip")) return resolveParamIdByName(kMamChipParamMap, name);
+          return 0;
+        };
+        for (auto& c : cmds) {
+          c.nodeId = rr.id + ":" + c.nodeId;
+          if (c.paramId == 0 && !c.paramName.empty()) {
+            auto it = nodeIdToType.find(c.nodeId.substr(rr.id.size()+1));
+            const std::string nodeType = (it != nodeIdToType.end()) ? it->second : std::string();
+            c.paramId = mapParam(nodeType, c.paramName);
+          }
+        }
+        // Compute loopLen from transport
+        uint64_t loopLen2 = 0;
+        if (gs.hasTransport) {
+          const double bpm = (gs.transport.bpm > 0.0) ? gs.transport.bpm : 120.0;
+          const double secPerBar = 4.0 * (60.0 / bpm);
+          const uint64_t framesPerBar = static_cast<uint64_t>(secPerBar * sessionSrU32 + 0.5);
+          const uint32_t bars = (gs.transport.lengthBars > 0) ? gs.transport.lengthBars : 1u;
+          loopLen2 = framesPerBar * static_cast<uint64_t>(bars);
+        }
+        rackRTs.push_back(RackRT{rr.id, cmds, loopLen2});
+        std::fprintf(stderr, "[rt-session] rack=%s cmds=%zu loopLen=%llu\n", rr.id.c_str(), cmds.size(), (unsigned long long)loopLen2);
+        for (size_t i = 0; i < std::min<size_t>(cmds.size(), 6); ++i) {
+          const auto& c = cmds[i];
+          std::fprintf(stderr, "  cmd[%zu] t=%llu type=%s node=%s pid=%u val=%.3f\n", i, (unsigned long long)c.sampleTime,
+                       c.type.c_str(), c.nodeId.c_str(), c.paramId, (double)c.value);
+        }
+      }
+      if (rackRTs.empty()) { std::fprintf(stderr, "[rt-session] error: no racks\n"); return 1; }
+      size_t totalCmds = 0; for (const auto& r : rackRTs) totalCmds += r.baseCmds.size();
+      if (totalCmds == 0) { std::fprintf(stderr, "[rt-session] error: synthesized zero commands across racks\n"); }
+
+      // Start realtime session renderer
+      RealtimeSessionRenderer srt;
+      srt.setCommandQueue(&cmdQueue);
+      srt.setDiagnostics(printTriggers);
+      // Build racks vector with per-rack gain (from session routes we still route to buses; use 1.0 here)
+      std::vector<RealtimeSessionRenderer::Rack> rracks;
+      rracks.reserve(graphsOwned.size());
+      for (size_t i = 0; i < graphsOwned.size(); ++i) {
+        rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, 1.0f});
+      }
+      srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
+
+      // Initial horizon: push one loop per rack (prefixed ids)
+      for (const auto& rrt : rackRTs) {
+        size_t pushed = 0;
+        for (const auto& c : rrt.baseCmds) {
+          Command cmd{}; cmd.sampleTime = c.sampleTime; cmd.nodeId = internNodeId(c.nodeId); if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger; else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam; else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs; (void)cmdQueue.push(cmd);
+          ++pushed;
+        }
+        if (rtDebugSession) std::fprintf(stderr, "[rt-session] init enqueued rack=%s cmds=%zu\n", rrt.rackId.c_str(), pushed);
+      }
+
+      // Feeder: extend horizon per rack
+      std::thread sessionFeeder;
+      sessionFeeder = std::thread([&cmdQueue, &rackRTs, &srt, rtDebugSession]() mutable {
+        const uint64_t desiredAhead = static_cast<uint64_t>(5.0 * srt.sampleRate());
+        std::vector<uint64_t> nextOffset(rackRTs.size(), 0ull);
+        for (size_t i = 0; i < rackRTs.size(); ++i) nextOffset[i] = rackRTs[i].loopLen;
+        while (gRunning.load()) {
+          const uint64_t now = static_cast<uint64_t>(srt.sampleCounter());
+          for (size_t i = 0; i < rackRTs.size(); ++i) {
+            if (rackRTs[i].loopLen == 0) continue;
+            if (nextOffset[i] <= now + desiredAhead) {
+              size_t pushed = 0;
+              for (auto c : rackRTs[i].baseCmds) {
+                Command cmd{}; cmd.sampleTime = c.sampleTime + nextOffset[i]; cmd.nodeId = internNodeId(c.nodeId); if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger; else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam; else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
+                while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                ++pushed;
+                if (!gRunning.load()) break;
+              }
+              if (rtDebugSession) std::fprintf(stderr, "[rt-session] extend rack=%s offset=%llu pushed=%zu now=%llu\n", rackRTs[i].rackId.c_str(), (unsigned long long)nextOffset[i], pushed, (unsigned long long)now);
+              nextOffset[i] += rackRTs[i].loopLen;
+            }
+          }
+          std::this_thread::sleep_for(std::chrono::milliseconds(20));
+        }
+      });
+
+      // Main loop waits for Enter/Ctrl-C
+      while (gRunning.load()) {
+        if (isStdinReady()) {
+          char buf[4]; (void)read(STDIN_FILENO, buf, sizeof(buf)); gRunning.store(false); break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      }
+      if (sessionFeeder.joinable()) sessionFeeder.join();
+      srt.stop();
+      return 0;
+    } catch (const std::exception& e) {
+      std::fprintf(stderr, "Realtime session failed: %s\n", e.what());
+      return 1;
+    }
+  } else {
         if (baseSpan >= horizonFrames) {
           realtimeCmds = baseCmds;
         } else {

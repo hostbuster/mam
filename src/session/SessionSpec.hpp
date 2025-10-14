@@ -1,0 +1,88 @@
+#pragma once
+
+#include <string>
+#include <vector>
+#include <cstdint>
+#include <stdexcept>
+#include <fstream>
+#include <sstream>
+#include "../core/GraphConfig.hpp"
+#include "../../third_party/nlohmann/json.hpp"
+
+struct SessionSpec {
+  struct RackRef {
+    std::string id;
+    std::string path;
+    int64_t startOffsetFrames = 0;
+    float gain = 1.0f;
+    // Optional transport overrides per rack
+    uint32_t bars = 0;           // force bars (0 = use graph)
+    uint32_t loopCount = 0;      // repeat bars N times
+    double loopMinutes = 0.0;    // or target minutes
+    double loopSeconds = 0.0;    // or target seconds
+    double tailMs = 0.0;         // extra tail for this rack
+  };
+  struct InsertRef { std::string type; std::string id; nlohmann::json params; std::vector<std::pair<std::string,std::string>> sidechains; };
+  struct BusRef { std::string id; uint32_t channels = 2; std::vector<InsertRef> inserts; };
+  struct RouteRef { std::string from; std::string to; float gain = 1.0f; };
+  uint32_t sampleRate = 48000;
+  uint32_t channels = 2;
+  std::vector<RackRef> racks;
+  std::vector<BusRef> buses;
+  std::vector<RouteRef> routes;
+};
+
+inline SessionSpec loadSessionSpecFromJsonFile(const std::string& path) {
+  std::ifstream f(path);
+  if (!f) throw std::runtime_error("Failed to open session file: " + path);
+  std::stringstream ss; ss << f.rdbuf();
+  auto j = nlohmann::json::parse(ss.str());
+  SessionSpec s;
+  if (j.contains("sampleRate")) s.sampleRate = j["sampleRate"].get<uint32_t>();
+  if (j.contains("channels")) s.channels = j["channels"].get<uint32_t>();
+  if (j.contains("racks")) {
+    for (const auto& r : j["racks"]) {
+      SessionSpec::RackRef rr;
+      rr.id = r.value("id", std::string());
+      rr.path = r.value("path", std::string());
+      rr.startOffsetFrames = r.value("startOffsetFrames", 0);
+      rr.gain = r.value("gain", 1.0f);
+      rr.bars = r.value("bars", 0u);
+      rr.loopCount = r.value("loopCount", 0u);
+      rr.loopMinutes = r.value("loopMinutes", 0.0);
+      rr.loopSeconds = r.value("loopSeconds", 0.0);
+      rr.tailMs = r.value("tailMs", 0.0);
+      if (rr.id.empty() || rr.path.empty()) throw std::runtime_error("Session rack requires id and path");
+      s.racks.push_back(rr);
+    }
+  }
+  if (j.contains("buses")) {
+    for (const auto& b : j["buses"]) {
+      SessionSpec::BusRef br; br.id = b.value("id", std::string()); br.channels = b.value("channels", 2u);
+      if (b.contains("inserts")) {
+        for (const auto& ins : b["inserts"]) {
+          SessionSpec::InsertRef ir; ir.type = ins.value("type", std::string()); ir.id = ins.value("id", std::string());
+          if (ins.contains("params")) ir.params = ins["params"]; if (ins.contains("sidechains")) {
+            for (const auto& sc : ins["sidechains"]) {
+              const std::string scId = sc.value("id", std::string()); const std::string from = sc.value("from", std::string());
+              ir.sidechains.emplace_back(scId, from);
+            }
+          }
+          br.inserts.push_back(std::move(ir));
+        }
+      }
+      if (br.id.empty()) throw std::runtime_error("Session bus requires id");
+      s.buses.push_back(std::move(br));
+    }
+  }
+  if (j.contains("routes")) {
+    for (const auto& r : j["routes"]) {
+      SessionSpec::RouteRef rr; rr.from = r.value("from", std::string()); rr.to = r.value("to", std::string()); rr.gain = r.value("gain", 1.0f);
+      if (rr.from.empty() || rr.to.empty()) throw std::runtime_error("Session route requires from and to");
+      s.routes.push_back(rr);
+    }
+  }
+  return s;
+}
+
+

@@ -61,7 +61,7 @@
 
   "transport": {
     "bpm": 128,
-    "lengthBars": 8,
+    "lengthBars": 32,
     "resolution": 16,
     "patterns": [
       {
