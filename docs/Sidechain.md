@@ -272,3 +272,11 @@ Notes and limitations
 - Lookahead adds latency equal to `lookaheadMs` (reported via `latencySamples()`); plan preroll accordingly for offline exports.
 - Band parameters are static from JSON; real‑time parameter locks are not exposed yet for this node type.
 - Engine‑level channel adaptation rules apply identically as with the standard compressor.
+
+Upgrade path (planned)
+
+- Dynamic EQ mode: apply per-band ducking using matching peaking filters on the main signal (more transparent than full-band multiply).
+- Detector shaping: sidechain HPF/tilt EQ to steer what triggers ducking.
+- Per-band controls: threshold/ratio/knee/hold/program-dependent release.
+- Stereo modes: LR vs Mid/Side ducking; duck lows in Mid more than Sides.
+- Quality presets: IIR multiband (realtime), linear-phase multiband (offline), STFT per-bin (offline, most precise).

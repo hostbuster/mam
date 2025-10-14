@@ -173,6 +173,9 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
       s->makeupDb = static_cast<float>(j.value("makeupDb", 0.0));
       s->lookaheadMs = static_cast<float>(j.value("lookaheadMs", 5.0));
       s->mix = static_cast<float>(j.value("mix", 1.0));
+      s->scHpfHz = static_cast<float>(j.value("detectorHpfHz", 0.0));
+      const std::string mode = j.value("applyMode", "multiply");
+      s->applyMode = (mode == "dynamicEq") ? SpectralDuckerNode::ApplyMode::DynamicEq : SpectralDuckerNode::ApplyMode::Multiply;
       if (j.contains("bands")) {
         s->bands.clear();
         for (const auto& b : j.at("bands")) {
