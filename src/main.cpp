@@ -131,6 +131,7 @@ static void printUsage(const char* exe) {
                "  --meters-per-node  Print per-node peak/RMS after run/export\n"
                "  --cpu-stats        Print block CPU avg/max and xrun count at end\n"
                "  --cpu-stats-per-node  Print per-node avg/max us at end\n"
+               "  --rt-debug-feed   Debug realtime feeder (queue pushes, offsets)\n"
                "  --loop-minutes M   Repeat transport to reach at least M minutes (offline)\n"
                "  --loop-seconds S   Repeat transport to reach at least S seconds (offline)\n"
                "  --random-seed N    Override JSON randomSeed for deterministic randomness (0 to skip)\n"
@@ -568,6 +569,7 @@ int main(int argc, char** argv) {
   bool metersPerNode = false;
   bool cpuStats = false;
   bool cpuStatsPerNode = false;
+  bool rtDebugFeed = false;
   bool printTriggers = false;
   bool dumpEvents = false;
   bool schemaStrict = false;         // enforce JSON Schema on load
@@ -651,6 +653,8 @@ int main(int argc, char** argv) {
       cpuStats = true;
     } else if (std::strcmp(a, "--cpu-stats-per-node") == 0) {
       cpuStatsPerNode = true;
+    } else if (std::strcmp(a, "--rt-debug-feed") == 0) {
+      rtDebugFeed = true;
     } else if (std::strcmp(a, "--random-seed") == 0) {
       need(1); randomSeedOverride = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--progress-ms") == 0) {
@@ -1013,7 +1017,8 @@ int main(int argc, char** argv) {
   }
   RealtimeGraphRenderer rt;
   SpscCommandQueue<2048> cmdQueue;
-  rt.setCommandQueue(&cmdQueue);
+    rt.setCommandQueue(&cmdQueue);
+    rt.setCmdQueueDebug(rtDebugFeed);
   // Try to infer transport resolution and bpm from graph for diagnostics; defaults: res=16, bpm=120
   uint32_t diagRes = 16;
   double diagBpm = 120.0;
@@ -1047,7 +1052,7 @@ int main(int argc, char** argv) {
         // Generate a multi-loop chunk in one shot to avoid boundary duplication/rounding artifacts
         GraphSpec::Transport chunk = spec.transport;
         const uint32_t baseBarsRT = (spec.transport.lengthBars > 0) ? spec.transport.lengthBars : 1u;
-        const uint32_t chunkLoops = 16u; // initial horizon chunk
+        const uint32_t chunkLoops = 1u; // single-loop; we'll replicate explicitly
         chunk.lengthBars = baseBarsRT * chunkLoops;
         auto gen = generateCommandsFromTransport(chunk, static_cast<uint32_t>(rt.sampleRate() + 0.5));
         baseCmds.insert(baseCmds.end(), gen.begin(), gen.end());
@@ -1060,6 +1065,7 @@ int main(int argc, char** argv) {
           if (type == std::string("kick")) return resolveParamIdByName(kKickParamMap, name);
           if (type == std::string("clap")) return resolveParamIdByName(kClapParamMap, name);
           if (type == std::string("tb303_ext")) return resolveParamIdByName(kTb303ParamMap, name);
+          if (type == std::string("mam_chip")) return resolveParamIdByName(kMamChipParamMap, name);
           return 0;
         };
         for (auto& c : baseCmds) {
@@ -1102,39 +1108,92 @@ int main(int argc, char** argv) {
       // Provide precise loop length to realtime diagnostics so Loop N prints at exact boundaries
       rt.setDiagLoop(rtLoopLen);
       std::vector<GraphSpec::CommandSpec> realtimeCmds;
+      const bool startFeeder = (spec.hasTransport && loopLen > 0);
       // Use baseCmds as-is if they already span the initial horizon; otherwise replicate to cover it
       uint64_t baseSpan = 0; for (const auto& c : baseCmds) if (c.sampleTime > baseSpan) baseSpan = c.sampleTime;
-      if (baseSpan >= horizonFrames) {
-        realtimeCmds = baseCmds;
+      // For realtime with feeder, enqueue exactly one full loop now; feeder extends horizon later
+      if (startFeeder) {
+        realtimeCmds = baseCmds; // single loop
       } else {
-        for (uint64_t offset = 0; offset < horizonFrames; offset += loopLen) {
-          for (auto c : baseCmds) { c.sampleTime += offset; realtimeCmds.push_back(c); }
+        if (baseSpan >= horizonFrames) {
+          realtimeCmds = baseCmds;
+        } else {
+          for (uint64_t offset = 0; offset < horizonFrames; offset += loopLen) {
+            for (auto c : baseCmds) { c.sampleTime += offset; realtimeCmds.push_back(c); }
+          }
         }
       }
-      for (const auto& c : realtimeCmds) {
-        Command cmd{};
-        cmd.sampleTime = c.sampleTime;
-        cmd.nodeId = internNodeId(c.nodeId);
-        if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger;
-        else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam;
-        else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp;
-        cmd.paramId = c.paramId;
-        cmd.value = c.value;
-        cmd.rampMs = c.rampMs;
-        (void)cmdQueue.push(cmd);
+      // Defensive stable sort to ensure deterministic same-sample ordering
+      std::stable_sort(realtimeCmds.begin(), realtimeCmds.end(), [](const auto& a, const auto& b){
+        if (a.sampleTime != b.sampleTime) return a.sampleTime < b.sampleTime;
+        if (a.nodeId != b.nodeId) return a.nodeId < b.nodeId;
+        if (a.type != b.type) return a.type < b.type;
+        if (a.paramId != b.paramId) return a.paramId < b.paramId;
+        return a.value < b.value;
+      });
+      // Trim only in non-feeder mode; with feeder we need the full first loop queued
+      if (!startFeeder) {
+        realtimeCmds.erase(std::remove_if(realtimeCmds.begin(), realtimeCmds.end(), [&](const auto& c){ return c.sampleTime >= horizonFrames; }), realtimeCmds.end());
+      }
+      // startFeeder already computed above
+      if (!startFeeder) {
+        for (const auto& c : realtimeCmds) {
+          Command cmd{};
+          cmd.sampleTime = c.sampleTime;
+          cmd.nodeId = internNodeId(c.nodeId);
+          if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger;
+          else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam;
+          else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp;
+          cmd.paramId = c.paramId;
+          cmd.value = c.value;
+          cmd.rampMs = c.rampMs;
+          while (gRunning.load() && !cmdQueue.push(cmd)) {
+            if (rtDebugFeed) {
+              std::fprintf(stderr, "[rt-feed] init queue full: size=%zu/%zu, cmd at %llu type=%u pid=%u\n",
+                cmdQueue.approxSizeProducer(), cmdQueue.capacity(),
+                static_cast<unsigned long long>(cmd.sampleTime),
+                (unsigned)cmd.type, (unsigned)cmd.paramId);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+          }
+          if (!gRunning.load()) break;
+        }
       }
 
       // Rolling feeder thread to extend horizon in realtime without flooding the queue
-      if (spec.hasTransport && loopLen > 0) {
-        uint64_t nextOffset = horizonFrames;
+      if (startFeeder) {
+        uint64_t nextOffset = loopLen; // after the first loop
         const uint64_t desiredAheadFrames = static_cast<uint64_t>(5.0 * rt.sampleRate()); // keep ~5s of commands ahead
-        transportFeeder = std::thread([&cmdQueue, baseCmds, loopLen, nextOffset, &rt, desiredAheadFrames]() mutable {
+        transportFeeder = std::thread([&cmdQueue, baseCmds, realtimeCmds, loopLen, nextOffset, &rt, desiredAheadFrames, rtDebugFeed]() mutable {
           uint64_t offset = nextOffset;
+          // Initial bulk push is done here to keep SPSC contract (single producer)
+          for (const auto& c : realtimeCmds) {
+            Command cmd{};
+            cmd.sampleTime = c.sampleTime;
+            cmd.nodeId = internNodeId(c.nodeId);
+            if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger;
+            else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam;
+            else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp;
+            cmd.paramId = c.paramId;
+            cmd.value = c.value;
+            cmd.rampMs = c.rampMs;
+            while (gRunning.load() && !cmdQueue.push(cmd)) {
+              if (rtDebugFeed) {
+                std::fprintf(stderr, "[rt-feed] init queue full: size=%zu/%zu, cmd at %llu type=%u pid=%u\n",
+                  cmdQueue.approxSizeProducer(), cmdQueue.capacity(),
+                  static_cast<unsigned long long>(cmd.sampleTime),
+                  (unsigned)cmd.type, (unsigned)cmd.paramId);
+              }
+              std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            }
+            if (!gRunning.load()) break;
+          }
           while (gRunning.load()) {
             const uint64_t framesNow = static_cast<uint64_t>(rt.sampleCounter());
-            // Current queued horizon end in frames is offset + loopLen
-            if ((offset + loopLen) <= framesNow + desiredAheadFrames) {
+            // Enqueue next loop when its start is within desiredAheadFrames from now
+            if (offset <= framesNow + desiredAheadFrames) {
               // Enqueue one additional loop span
+              size_t pushed = 0;
               for (auto c : baseCmds) {
                 Command cmd{};
                 cmd.sampleTime = c.sampleTime + offset;
@@ -1147,13 +1206,32 @@ int main(int argc, char** argv) {
                 cmd.rampMs = c.rampMs;
                 // Always push; if queue is saturated, retry briefly but allow shutdown to break out
                 while (gRunning.load() && !cmdQueue.push(cmd)) {
+                  if (rtDebugFeed) {
+                    std::fprintf(stderr, "[rt-feed] queue full: size=%zu/%zu at f=%llu, cmd at %llu type=%u pid=%u\n",
+                      cmdQueue.approxSizeProducer(), cmdQueue.capacity(),
+                      static_cast<unsigned long long>(framesNow), static_cast<unsigned long long>(cmd.sampleTime),
+                      (unsigned)cmd.type, (unsigned)cmd.paramId);
+                  }
                   std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 }
+                ++pushed;
                 if (!gRunning.load()) break; // allow clean shutdown without blocking on a full queue
               }
               if (!gRunning.load()) break;
+              if (rtDebugFeed) {
+                const uint64_t framesAfter = static_cast<uint64_t>(rt.sampleCounter());
+                std::fprintf(stderr, "[rt-feed] extended horizon offset=%llu (+%llu) now=%llu span=%llu pushed=%zu\n",
+                  static_cast<unsigned long long>(offset), static_cast<unsigned long long>(loopLen),
+                  static_cast<unsigned long long>(framesAfter), static_cast<unsigned long long>(loopLen), pushed);
+              }
               offset += loopLen;
             } else {
+              if (rtDebugFeed) {
+                const uint64_t need = (offset + loopLen);
+                std::fprintf(stderr, "[rt-feed] sleeping: now=%llu need<=%llu (ahead=%lld)\n",
+                  static_cast<unsigned long long>(framesNow), static_cast<unsigned long long>(need),
+                  static_cast<long long>((long long)need - (long long)framesNow));
+              }
               std::this_thread::sleep_for(std::chrono::milliseconds(50));
             }
           }

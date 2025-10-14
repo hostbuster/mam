@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "nodes": [
+    { "id": "lead",  "type": "mam_chip", "params": { "wave": "saw",   "note": 72, "gain": 0.95, "pan": -0.1, "attackMs": 8,  "decayMs": 140, "sustain": 0.65, "releaseMs": 180 } },
+    { "id": "arp",   "type": "mam_chip", "params": { "wave": "pulse", "note": 76, "gain": 0.85, "pan":  0.2, "pulseWidth": 0.25, "attackMs": 4,  "decayMs": 100, "sustain": 0.5,  "releaseMs": 120 } },
+    { "id": "bass",  "type": "mam_chip", "params": { "wave": "saw",   "note": 48, "gain": 0.9,  "pan":  0.0, "attackMs": 2,  "decayMs": 160, "sustain": 0.4,  "releaseMs": 120 } },
+    { "id": "noise", "type": "mam_chip", "params": { "wave": "pulse", "note": 60, "gain": 0.6,  "pan":  0.0, "noiseMix": 0.7,  "attackMs": 1,  "decayMs": 60,  "sustain": 0.0,  "releaseMs": 60 } },
+    { "id": "fx",    "type": "mam_chip", "params": { "wave": "tri",   "note": 84, "gain": 0.5,  "pan":  0.0, "attackMs": 10, "decayMs": 200, "sustain": 0.0,  "releaseMs": 400 } }
+  ],
+  "mixer": {
+    "masterPercent": 90,
+    "softClip": true,
+    "inputs": [
+      { "id": "lead",  "gainPercent": 100 },
+      { "id": "arp",   "gainPercent": 90  },
+      { "id": "bass",  "gainPercent": 100 },
+      { "id": "noise", "gainPercent": 55  },
+      { "id": "fx",    "gainPercent": 70  }
+    ]
+  },
+  "transport": {
+    "bpm": 128,
+    "lengthBars": 32,
+    "resolution": 16,
+    "patterns": [
+      
+      { "nodeId": "bass", "steps": "x...x...x...x...",
+        "locks": [
+          { "step": 0,    "param": "NOTE_SEMITONES", "value": 36 },
+          { "step": 4,    "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 8,    "param": "NOTE_SEMITONES", "value": 41 },
+          { "step": 12,   "param": "NOTE_SEMITONES", "value": 38 },
+          { "step": 32,   "param": "NOTE_SEMITONES", "value": 36 },
+          { "step": 36,   "param": "NOTE_SEMITONES", "value": 48 },
+          { "step": 40,   "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 44,   "param": "NOTE_SEMITONES", "value": 41 },
+          { "step": 64,   "param": "NOTE_SEMITONES", "value": 34 },
+          { "step": 68,   "param": "NOTE_SEMITONES", "value": 41 },
+          { "step": 72,   "param": "NOTE_SEMITONES", "value": 39 },
+          { "step": 76,   "param": "NOTE_SEMITONES", "value": 36 },
+          { "step": 96,   "param": "NOTE_SEMITONES", "value": 36 },
+          { "step": 100,  "param": "NOTE_SEMITONES", "value": 43 },
+          { "step": 104,  "param": "NOTE_SEMITONES", "value": 41 },
+          { "step": 108,  "param": "NOTE_SEMITONES", "value": 38 },
+          { "step": 128,  "param": "GAIN",           "value": 0.8 },
+          { "step": 192,  "param": "GAIN",           "value": 0.9 }
+        ]
+      },
+      
+      { "nodeId": "arp", "steps": "x.x.x.x.x.x.x.x.",
+        "locks": [
+          { "step": 0,   "param": "NOTE_SEMITONES", "value": 67 },
+          { "step": 1,   "param": "NOTE_SEMITONES", "value": 71 },
+          { "step": 2,   "param": "NOTE_SEMITONES", "value": 74 },
+          { "step": 3,   "param": "NOTE_SEMITONES", "value": 79 },
+          { "step": 4,   "param": "NOTE_SEMITONES", "value": 72 },
+          { "step": 5,   "param": "NOTE_SEMITONES", "value": 76 },
+          { "step": 6,   "param": "NOTE_SEMITONES", "value": 79 },
+          { "step": 7,   "param": "NOTE_SEMITONES", "value": 84 },
+          { "step": 16,  "param": "PULSE_WIDTH",    "value": 0.15 },
+          { "step": 24,  "param": "PULSE_WIDTH",    "value": 0.35 },
+          { "step": 32,  "param": "PULSE_WIDTH",    "value": 0.25 },
+          { "step": 40,  "param": "PULSE_WIDTH",    "value": 0.45 },
+          { "step": 48,  "param": "PULSE_WIDTH",    "value": 0.20 },
+          { "step": 56,  "param": "PULSE_WIDTH",    "value": 0.30 },
+          { "step": 64,  "param": "NOTE_SEMITONES", "value": 69 },
+          { "step": 65,  "param": "NOTE_SEMITONES", "value": 72 },
+          { "step": 66,  "param": "NOTE_SEMITONES", "value": 76 },
+          { "step": 67,  "param": "NOTE_SEMITONES", "value": 81 },
+          { "step": 80,  "param": "PULSE_WIDTH",    "value": 0.12 },
+          { "step": 88,  "param": "PULSE_WIDTH",    "value": 0.4 },
+          { "step": 112, "param": "PULSE_WIDTH",    "value": 0.25 }
+        ]
+      },
+      
+      { "nodeId": "lead", "steps": "x...x..x.x...x..",
+        "locks": [
+          { "step": 0,   "param": "NOTE_SEMITONES", "value": 72 },
+          { "step": 6,   "param": "NOTE_SEMITONES", "value": 74 },
+          { "step": 8,   "param": "NOTE_SEMITONES", "value": 76 },
+          { "step": 14,  "param": "NOTE_SEMITONES", "value": 79 },
+          { "step": 16,  "param": "NOTE_SEMITONES", "value": 84 },
+          { "step": 22,  "param": "NOTE_SEMITONES", "value": 83 },
+          { "step": 24,  "param": "NOTE_SEMITONES", "value": 81 },
+          { "step": 30,  "param": "NOTE_SEMITONES", "value": 79 },
+          { "step": 32,  "param": "NOTE_SEMITONES", "value": 76 },
+          { "step": 38,  "param": "NOTE_SEMITONES", "value": 74 },
+          { "step": 40,  "param": "NOTE_SEMITONES", "value": 72 },
+          { "step": 46,  "param": "NOTE_SEMITONES", "value": 71 },
+          { "step": 48,  "param": "NOTE_SEMITONES", "value": 69 },
+          { "step": 54,  "param": "NOTE_SEMITONES", "value": 67 },
+          { "step": 64,  "param": "PAN",            "value": -0.4 },
+          { "step": 80,  "param": "PAN",            "value":  0.4 },
+          { "step": 96,  "param": "PAN",            "value": -0.2 },
+          { "step": 112, "param": "PAN",            "value":  0.2 }
+        ]
+      },
+      
+      { "nodeId": "noise", "steps": "x..x..x..x..x..x",
+        "locks": [
+          { "step": 0,   "param": "NOISE_MIX",      "value": 0.5 },
+          { "step": 8,   "param": "NOISE_MIX",      "value": 0.2 },
+          { "step": 16,  "param": "NOISE_MIX",      "value": 0.6 },
+          { "step": 24,  "param": "NOISE_MIX",      "value": 0.3 },
+          { "step": 32,  "param": "NOISE_MIX",      "value": 0.7 },
+          { "step": 40,  "param": "NOISE_MIX",      "value": 0.4 },
+          { "step": 48,  "param": "NOISE_MIX",      "value": 0.5 },
+          { "step": 56,  "param": "NOISE_MIX",      "value": 0.2 },
+          { "step": 96,  "param": "NOISE_MIX",      "value": 0.8 },
+          { "step": 100, "param": "GAIN",           "value": 0.3 },
+          { "step": 104, "param": "GAIN",           "value": 0.6 },
+          { "step": 108, "param": "GAIN",           "value": 0.4 }
+        ]
+      },
+      
+      { "nodeId": "fx", "steps": "x...x...x...x...",
+        "locks": [
+          { "step": 0,   "param": "NOTE_SEMITONES", "value": 84 },
+          { "step": 16,  "param": "NOTE_SEMITONES", "value": 96 },
+          { "step": 32,  "param": "NOTE_SEMITONES", "value": 72 },
+          { "step": 48,  "param": "NOTE_SEMITONES", "value": 60 },
+          { "step": 0,   "param": "GAIN",           "value": 0.0 },
+          { "step": 8,   "param": "GAIN",           "value": 0.5 },
+          { "step": 24,  "param": "GAIN",           "value": 0.0 },
+          { "step": 56,  "param": "GAIN",           "value": 0.7 },
+          { "step": 64,  "param": "GAIN",           "value": 0.0 },
+          { "step": 120, "param": "GAIN",           "value": 0.6 }
+        ]
+      }
+    ]
+  },
+  "connections": [],
+  "commands": []
+}

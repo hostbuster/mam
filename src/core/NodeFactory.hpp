@@ -11,6 +11,7 @@
 #include "CompressorNode.hpp"
 #include "ReverbNode.hpp"
 #include "WiretapNode.hpp"
+#include "../instruments/mam_chip/MamChipFactory.hpp"
 #include "SpectralDuckerNode.hpp"
 #include "../instruments/tb303/Tb303ExtNode.hpp"
 #include <type_traits>
@@ -266,6 +267,9 @@ inline std::unique_ptr<Node> createNodeFromSpec(const NodeSpec& spec) {
       }
     }
     return node;
+  }
+  if (spec.type == "mam_chip") {
+    return makeMamChipFromParamsJson(spec.paramsJson);
   }
   // Unknown node type
   std::fprintf(stderr, "Warning: Unknown node type '%s' (id='%s')\n", spec.type.c_str(), spec.id.c_str());

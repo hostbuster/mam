@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "nodes": [
+    { "id": "chip1", "type": "mam_chip", "params": { "wave": "saw", "note": 60, "gain": 0.9, "pan": -0.1 } }
+  ],
+  "mixer": { "masterPercent": 90, "softClip": true, "inputs": [ { "id": "chip1", "gainPercent": 100 } ] },
+  "transport": { "bpm": 128, "lengthBars": 2, "resolution": 16,
+    "patterns": [ { "nodeId": "chip1", "steps": "x...x...x...x..." } ] },
+  "connections": [],
+  "commands": []
+}

@@ -32,6 +32,14 @@ public:
     return true;
   }
 
+  // Producer-side approximate size and capacity (for debugging/telemetry only)
+  size_t approxSizeProducer() const {
+    const size_t tail = tail_.load(std::memory_order_acquire);
+    const size_t head = head_;
+    return (head >= tail) ? (head - tail) : (Capacity - (tail - head));
+  }
+  constexpr size_t capacity() const { return Capacity - 1; }
+
   // Drain into out vector all commands with sampleTime < cutoff
   void drainUpTo(SampleTime cutoff, std::vector<Command>& out) {
     while (tail_.load(std::memory_order_relaxed) != head_) {

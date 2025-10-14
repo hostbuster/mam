@@ -21,6 +21,7 @@ public:
   ~RealtimeGraphRenderer() { stop(); }
 
   void setCommandQueue(SpscCommandQueue<2048>* q) { cmdQueue_ = q; }
+  void setCmdQueueDebug(bool enabled) { queueDiag_ = enabled; }
   void setDiagnostics(bool printTriggers, double bpmForBeats, uint32_t resolutionStepsPerBar) {
     printTriggers_ = printTriggers; diagBpm_ = bpmForBeats; diagResolution_ = (resolutionStepsPerBar == 0 ? 16u : resolutionStepsPerBar);
   }
@@ -124,6 +125,13 @@ private:
     if (self->cmdQueue_) {
       self->drained_.clear();
       self->cmdQueue_->drainUpTo(cutoff, self->drained_);
+      if (self->queueDiag_) {
+        std::fprintf(stderr, "[rt] drained %zu events up to %llu (block %llu..%llu)\n",
+          self->drained_.size(),
+          static_cast<unsigned long long>(cutoff),
+          static_cast<unsigned long long>(blockStartAbs),
+          static_cast<unsigned long long>(cutoff));
+      }
         // Sort events to stabilize segment splits and de-duplicate identical ones on the same sample
         std::sort(self->drained_.begin(), self->drained_.end(), [](const Command& a, const Command& b){
           if (a.sampleTime != b.sampleTime) return a.sampleTime < b.sampleTime;
@@ -217,6 +225,7 @@ private:
   uint32_t diagResolution_ = 16;
   bool transportEmitEnabled_ = false;
   uint64_t diagLoopFrames_ = 0;
+  bool queueDiag_ = false;
 
   void printEvent(const char* tag, const Command& c) const {
     const uint64_t st = c.sampleTime;

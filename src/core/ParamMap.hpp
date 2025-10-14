@@ -148,3 +148,22 @@ static constexpr ParamDef kTb303Params[] = {
 static constexpr ParamMap kTb303ParamMap{ "tb303_ext", kTb303Params, sizeof(kTb303Params)/sizeof(kTb303Params[0]) };
 
 
+// MAMIC (mam_chip) - initial musical API (single-voice scaffold)
+static constexpr ParamDef kMamChipParams[] = {
+  {1,  "WAVE",           "",   0.f,   2.f,   0.f,   "step"},   // 0=square,1=tri,2=saw
+  {2,  "NOTE_SEMITONES", "st",  0.f, 127.f, 60.f,   "step"},
+  {3,  "VELOCITY",       "",    0.f,   1.f,  1.0f,  "step"},
+  {4,  "PULSE_WIDTH",    "",   0.05f, 0.95f, 0.5f,  "linear"},
+  {5,  "GAIN",           "",    0.f,   1.5f, 0.9f,  "linear"},
+  {6,  "PAN",            "",   -1.f,   1.f,  0.0f,  "linear"},
+  {7,  "ATTACK_MS",      "ms",  0.f,  400.f, 10.f,  "linear"},
+  {8,  "DECAY_MS",       "ms",  0.f, 1000.f, 120.f, "linear"},
+  {9,  "SUSTAIN",        "",    0.f,   1.f,  0.7f,  "linear"},
+  {10, "RELEASE_MS",     "ms",  0.f, 1000.f, 200.f, "linear"},
+  {11, "NOISE_MIX",      "",    0.f,   1.f,  0.0f,  "linear"},
+  {12, "MODE",           "",    0.f,   1.f,  0.0f,  "step"}    // 0=psg,1=sidish (future)
+};
+
+static constexpr ParamMap kMamChipParamMap{ "mam_chip", kMamChipParams, sizeof(kMamChipParams)/sizeof(kMamChipParams[0]) };
+
+

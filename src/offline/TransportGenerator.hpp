@@ -68,6 +68,15 @@ inline std::vector<GraphSpec::CommandSpec> generateCommandsFromTransport(const G
     }
   }
 
+  // Stable sort ensures deterministic ordering on same-sample events (locks before triggers or vice versa)
+  std::stable_sort(out.begin(), out.end(), [](const GraphSpec::CommandSpec& a, const GraphSpec::CommandSpec& b){
+    if (a.sampleTime != b.sampleTime) return a.sampleTime < b.sampleTime;
+    if (a.nodeId != b.nodeId) return a.nodeId < b.nodeId;
+    if (a.type != b.type) return a.type < b.type;
+    if (a.paramId != b.paramId) return a.paramId < b.paramId;
+    return a.value < b.value;
+  });
+
   return out;
 }
 
