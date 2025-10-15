@@ -1,0 +1,150 @@
+## Session Design: Timeline, Commands, Duration, and Looping
+
+This document explores options for session-level timing and control, with the goal of a powerful yet understandable design. It proposes concrete, incremental specs that interoperate with existing features (racks, buses, routes, xfaders) and leave room to grow.
+
+### Goals
+- Balance power and simplicity: authoring should be clear for non-developers but expressive enough for complex arrangements.
+- Keep realtime/offline parity: sessions should behave the same in the player and when exporting.
+- Preserve sample accuracy: all events map cleanly to sample times at render.
+- Be future-proof: allow scenes, global tempo maps, and external control later.
+
+### Existing Context (Constraints)
+- A session aggregates multiple rack graphs (each with its own transport, nodes, commands, and overrides like `bars`, `loopCount`, `loopMinutes/Seconds`).
+- Session routes connect racks to buses and then to the master mix.
+- Session supports crossfaders (`xfaders[]`) applied at the mixer in realtime.
+- Realtime renderer is the top-level scheduler; offline has a similar plan-first model.
+
+### Timing Addressing Options
+
+1) Absolute Time (Seconds)
+- Shape: `{ "timeSec": 12.5, "nodeId": "xfader:main:x", "type": "SetParam", "value": 1.0, "rampMs": 250 }`.
+- Pros: simple, transport-agnostic; works even if racks differ in tempo.
+- Cons: not musical; authoring by ear or with stopwatch.
+
+2) Musical Time (Bars/Steps) Anchored to a Rack
+- Shape: `{ "rack": "rack1", "bar": 8, "step": 1, "res": 16, "nodeId": "xfader:main:x", "type": "SetParam", "value": 0.0, "rampMs": 500 }`.
+- Pros: musician-friendly; aligns to a specific rack’s transport (tempo, resolution, ramps).
+- Cons: ambiguity when multiple racks differ in tempo/transport; requires a reference rack.
+
+3) Hybrid (Support Both)
+- Allow either `timeSec` or (`rack` + `bar`/`step`), resolving to absolute sample time at plan-time.
+- Resolution rules per command:
+  - If `timeSec` is present → use absolute seconds.
+  - Else if `rack` and musical fields are present → resolve with that rack’s transport (tempo ramps) to absolute time, then samples.
+  - If both provided → prefer `timeSec` and warn.
+
+### Duration and Looping (Song Semantics)
+
+Session-level duration fields (proposed):
+- `durationSec` (number) — hard cap for session play length.
+- `loop` (boolean) — if true, the player loops from start when reaching `durationSec`.
+- `prerollSec` (number, optional) — derivable; estimated from rack prerolls.
+- `tailSec` (number, optional) — auto-suggest, or manual override for long reverb/delay tails.
+
+Rules of thumb:
+- If `durationSec` is omitted, compute as the max of: last session command time, last rack content, plus preroll and tail.
+- Offline export always renders through preroll and tail.
+- Realtime player honors `loop`; commands that spill past loop boundaries wrap or clip depending on an `eventWrapping` policy (default: wrap musical, clip absolute).
+
+### Command Model (Session-Level)
+
+Schema (incremental proposal):
+
+```
+{
+  "commands": [
+    { "timeSec": 4.0,  "nodeId": "xfader:main:x", "type": "SetParam", "value": 0.0, "rampMs": 250 },
+    { "rack": "rack1", "bar": 8, "step": 1, "res": 16,
+      "nodeId": "xfader:main:x", "type": "SetParam", "value": 1.0, "rampMs": 1000 }
+  ]
+}
+```
+
+- `nodeId` supports session-level targets like `xfader:<id>:x`; can extend to `bus:<id>:param` later.
+- `type`: `SetParam` (for now). Future: `Trigger`, explicit `SetParamRamp`.
+- `rampMs`: optional; when provided, becomes smoothing horizon for the target.
+- Musical addressing uses `rack` + `bar` + optional `step`/`res`. If only `bar` is given, execute at bar start.
+
+Scheduling & priority:
+- All are resolved to absolute sample times during session plan.
+- Merge session commands with rack-synthesized events; use deterministic ordering (time, nodeId, type).
+- Same-sample ordering: SetParams before Triggers; xfader logic before rack mixing.
+
+### Scenes (Future)
+
+Add `scenes[]` to session:
+
+```
+{
+  "scenes": [
+    { "id": "verse",  "xfaders": [{ "id": "main", "x": 0.2 }] },
+    { "id": "chorus", "xfaders": [{ "id": "main", "x": 0.9 }] }
+  ]
+}
+```
+
+- Commands can `RecallScene` at time or bar/step.
+- Optionally `morphMs` for smooth transitions.
+
+### Player Looping Modes (Future)
+- `loop: true` — entire session loops (A→B) using `durationSec` boundaries.
+- `loopInSec` / `loopOutSec` — partial loop.
+- Musical loop region: `{ "rack": "rack1", "barIn": X, "barOut": Y }` resolved to absolute.
+
+### Parameter Addressing (Naming)
+- Session-level now:
+  - `xfader:<id>:x`
+- Future session-level:
+  - `bus:<id>:param`
+- Rack/node-level (existing): use prefixed `rackId:nodeId` inside graphs.
+
+### Examples
+
+Absolute time automation:
+
+```
+{
+  "durationSec": 16,
+  "loop": false,
+  "commands": [
+    { "timeSec": 2.0,  "nodeId": "xfader:main:x", "type": "SetParam", "value": 0.25, "rampMs": 250 },
+    { "timeSec": 10.0, "nodeId": "xfader:main:x", "type": "SetParam", "value": 0.85, "rampMs": 500 }
+  ]
+}
+```
+
+Musical (anchored to rack1 transport):
+
+```
+{
+  "durationSec": 32,
+  "loop": false,
+  "commands": [
+    { "rack": "rack1", "bar": 8,  "nodeId": "xfader:main:x", "type": "SetParam", "value": 0.0, "rampMs": 250 },
+    { "rack": "rack1", "bar": 16, "nodeId": "xfader:main:x", "type": "SetParam", "value": 1.0, "rampMs": 1000 }
+  ]
+}
+```
+
+### UX/Docs Defaults
+- When `--dump-events` is enabled, print the resolved session plan (absolute times with bar/step labels) before run/export.
+- Provide meaningful warnings: ambiguous reference rack, invalid step, overlapping ramps.
+- NDJSON includes `event:"xfader"`, `id`, `x`, `gainA`, `gainB` per interval for observability.
+
+### Backward Compatibility
+- Sessions without `commands`, `durationSec`, or `loop` behave exactly as before.
+- Musical mode requires at least one rack with transport to anchor timing.
+
+### Implementation Plan (Incremental)
+1) Add `commands[]` to `SessionSpec` with `timeSec` support (absolute time). Plan and enqueue into realtime/offline paths.
+2) Add musical addressing (`rack`, `bar`, `step`, `res`) resolving to `timeSec` using the referenced rack’s transport.
+3) Add `durationSec`/`loop` handling in realtime player; offline renders through duration + tail.
+4) Scenes and `RecallScene` command (optional).
+5) Extended targets: `bus:<id>:param` (optional, post-mix inserts etc.).
+
+### Rationale
+- Supporting both absolute and musical timing covers live performance and song-like authoring.
+- Anchoring musical time to a specific rack avoids global tempo coupling while remaining predictable.
+- Session-level duration/loop fields make “songs” and “loops” first-class without losing flexibility.
+
+

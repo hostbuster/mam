@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "alignTransports": true,
+  "racks": [
+    { "id": "rack1", "path": "examples/acid303.json", "gain": 1.0, "loopSeconds": 30 },
+    { "id": "rack2", "path": "examples/mamic_song.json", "gain": 1.0, "bars": 32, "loopCount": 1 }
+  ],
+  "xfaders": [
+    { "id": "main", "racks": ["rack1","rack2"], "law": "equal_power", "smoothingMs": 50.0 }
+  ],
+  "commands": [
+    { "timeSec": 0.0,  "nodeId": "xfader:main:x", "type": "SetParam", "value": 0.5, "rampMs": 0 },
+    { "timeSec": 3.0,  "nodeId": "xfader:main:x", "type": "SetParam", "value": 1.0, "rampMs": 800 }
+  ]
+}
+
+

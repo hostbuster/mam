@@ -32,12 +32,17 @@ struct SessionSpec {
     double smoothingMs = 10.0; // slew for x changes
     struct Lfo { std::string wave = "sine"; float freqHz = 0.25f; float phase01 = 0.0f; bool has = false; } lfo;
   };
+  struct SessCommand { double timeSec = 0.0; std::string nodeId; std::string type; float value = 0.0f; float rampMs = 0.0f; };
   uint32_t sampleRate = 48000;
   uint32_t channels = 2;
+  double durationSec = 0.0; // 0 = auto
+  bool loop = false;
+  bool alignTransports = false; // align first transport trigger across racks
   std::vector<RackRef> racks;
   std::vector<BusRef> buses;
   std::vector<RouteRef> routes;
   std::vector<XfaderRef> xfaders;
+  std::vector<SessCommand> commands;
 };
 
 inline SessionSpec loadSessionSpecFromJsonFile(const std::string& path) {
@@ -48,6 +53,9 @@ inline SessionSpec loadSessionSpecFromJsonFile(const std::string& path) {
   SessionSpec s;
   if (j.contains("sampleRate")) s.sampleRate = j["sampleRate"].get<uint32_t>();
   if (j.contains("channels")) s.channels = j["channels"].get<uint32_t>();
+  if (j.contains("durationSec")) s.durationSec = j["durationSec"].get<double>();
+  if (j.contains("loop")) s.loop = j["loop"].get<bool>();
+  if (j.contains("alignTransports")) s.alignTransports = j["alignTransports"].get<bool>();
   if (j.contains("racks")) {
     for (const auto& r : j["racks"]) {
       SessionSpec::RackRef rr;
@@ -110,6 +118,18 @@ inline SessionSpec loadSessionSpecFromJsonFile(const std::string& path) {
       }
       if (xr.id.empty() || xr.racks.empty()) throw std::runtime_error("Session xfader requires id and racks");
       s.xfaders.push_back(std::move(xr));
+    }
+  }
+  if (j.contains("commands")) {
+    for (const auto& cj : j["commands"]) {
+      SessionSpec::SessCommand sc;
+      sc.timeSec = cj.value("timeSec", 0.0);
+      sc.nodeId = cj.value("nodeId", std::string());
+      sc.type = cj.value("type", std::string("SetParam"));
+      sc.value = cj.value("value", 0.0f);
+      sc.rampMs = cj.value("rampMs", 0.0f);
+      if (sc.nodeId.empty()) throw std::runtime_error("Session command requires nodeId");
+      s.commands.push_back(std::move(sc));
     }
   }
   return s;

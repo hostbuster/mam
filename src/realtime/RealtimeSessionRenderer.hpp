@@ -47,7 +47,7 @@ public:
     xfaders_.clear();
     for (const auto& xr : xs) {
       if (xr.racks.size() < 2) continue;
-      XfaderState st{};
+      XfaderState st{}; st.id = xr.id;
       st.aIndex = indexOf(xr.racks[0]);
       st.bIndex = indexOf(xr.racks[1]);
       if (st.aIndex == SIZE_MAX || st.bIndex == SIZE_MAX) continue;
@@ -133,6 +133,28 @@ private:
     for (size_t si = 0; si + 1 < splits.size(); ++si) {
       const uint32_t segStart = splits[si]; const uint32_t segEnd = splits[si + 1]; const uint32_t segFrames = segEnd - segStart; if (segFrames == 0) continue;
       const SampleTime segAbsStart = blockStartAbs + static_cast<SampleTime>(segStart);
+      // Handle xfader param events (nodeId "xfader:<id>:x") at boundary before node events
+      for (const auto& ev : drained) if (ev.sampleTime == segAbsStart && (ev.type == CommandType::SetParam || ev.type == CommandType::SetParamRamp)) {
+        if (ev.nodeId) {
+          const char* nid = ev.nodeId;
+          if (std::strncmp(nid, "xfader:", 8) == 0) {
+            const char* rest = nid + 8; // <id>:x
+            const char* colon = std::strchr(rest, ':');
+            if (colon && std::strcmp(colon + 1, "x") == 0) {
+              const std::string xfId(rest, static_cast<size_t>(colon - rest));
+              for (auto& xf : self->xfaders_) {
+                if (xf.id == xfId) {
+                  xf.lfoEnabled = false; // manual takes over
+                  double v = static_cast<double>(ev.value);
+                  if (v < 0.0) v = 0.0; else if (v > 1.0) v = 1.0;
+                  xf.xTarget = v;
+                  if (ev.type == CommandType::SetParamRamp && ev.rampMs > 0.0f) xf.smoothingMs = static_cast<double>(ev.rampMs);
+                }
+              }
+            }
+          }
+        }
+      }
       // Apply events at segment boundary: SetParam first, then Trigger across all racks
       for (const auto& ev : drained) if (ev.sampleTime == segAbsStart && (ev.type == CommandType::SetParam || ev.type == CommandType::SetParamRamp)) {
         for (const auto& r : self->racks_) if (r.graph) r.graph->forEachNode([&](const std::string& id, Node& n){ if (ev.nodeId && id == ev.nodeId) n.handleEvent(ev); });
@@ -292,8 +314,8 @@ private:
           if (self->metricsEnabled_ && self->metricsFile_) {
             for (const auto& xf : self->xfaders_) {
               std::fprintf(self->metricsFile_,
-                           "{\"event\":\"xfader\",\"ts_unix\":%.6f,\"t_rel\":%.6f,\"x\":%.4f,\"gainA\":%.4f,\"gainB\":%.4f}\n",
-                           tsUnix, tRel, xf.x, xf.lastGA, xf.lastGB);
+                           "{\"event\":\"xfader\",\"ts_unix\":%.6f,\"t_rel\":%.6f,\"id\":\"%s\",\"x\":%.4f,\"gainA\":%.4f,\"gainB\":%.4f}\n",
+                           tsUnix, tRel, xf.id.c_str(), xf.x, xf.lastGA, xf.lastGB);
             }
             std::fflush(self->metricsFile_);
           }
@@ -330,7 +352,7 @@ private:
   std::vector<Meter> busMeters_{};
   bool metersEnabled_ = false; double metersIntervalSec_ = 1.0; double lastMetersPrintSec_ = 0.0;
   bool metricsEnabled_ = false; FILE* metricsFile_ = nullptr; bool metricsIncludeRacks_ = true; bool metricsIncludeBuses_ = true; double startWallUnix_ = 0.0;
-  struct XfaderState { size_t aIndex=SIZE_MAX; size_t bIndex=SIZE_MAX; bool lawEqualPower=true; double smoothingMs=10.0; bool lfoEnabled=false; double freqHz=0.25; double phase01=0.0; double x=0.0; double xTarget=0.0; double lastGA=1.0; double lastGB=1.0; };
+  struct XfaderState { std::string id; size_t aIndex=SIZE_MAX; size_t bIndex=SIZE_MAX; bool lawEqualPower=true; double smoothingMs=10.0; bool lfoEnabled=false; double freqHz=0.25; double phase01=0.0; double x=0.0; double xTarget=0.0; double lastGA=1.0; double lastGB=1.0; };
   std::vector<XfaderState> xfaders_{};
 };
 

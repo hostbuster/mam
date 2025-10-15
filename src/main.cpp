@@ -946,6 +946,15 @@ int main(int argc, char** argv) {
       }
       std::vector<RealtimeSessionRenderer::Rack> rracks; rracks.reserve(graphsOwned.size()); for (size_t i = 0; i < graphsOwned.size(); ++i) rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain});
       srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
+      // Enqueue session-level commands (absolute time, realtime)
+      if (!sess.commands.empty()) {
+        for (const auto& sc : sess.commands) {
+          Command cmd{}; cmd.sampleTime = static_cast<uint64_t>(std::llround(sc.timeSec * srt.sampleRate()));
+          cmd.nodeId = internNodeId(sc.nodeId); cmd.type = (sc.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParam;
+          cmd.paramId = 0; cmd.value = sc.value; cmd.rampMs = sc.rampMs;
+          while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+      }
       // Adjust pre-synthesized command timing to actual device sample rate if needed
       {
         const uint32_t srActual = static_cast<uint32_t>(srt.sampleRate() + 0.5);
@@ -960,6 +969,28 @@ int main(int argc, char** argv) {
           std::fprintf(stderr, "[rt-session] rescaled commands to device sr=%u (scale=%.6f)\n", srActual, scale);
         }
       }
+      // Optional: align transports (shift racks so the earliest first trigger begins at t=0)
+      if (sess.alignTransports) {
+        uint64_t earliest = UINT64_MAX;
+        std::vector<uint64_t> firsts(rackRTs.size(), UINT64_MAX);
+        for (size_t i = 0; i < rackRTs.size(); ++i) {
+          for (const auto& c : rackRTs[i].baseCmds) {
+            if (c.type == std::string("Trigger")) { firsts[i] = c.sampleTime; break; }
+          }
+          if (firsts[i] < earliest) earliest = firsts[i];
+        }
+        if (earliest != UINT64_MAX) {
+          for (size_t i = 0; i < rackRTs.size(); ++i) {
+            if (firsts[i] == UINT64_MAX) continue;
+            const int64_t shift = static_cast<int64_t>(firsts[i]) - static_cast<int64_t>(earliest);
+            if (shift > 0) {
+              const uint64_t u = static_cast<uint64_t>(shift);
+              for (auto& c : rackRTs[i].baseCmds) c.sampleTime -= std::min(c.sampleTime, u);
+            }
+          }
+        }
+      }
+
       // Initial enqueue (globally time-sorted merge across racks)
       {
         struct Item { uint64_t t; size_t ri; size_t ci; };
@@ -1496,6 +1527,19 @@ int main(int argc, char** argv) {
             c.paramId = mapParam(nodeType, c.paramName);
           }
         }
+        // Apply per-rack start offset in frames (positive delays start; negative advances and clips pre-zero events)
+        if (rr.startOffsetFrames != 0) {
+          const int64_t off = rr.startOffsetFrames;
+          if (off > 0) {
+            const uint64_t uoff = static_cast<uint64_t>(off);
+            for (auto& c : cmds) c.sampleTime += uoff;
+          } else {
+            const uint64_t adv = static_cast<uint64_t>(-off);
+            // drop commands that would occur before t=0
+            cmds.erase(std::remove_if(cmds.begin(), cmds.end(), [&](const auto& c){ return c.sampleTime <= adv; }), cmds.end());
+            for (auto& c : cmds) c.sampleTime -= adv;
+          }
+        }
         // Compute loopLen from transport
         uint64_t loopLen2 = 0;
         if (gs.hasTransport) {
@@ -1574,8 +1618,12 @@ int main(int argc, char** argv) {
         }
       });
 
-      // Main loop waits for Enter/Ctrl-C
+      // Main loop waits for Enter/Ctrl-C (or session duration)
       while (gRunning.load()) {
+        if (sess.durationSec > 0.0) {
+          const double tNow = static_cast<double>(srt.sampleCounter()) / srt.sampleRate();
+          if (tNow >= sess.durationSec) { if (sess.loop) { /* future: restart */ } else { gRunning.store(false); break; } }
+        }
         if (isStdinReady()) {
           char buf[4]; (void)read(STDIN_FILENO, buf, sizeof(buf)); gRunning.store(false); break;
         }
