@@ -39,6 +39,32 @@ public:
       metricsEnabled_ = false;
     }
   }
+  // Session crossfaders: configure pairs and behavior
+  void setXfaders(const std::vector<SessionSpec::XfaderRef>& xs, const std::vector<Rack>& racks) {
+    auto indexOf = [&](const std::string& id) -> size_t {
+      for (size_t i = 0; i < racks.size(); ++i) if (racks[i].id == id) return i; return SIZE_MAX;
+    };
+    xfaders_.clear();
+    for (const auto& xr : xs) {
+      if (xr.racks.size() < 2) continue;
+      XfaderState st{};
+      st.aIndex = indexOf(xr.racks[0]);
+      st.bIndex = indexOf(xr.racks[1]);
+      if (st.aIndex == SIZE_MAX || st.bIndex == SIZE_MAX) continue;
+      st.lawEqualPower = (xr.law != std::string("linear"));
+      st.smoothingMs = xr.smoothingMs;
+      st.lfoEnabled = xr.lfo.has;
+      st.freqHz = xr.lfo.freqHz;
+      st.phase01 = xr.lfo.phase01;
+      if (st.lfoEnabled) {
+        const double s = std::sin(2.0 * M_PI * st.phase01);
+        st.x = 0.5 * (s + 1.0);
+        st.xTarget = st.x;
+      } else { st.x = 0.5; st.xTarget = st.x; }
+      st.lastGA = st.lastGB = 1.0;
+      xfaders_.push_back(st);
+    }
+  }
 
   void start(const std::vector<Rack>& racks, const std::vector<SessionSpec::BusRef>& buses, const std::vector<SessionSpec::RouteRef>& routes, double requestedSampleRate, uint32_t channels) {
     if (channels == 0) throw std::invalid_argument("channels must be > 0");
@@ -146,27 +172,46 @@ private:
         const size_t count = static_cast<size_t>(segFrames) * self->channels_;
         for (size_t i = 0; i < count; ++i) bbuf[i] = 0.0f;
       }
+      // Compute per-rack gain multipliers from xfaders (apply once per segment)
+      std::vector<float> rackGainMul(self->racks_.size(), 1.0f);
+      for (auto& xf : self->xfaders_) {
+        if (xf.lfoEnabled) {
+          const double dt = static_cast<double>(segFrames) / self->sampleRate_;
+          xf.phase01 += xf.freqHz * dt; while (xf.phase01 >= 1.0) xf.phase01 -= 1.0;
+          const double s = std::sin(2.0 * M_PI * xf.phase01);
+          xf.xTarget = 0.5 * (s + 1.0);
+        }
+        const double alpha = std::min(1.0, (xf.smoothingMs > 0.0 ? (static_cast<double>(segFrames) / self->sampleRate_) / (xf.smoothingMs / 1000.0) : 1.0));
+        xf.x += (xf.xTarget - xf.x) * alpha;
+        double gA = 1.0, gB = 1.0;
+        const double x = std::clamp(xf.x, 0.0, 1.0);
+        if (xf.lawEqualPower) { gA = std::cos(0.5 * M_PI * x); gB = std::sin(0.5 * M_PI * x); }
+        else { gA = 1.0 - x; gB = x; }
+        xf.lastGA = gA; xf.lastGB = gB;
+        if (xf.aIndex < rackGainMul.size()) rackGainMul[xf.aIndex] *= static_cast<float>(gA);
+        if (xf.bIndex < rackGainMul.size()) rackGainMul[xf.bIndex] *= static_cast<float>(gB);
+      }
       // Route racks to buses
       std::vector<bool> rackHadRoute(self->racks_.size(), false);
       for (const auto& rt : self->routes_) {
-        // find rack index
         size_t ri = 0; bool foundRack = false; for (; ri < self->racks_.size(); ++ri) if (self->racks_[ri].id == rt.from) { foundRack = true; break; }
         if (!foundRack) continue;
         size_t bi = 0; bool foundBus = false; for (; bi < self->buses_.size(); ++bi) if (self->buses_[bi].id == rt.to) { foundBus = true; break; }
         if (!foundBus) continue;
-        const float gain = self->racks_[ri].gain * rt.gain;
+        const float gain = self->racks_[ri].gain * rt.gain * ((ri < rackGainMul.size()) ? rackGainMul[ri] : 1.0f);
         const float* src = self->rackScratch_[ri].data(); float* dst = self->busScratch_[bi].data();
         const size_t n = static_cast<size_t>(segFrames) * self->channels_;
         for (size_t i = 0; i < n; ++i) dst[i] += src[i] * gain;
         rackHadRoute[ri] = true;
       }
-      // Fallback: if a rack has no route, sum it directly to output (MVP behavior like offline)
+      // Fallback: racks without routes → sum to output
       for (size_t ri = 0; ri < self->racks_.size(); ++ri) {
         if (ri >= rackHadRoute.size() || rackHadRoute[ri]) continue;
         const float* src = self->rackScratch_[ri].data();
         float* dst = outPtr;
         const size_t n = static_cast<size_t>(segFrames) * self->channels_;
-        for (size_t i = 0; i < n; ++i) dst[i] += src[i] * self->racks_[ri].gain;
+        const float mul = ((ri < rackGainMul.size()) ? rackGainMul[ri] : 1.0f) * self->racks_[ri].gain;
+        for (size_t i = 0; i < n; ++i) dst[i] += src[i] * mul;
       }
       // Apply inserts (spectral_ducker) on each bus
       for (size_t bi = 0; bi < self->buses_.size(); ++bi) {
@@ -181,20 +226,19 @@ private:
               if (ins.params.contains("msSideScale")) duck.msSideScale = ins.params["msSideScale"].get<float>();
             } catch (...) {}
             duck.prepare(self->sampleRate_, std::min<uint32_t>(segFrames, 4096u));
-            // Build sidechain by summing referenced rack scratch
             std::vector<float> sc; sc.assign(static_cast<size_t>(segFrames) * self->channels_, 0.0f);
             for (const auto& scp : ins.sidechains) {
               const std::string& fromRack = scp.second; size_t ri = 0; bool found = false; for (; ri < self->racks_.size(); ++ri) if (self->racks_[ri].id == fromRack) { found = true; break; }
-              if (!found) continue; const float* src = self->rackScratch_[ri].data();
+              if (!found) continue; const float* s = self->rackScratch_[ri].data();
               const size_t n = static_cast<size_t>(segFrames) * self->channels_;
-              for (size_t i = 0; i < n; ++i) sc[i] += src[i];
+              for (size_t i = 0; i < n; ++i) sc[i] += s[i];
             }
             ProcessContext bctx{}; bctx.sampleRate = self->sampleRate_; bctx.frames = segFrames; bctx.blockStart = segAbsStart;
             duck.applySidechain(bctx, self->busScratch_[bi].data(), sc.data(), self->channels_);
           }
         }
       }
-      // Accumulate meters on buses after inserts
+      // Accumulate bus meters after inserts
       if (self->metersEnabled_) {
         for (size_t bi = 0; bi < self->busScratch_.size(); ++bi) {
           Meter& m = self->busMeters_[bi];
@@ -209,23 +253,20 @@ private:
           m.frames += segFrames * self->channels_;
         }
       }
-
       // Sum buses to output
       for (size_t bi = 0; bi < self->busScratch_.size(); ++bi) {
         const size_t n = static_cast<size_t>(segFrames) * self->channels_;
         const float* src = self->busScratch_[bi].data();
         for (size_t i = 0; i < n; ++i) outPtr[i] += src[i];
       }
-
-      // Periodic meters print
+      // Periodic meters + metrics
       if (self->metersEnabled_) {
         const double nowSec = static_cast<double>(cutoff) / self->sampleRate_;
         if (nowSec - self->lastMetersPrintSec_ >= self->metersIntervalSec_) {
           const double tRel = nowSec;
           const double tsUnix = std::chrono::duration<double>(std::chrono::system_clock::now().time_since_epoch()).count();
           for (size_t ri = 0; ri < self->racks_.size(); ++ri) {
-            const Meter& m = self->rackMeters_[ri];
-            if (m.frames == 0) continue;
+            const Meter& m = self->rackMeters_[ri]; if (m.frames == 0) continue;
             const double peakDb = (m.peak > 0.0) ? (20.0 * std::log10(static_cast<double>(m.peak))) : -std::numeric_limits<double>::infinity();
             const double rmsLin = std::sqrt(m.sumSq / static_cast<double>(m.frames));
             const double rmsDb = (rmsLin > 0.0) ? (20.0 * std::log10(rmsLin)) : -std::numeric_limits<double>::infinity();
@@ -237,8 +278,7 @@ private:
             }
           }
           for (size_t bi = 0; bi < self->buses_.size(); ++bi) {
-            const Meter& m = self->busMeters_[bi];
-            if (m.frames == 0) continue;
+            const Meter& m = self->busMeters_[bi]; if (m.frames == 0) continue;
             const double peakDb = (m.peak > 0.0) ? (20.0 * std::log10(static_cast<double>(m.peak))) : -std::numeric_limits<double>::infinity();
             const double rmsLin = std::sqrt(m.sumSq / static_cast<double>(m.frames));
             const double rmsDb = (rmsLin > 0.0) ? (20.0 * std::log10(rmsLin)) : -std::numeric_limits<double>::infinity();
@@ -249,8 +289,14 @@ private:
                            tsUnix, tRel, self->metersIntervalSec_, self->sampleRate_, self->channels_, self->buses_[bi].id.c_str(), peakDb, rmsDb);
             }
           }
-          if (self->metricsEnabled_ && self->metricsFile_) std::fflush(self->metricsFile_);
-          // reset
+          if (self->metricsEnabled_ && self->metricsFile_) {
+            for (const auto& xf : self->xfaders_) {
+              std::fprintf(self->metricsFile_,
+                           "{\"event\":\"xfader\",\"ts_unix\":%.6f,\"t_rel\":%.6f,\"x\":%.4f,\"gainA\":%.4f,\"gainB\":%.4f}\n",
+                           tsUnix, tRel, xf.x, xf.lastGA, xf.lastGB);
+            }
+            std::fflush(self->metricsFile_);
+          }
           for (auto& m : self->rackMeters_) { m = Meter{}; }
           for (auto& m : self->busMeters_) { m = Meter{}; }
           self->lastMetersPrintSec_ = nowSec;
@@ -265,7 +311,6 @@ private:
   void printEvent(const Command& c, SampleTime segAbsStart) const {
     const double tSec = static_cast<double>(segAbsStart) / sampleRate_;
     const char* tag = (c.type == CommandType::Trigger) ? "TRIGGER" : (c.type == CommandType::SetParam ? "SET" : "RAMP");
-    // Tab-delimited for stable visual columns
     std::fprintf(stderr, "%.6f\t%s\tnode=%s\tpid=%u\tval=%.3f\n", tSec, tag, c.nodeId ? c.nodeId : "", c.paramId, static_cast<double>(c.value));
   }
 
@@ -280,13 +325,13 @@ private:
   bool printTriggers_ = false;
   std::vector<std::vector<float>> rackScratch_{};
   std::vector<std::vector<float>> busScratch_{};
-  // meters
   struct Meter { double sumSq = 0.0; double peak = 0.0; uint64_t frames = 0; };
   std::vector<Meter> rackMeters_{};
   std::vector<Meter> busMeters_{};
   bool metersEnabled_ = false; double metersIntervalSec_ = 1.0; double lastMetersPrintSec_ = 0.0;
-  // NDJSON metrics
   bool metricsEnabled_ = false; FILE* metricsFile_ = nullptr; bool metricsIncludeRacks_ = true; bool metricsIncludeBuses_ = true; double startWallUnix_ = 0.0;
+  struct XfaderState { size_t aIndex=SIZE_MAX; size_t bIndex=SIZE_MAX; bool lawEqualPower=true; double smoothingMs=10.0; bool lfoEnabled=false; double freqHz=0.25; double phase01=0.0; double x=0.0; double xTarget=0.0; double lastGA=1.0; double lastGB=1.0; };
+  std::vector<XfaderState> xfaders_{};
 };
 
 

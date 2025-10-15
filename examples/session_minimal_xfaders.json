@@ -1,0 +1,20 @@
+{
+    "version": 1,
+    "sampleRate": 48000,
+    "channels": 2,
+    "racks": [
+      { "id": "rack1", "path": "examples/acid303_sidechain_spectral.json", "startOffsetFrames": 0, "gain": 1.0, "loopSeconds": 30 },
+      { "id": "rack2", "path": "examples/mamic_song.json", "startOffsetFrames": 0, "gain": 0.3, "bars": 32, "loopCount": 1 }
+    ],
+    "xfaders": [
+      {
+        "id": "main",
+        "racks": ["rack1","rack2"],
+        "law": "equal_power",
+        "smoothingMs": 10.0,
+        "lfo": { "wave": "sine", "freqHz": 0.1, "phase01": 0.0 }
+      }
+    ]
+  }
+  
+  

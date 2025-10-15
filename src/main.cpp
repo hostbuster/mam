@@ -156,12 +156,10 @@ static void printUsage(const char* exe) {
                "  --no-summary       Disable final speedup summary\n"
                "\n"
                "Examples:\n"
-               "  %s                       # one-shot, defaults (real-time)\n"
-               "  %s --bpm 120            # 120 BPM continuous till Ctrl-C (real-time)\n"
-               "  %s --graph demo.json --wav demo.wav         # export using auto-duration\n"
-               "  --metrics-ndjson path.ndjson  Write NDJSON metrics per interval (racks/buses)\n"
-               "  --metrics-scope scopes       Comma list: racks,buses (default both)\n",
-               exe, exe, exe);
+               "  mam                       # one-shot, defaults (real-time)\n"
+               "  mam --bpm 120            # 120 BPM continuous till Ctrl-C (real-time)\n"
+               "  mam --graph demo.json --wav demo.wav         # export using auto-duration\n",
+               exe);
 }
 // Generate a simple Mermaid flowchart for a SessionSpec (racks/buses/routes)
 static std::string generateMermaidForSession(const SessionSpec& s) {
@@ -940,6 +938,12 @@ int main(int argc, char** argv) {
       RealtimeSessionRenderer srt; SpscCommandQueue<16384> cmdQueue;
       srt.setCommandQueue(&cmdQueue); srt.setDiagnostics(printTriggers); srt.setMeters(printMeters || metersPerNode, metersIntervalSec);
       if (!metricsNdjsonPath.empty()) srt.setMetricsNdjson(metricsNdjsonPath.c_str(), metricsScopeRacks, metricsScopeBuses);
+      // Configure session xfaders (if any)
+      {
+        std::vector<RealtimeSessionRenderer::Rack> cfg; cfg.reserve(graphsOwned.size());
+        for (size_t i = 0; i < graphsOwned.size(); ++i) cfg.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain});
+        srt.setXfaders(sess.xfaders, cfg);
+      }
       std::vector<RealtimeSessionRenderer::Rack> rracks; rracks.reserve(graphsOwned.size()); for (size_t i = 0; i < graphsOwned.size(); ++i) rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain});
       srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
       // Adjust pre-synthesized command timing to actual device sample rate if needed
@@ -1520,6 +1524,12 @@ int main(int argc, char** argv) {
       // Enable periodic per-rack meters when --meters is provided (or keep per-node flag compatibility)
       srt.setMeters(printMeters || metersPerNode, metersIntervalSec);
       if (!metricsNdjsonPath.empty()) srt.setMetricsNdjson(metricsNdjsonPath.c_str(), metricsScopeRacks, metricsScopeBuses);
+      // Configure session xfaders (if any)
+      {
+        std::vector<RealtimeSessionRenderer::Rack> cfg; cfg.reserve(graphsOwned.size());
+        for (size_t i = 0; i < graphsOwned.size(); ++i) cfg.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, 1.0f});
+        srt.setXfaders(sess.xfaders, cfg);
+      }
       // Build racks vector with per-rack gain (from session routes we still route to buses; use 1.0 here)
       std::vector<RealtimeSessionRenderer::Rack> rracks;
       rracks.reserve(graphsOwned.size());

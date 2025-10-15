@@ -1022,3 +1022,35 @@ Render in GitHub/Markdown using a mermaid code block:
 (flowchart content here)
 ```
 ```
+
+## Session crossfaders (realtime)
+
+You can define crossfaders at the session level to blend racks with equal‑power or linear laws. Crossfaders are applied in the realtime session mixer path and can be LFO‑driven.
+
+JSON example:
+```json
+{
+  "xfaders": [
+    {
+      "id": "main",
+      "racks": ["rack1", "rack2"],
+      "law": "equal_power",           // or "linear"
+      "smoothingMs": 10.0,            // slew for click‑free moves
+      "lfo": { "wave": "sine", "freqHz": 0.25, "phase01": 0.0 }
+    }
+  ]
+}
+```
+
+Runtime usage:
+```bash
+./build/mam --session examples/session_minimal_xfaders.json --meters --meters-interval 0.25
+# Optional NDJSON metrics (includes xfader events):
+./build/mam --session examples/session_minimal_xfaders.json --meters \
+  --meters-interval 0.25 --metrics-ndjson xfader.ndjson
+```
+
+Notes:
+- Equal‑power uses gA=cos(pi/2·x), gB=sin(pi/2·x) for smooth perceived loudness.
+- Set both rack base gains to comparable values for a balanced crossfade.
+- LFO is optional; future versions will expose a param `xfader:<id>:x` for automation.

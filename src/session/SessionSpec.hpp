@@ -25,11 +25,19 @@ struct SessionSpec {
   struct InsertRef { std::string type; std::string id; nlohmann::json params; std::vector<std::pair<std::string,std::string>> sidechains; };
   struct BusRef { std::string id; uint32_t channels = 2; std::vector<InsertRef> inserts; };
   struct RouteRef { std::string from; std::string to; float gain = 1.0f; };
+  struct XfaderRef {
+    std::string id;
+    std::vector<std::string> racks; // typically size 2
+    std::string law = "equal_power"; // "equal_power" | "linear"
+    double smoothingMs = 10.0; // slew for x changes
+    struct Lfo { std::string wave = "sine"; float freqHz = 0.25f; float phase01 = 0.0f; bool has = false; } lfo;
+  };
   uint32_t sampleRate = 48000;
   uint32_t channels = 2;
   std::vector<RackRef> racks;
   std::vector<BusRef> buses;
   std::vector<RouteRef> routes;
+  std::vector<XfaderRef> xfaders;
 };
 
 inline SessionSpec loadSessionSpecFromJsonFile(const std::string& path) {
@@ -80,6 +88,28 @@ inline SessionSpec loadSessionSpecFromJsonFile(const std::string& path) {
       SessionSpec::RouteRef rr; rr.from = r.value("from", std::string()); rr.to = r.value("to", std::string()); rr.gain = r.value("gain", 1.0f);
       if (rr.from.empty() || rr.to.empty()) throw std::runtime_error("Session route requires from and to");
       s.routes.push_back(rr);
+    }
+  }
+  if (j.contains("xfaders")) {
+    for (const auto& xj : j["xfaders"]) {
+      SessionSpec::XfaderRef xr;
+      xr.id = xj.value("id", std::string());
+      if (xj.contains("racks") && xj["racks"].is_array()) {
+        for (const auto& rr : xj["racks"]) xr.racks.push_back(rr.get<std::string>());
+      }
+      xr.law = xj.value("law", std::string("equal_power"));
+      xr.smoothingMs = xj.value("smoothingMs", 10.0);
+      if (xj.contains("lfo")) {
+        try {
+          xr.lfo.has = true;
+          auto lj = xj["lfo"];
+          xr.lfo.wave = lj.value("wave", std::string("sine"));
+          xr.lfo.freqHz = lj.value("freqHz", 0.25f);
+          xr.lfo.phase01 = lj.value("phase01", 0.0f);
+        } catch (...) { xr.lfo.has = false; }
+      }
+      if (xr.id.empty() || xr.racks.empty()) throw std::runtime_error("Session xfader requires id and racks");
+      s.xfaders.push_back(std::move(xr));
     }
   }
   return s;
