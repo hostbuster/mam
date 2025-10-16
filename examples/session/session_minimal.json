@@ -1,4 +1,5 @@
 {
+  "description": "Minimal session with two racks demonstrating basic mixing.",
   "kind": "session",
   "version": 1,
   "sampleRate": 48000,

@@ -1,4 +1,5 @@
 {
+  "description": "Session demonstrating buses with inserts and sidechains.",
   "kind": "session",
   "version": 1,
   "sampleRate": 48000,

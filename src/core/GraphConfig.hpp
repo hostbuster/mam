@@ -48,6 +48,7 @@ struct NodeSpec {
 };
 
 struct GraphSpec {
+  std::string description; // optional human-readable description
   int version = 1;
   uint32_t sampleRate = 48000;
   uint32_t channels = 2;

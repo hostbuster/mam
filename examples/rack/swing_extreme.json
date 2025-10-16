@@ -1,4 +1,5 @@
 {
+  "description": "Extreme swing demo: kick on quarters, hat/clap on swung 16ths.",
   "kind": "rack",
   "version": 1,
   "sampleRate": 48000,

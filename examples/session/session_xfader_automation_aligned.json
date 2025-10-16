@@ -1,4 +1,5 @@
 {
+  "description": "Session with xfader automation and aligned rack transports.",
   "kind": "session",
   "version": 1,
   "sampleRate": 48000,

@@ -70,6 +70,7 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
   }
 
   GraphSpec spec;
+  if (j.contains("description")) spec.description = j.at("description").get<std::string>();
   if (j.contains("version")) spec.version = j.at("version").get<int>();
   if (j.contains("sampleRate")) spec.sampleRate = j.at("sampleRate").get<uint32_t>();
   if (j.contains("channels")) spec.channels = j.at("channels").get<uint32_t>();

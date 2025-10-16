@@ -1,4 +1,5 @@
 {
+  "description": "Pad ducked by kick via compressor sidechain (audible kick).",
   "kind": "rack",
   "version": 1,
   "sampleRate": 48000,
@@ -20,7 +21,7 @@
   ],
 
   "connections": [
-    { "from": "pad",   "to": "compA", "fromPort": 0, "toPort": 0, "gainPercent": 100 },
+    { "from": "kick1", "to": "compA", "fromPort": 0, "toPort": 1, "gainPercent": 100 },
     { "from": "kick1", "to": "compA", "fromPort": 0, "toPort": 1, "gainPercent": 100 }
   ],
 

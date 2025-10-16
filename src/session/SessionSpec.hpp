@@ -12,6 +12,7 @@
 #include <filesystem>
 
 struct SessionSpec {
+  std::string description; // optional human-readable description
   struct RackRef {
     std::string id;
     std::string path;
@@ -78,6 +79,7 @@ inline SessionSpec loadSessionSpecFromJsonFile(const std::string& path) {
     std::fprintf(stderr, "Warning: session JSON missing 'kind'; defaulting to 'session' (%s)\n", path.c_str());
   }
   SessionSpec s;
+  if (j.contains("description")) s.description = j["description"].get<std::string>();
   if (j.contains("sampleRate")) s.sampleRate = j["sampleRate"].get<uint32_t>();
   if (j.contains("channels")) s.channels = j["channels"].get<uint32_t>();
   if (j.contains("durationSec")) s.durationSec = j["durationSec"].get<double>();
