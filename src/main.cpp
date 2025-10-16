@@ -1038,10 +1038,14 @@ int main(int argc, char** argv) {
 
       // Initial enqueue (globally time-sorted merge across racks)
       {
+        // Determine active racks for enqueue (skip muted; if any solo, only solo)
+        bool anySolo = false; for (const auto& rr : sess.racks) if (rr.solo) { anySolo = true; break; }
+        std::vector<bool> activeFlags; activeFlags.reserve(sess.racks.size());
+        for (const auto& rr : sess.racks) activeFlags.push_back(anySolo ? rr.solo : !rr.muted);
         struct Item { uint64_t t; size_t ri; size_t ci; };
         auto cmp = [](const Item& a, const Item& b){ return a.t > b.t; };
         std::priority_queue<Item, std::vector<Item>, decltype(cmp)> pq(cmp);
-        for (size_t i = 0; i < rackRTs.size(); ++i) if (!rackRTs[i].baseCmds.empty()) pq.push(Item{rackRTs[i].baseCmds[0].sampleTime, i, 0});
+        for (size_t i = 0; i < rackRTs.size(); ++i) if (i < activeFlags.size() && activeFlags[i]) { if (!rackRTs[i].baseCmds.empty()) pq.push(Item{rackRTs[i].baseCmds[0].sampleTime, i, 0}); }
         size_t totalPushed = 0;
         while (!pq.empty() && gRunning.load()) {
           Item it = pq.top(); pq.pop(); const auto& c = rackRTs[it.ri].baseCmds[it.ci];
@@ -1055,14 +1059,17 @@ int main(int argc, char** argv) {
         std::fprintf(stderr, "[rt-session] init enqueued total cmds=%zu across %zu racks (time-sorted)\n", totalPushed, rackRTs.size());
       }
       // Feeder thread
-      std::thread feeder([&cmdQueue, &rackRTs, &srt]() mutable {
+      std::thread feeder([&cmdQueue, &rackRTs, &srt, sess]() mutable {
         const uint64_t desiredAhead = static_cast<uint64_t>(3.0 * srt.sampleRate());
         std::vector<uint64_t> nextOffset(rackRTs.size(), 0ull); for (size_t i = 0; i < rackRTs.size(); ++i) nextOffset[i] = rackRTs[i].loopLen;
+        bool anySolo = false; for (const auto& rr : sess.racks) if (rr.solo) { anySolo = true; break; }
+        std::vector<bool> activeFlags; activeFlags.reserve(sess.racks.size());
+        for (const auto& rr : sess.racks) activeFlags.push_back(anySolo ? rr.solo : !rr.muted);
         while (gRunning.load()) {
           const uint64_t now = static_cast<uint64_t>(srt.sampleCounter());
           // collect eligible racks
           std::vector<size_t> elig; elig.reserve(rackRTs.size());
-          for (size_t i = 0; i < rackRTs.size(); ++i) if (rackRTs[i].loopLen > 0 && nextOffset[i] <= now + desiredAhead) elig.push_back(i);
+          for (size_t i = 0; i < rackRTs.size(); ++i) if (i < activeFlags.size() && activeFlags[i]) { if (rackRTs[i].loopLen > 0 && nextOffset[i] <= now + desiredAhead) elig.push_back(i); }
           if (!elig.empty()) {
             struct Item { uint64_t t; size_t ri; size_t ci; };
             auto cmp = [](const Item& a, const Item& b){ return a.t > b.t; };
@@ -1072,9 +1079,7 @@ int main(int argc, char** argv) {
             }
             while (!pq.empty() && gRunning.load()) {
               Item it = pq.top(); pq.pop(); const auto& c = rackRTs[it.ri].baseCmds[it.ci];
-              Command cmd{}; cmd.sampleTime = c.sampleTime + nextOffset[it.ri]; cmd.nodeId = internNodeId(c.nodeId);
-              cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp;
-              cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
+              Command cmd{}; cmd.sampleTime = c.sampleTime + nextOffset[it.ri]; cmd.nodeId = internNodeId(c.nodeId); cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
               while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1)); if (!gRunning.load()) break;
               const size_t nextCi = it.ci + 1; if (nextCi < rackRTs[it.ri].baseCmds.size()) pq.push(Item{rackRTs[it.ri].baseCmds[nextCi].sampleTime + nextOffset[it.ri], it.ri, nextCi});
             }
@@ -1655,24 +1660,34 @@ int main(int argc, char** argv) {
       srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
 
       // Initial horizon: push one loop per rack (prefixed ids)
-      for (const auto& rrt : rackRTs) {
-        size_t pushed = 0;
-        for (const auto& c : rrt.baseCmds) {
-          Command cmd{}; cmd.sampleTime = c.sampleTime; cmd.nodeId = internNodeId(c.nodeId); if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger; else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam; else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs; (void)cmdQueue.push(cmd);
-          ++pushed;
+      {
+        bool anySolo = false; for (const auto& rr : sess.racks) if (rr.solo) { anySolo = true; break; }
+        std::vector<bool> activeFlags; activeFlags.reserve(sess.racks.size());
+        for (const auto& rr : sess.racks) activeFlags.push_back(anySolo ? rr.solo : !rr.muted);
+        for (size_t i = 0; i < rackRTs.size(); ++i) {
+          if (i >= activeFlags.size() || !activeFlags[i]) continue;
+          size_t pushed = 0;
+          for (const auto& c : rackRTs[i].baseCmds) {
+            Command cmd{}; cmd.sampleTime = c.sampleTime; cmd.nodeId = internNodeId(c.nodeId); if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger; else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam; else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs; (void)cmdQueue.push(cmd);
+            ++pushed;
+          }
+          if (rtDebugSession) std::fprintf(stderr, "[rt-session] init enqueued rack=%s cmds=%zu\n", rackRTs[i].rackId.c_str(), pushed);
         }
-        if (rtDebugSession) std::fprintf(stderr, "[rt-session] init enqueued rack=%s cmds=%zu\n", rrt.rackId.c_str(), pushed);
       }
 
       // Feeder: extend horizon per rack
       std::thread sessionFeeder;
-      sessionFeeder = std::thread([&cmdQueue, &rackRTs, &srt, rtDebugSession]() mutable {
+      sessionFeeder = std::thread([&cmdQueue, &rackRTs, &srt, rtDebugSession, sess]() mutable {
         const uint64_t desiredAhead = static_cast<uint64_t>(5.0 * srt.sampleRate());
         std::vector<uint64_t> nextOffset(rackRTs.size(), 0ull);
         for (size_t i = 0; i < rackRTs.size(); ++i) nextOffset[i] = rackRTs[i].loopLen;
+        bool anySolo = false; for (const auto& rr : sess.racks) if (rr.solo) { anySolo = true; break; }
+        std::vector<bool> activeFlags; activeFlags.reserve(sess.racks.size());
+        for (const auto& rr : sess.racks) activeFlags.push_back(anySolo ? rr.solo : !rr.muted);
         while (gRunning.load()) {
           const uint64_t now = static_cast<uint64_t>(srt.sampleCounter());
           for (size_t i = 0; i < rackRTs.size(); ++i) {
+            if (i >= activeFlags.size() || !activeFlags[i]) continue;
             if (rackRTs[i].loopLen == 0) continue;
             if (nextOffset[i] <= now + desiredAhead) {
               size_t pushed = 0;
