@@ -893,6 +893,8 @@ int main(int argc, char** argv) {
       std::vector<RackRT> rackRTs;
       const uint32_t sessionSrU32 = static_cast<uint32_t>((offlineSr > 0.0 ? offlineSr : 48000.0) + 0.5);
       std::fprintf(stderr, "[rt-session] starting: racks=%zu sr=%u\n", sess.racks.size(), sessionSrU32);
+      // Determine solo/mute policy once
+      bool anySoloGlobal = false; for (const auto& rr : sess.racks) if (rr.solo) { anySoloGlobal = true; break; }
       for (const auto& rr : sess.racks) {
         GraphSpec gs = loadGraphSpecFromJsonFile(rr.path);
         auto g = std::make_unique<Graph>();
@@ -916,6 +918,9 @@ int main(int argc, char** argv) {
           GraphSpec::Transport tgen = gs.transport; uint32_t baseBars = (gs.transport.lengthBars > 0) ? gs.transport.lengthBars : 1u; if (rr.bars > 0) baseBars = rr.bars; tgen.lengthBars = baseBars;
           auto gen = generateCommandsFromTransport(tgen, sessionSrU32); cmds.insert(cmds.end(), gen.begin(), gen.end());
         }
+        // Apply solo/mute policy: if any solo, only racks with rr.solo emit; otherwise skip muted
+        const bool activeRack = anySoloGlobal ? rr.solo : !rr.muted;
+        if (!activeRack) cmds.clear();
         // Resolve params and prefix nodeIds
         std::unordered_map<std::string, std::string> nodeIdToType; for (const auto& ns : gs.nodes) nodeIdToType.emplace(ns.id, ns.type);
         auto mapParam = [](const std::string& type, const std::string& name) -> uint16_t {
@@ -1544,6 +1549,8 @@ int main(int argc, char** argv) {
 
       const uint32_t sessionSrU32 = static_cast<uint32_t>((offlineSr > 0.0 ? offlineSr : 48000.0) + 0.5);
       std::fprintf(stderr, "[rt-session] racks=%zu sr=%u\n", sess.racks.size(), sessionSrU32);
+      // Determine solo/mute policy once
+      bool anySoloGlobal2 = false; for (const auto& rr : sess.racks) if (rr.solo) { anySoloGlobal2 = true; break; }
       // Build graphs with rack-prefixed node ids; build base commands per rack
       for (const auto& rr : sess.racks) {
         GraphSpec gs = loadGraphSpecFromJsonFile(rr.path);
@@ -1586,6 +1593,9 @@ int main(int argc, char** argv) {
           auto gen = generateCommandsFromTransport(tgen, sessionSrU32);
           cmds.insert(cmds.end(), gen.begin(), gen.end());
         }
+        // Apply solo/mute policy
+        const bool activeRack2 = anySoloGlobal2 ? rr.solo : !rr.muted;
+        if (!activeRack2) cmds.clear();
         // Resolve named params and prefix nodeIds
         std::unordered_map<std::string, std::string> nodeIdToType;
         for (const auto& ns : gs.nodes) nodeIdToType.emplace(ns.id, ns.type);
