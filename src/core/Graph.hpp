@@ -20,7 +20,13 @@ public:
     nodes_.push_back(NodeEntry{std::move(id), std::move(node)});
     topoDirty_ = true;
   }
-  void setMixer(std::unique_ptr<MixerNode> mixer) { mixer_ = std::move(mixer); }
+  void setMixer(std::unique_ptr<MixerNode> mixer) {
+    mixer_ = std::move(mixer);
+    mixerInputIds_.clear();
+    if (mixer_) {
+      for (const auto& ch : mixer_->channels()) mixerInputIds_.insert(ch.id);
+    }
+  }
   void setConnections(const std::vector<GraphSpec::Connection>& conns) {
     connections_ = conns;
     topoDirty_ = true;
@@ -46,6 +52,9 @@ public:
   void prepare(double sampleRate, uint32_t maxBlock) {
     for (auto& e : nodes_) e.node->prepare(sampleRate, maxBlock);
     if (statsEnabled_) initStats();
+    if (traceEnabled_ && traceEpoch_ == std::chrono::steady_clock::time_point{}) {
+      traceEpoch_ = std::chrono::steady_clock::now();
+    }
   }
 
   void reset() {
@@ -69,7 +78,7 @@ public:
     }
 
     for (size_t ni : order) {
-      const auto tNodeStart = cpuStatsEnabled_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
+      const auto tNodeStart = (cpuStatsEnabled_ || traceEnabled_) ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
       // Sum upstream edges into work_, honoring toPort (future multi-port semantics)
       std::fill(work_.begin(), work_.end(), 0.0f);
       auto upIt = upstream_.find(ni);
@@ -124,7 +133,7 @@ public:
         node->process(ctx, outBuffers_[ni].data(), channels);
         if (statsEnabled_) accumulateStats(ni, outBuffers_[ni].data(), ctx.frames, channels);
       }
-      if (cpuStatsEnabled_) {
+      if (cpuStatsEnabled_ || traceEnabled_) {
         const auto tNodeEnd = std::chrono::steady_clock::now();
         const double ns = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(tNodeEnd - tNodeStart).count());
         if (ni >= nodeNsSum_.size()) {
@@ -132,9 +141,17 @@ public:
           nodeNsMax_.resize(ni + 1, 0.0);
           nodeCalls_.resize(ni + 1, 0u);
         }
-        nodeNsSum_[ni] += static_cast<long double>(ns);
-        if (ns > nodeNsMax_[ni]) nodeNsMax_[ni] = ns;
-        nodeCalls_[ni] += 1u;
+        if (cpuStatsEnabled_) {
+          nodeNsSum_[ni] += static_cast<long double>(ns);
+          if (ns > nodeNsMax_[ni]) nodeNsMax_[ni] = ns;
+          nodeCalls_[ni] += 1u;
+        }
+        if (traceEnabled_) {
+          const double ts_us = static_cast<double>(
+            std::chrono::duration_cast<std::chrono::microseconds>(tNodeStart - traceEpoch_).count());
+          const double dur_us = ns / 1000.0;
+          trace_.push_back(TraceEvt{nodes_[ni].id, ts_us, dur_us});
+        }
       }
     }
 
@@ -148,6 +165,12 @@ public:
       for (const auto& e : connections_) {
         auto itF = idToIdx.find(e.from);
         if (itF == idToIdx.end()) continue;
+        // Prevent double-count: if a source is explicitly mixed via mixer inputs,
+        // suppress its dry sends to the final mix.
+        if (!mixerInputIds_.empty()) {
+          const std::string& fromId = nodes_[itF->second].id;
+          if (mixerInputIds_.count(fromId)) continue;
+        }
         const float dry = e.dryPercent * (1.0f/100.0f);
         if (dry <= 0.0f) continue;
         const auto& src = outBuffers_[itF->second];
@@ -198,6 +221,7 @@ private:
   std::vector<size_t> topoOrder_{};
   std::vector<size_t> insertionOrder_{};
   bool topoDirty_ = false;
+  std::unordered_set<std::string> mixerInputIds_{}; // for dry-tap suppression
   // Port descriptors (channel counts); 0 means "match graph channels"
   std::unordered_map<size_t, std::unordered_map<uint32_t, uint32_t>> inPortChannels_{};
   std::unordered_map<size_t, std::unordered_map<uint32_t, uint32_t>> outPortChannels_{};
@@ -211,6 +235,13 @@ private:
   bool cpuStatsEnabled_ = false;
   long double cpuNsSum_ = 0.0L; double cpuNsMax_ = 0.0; double cpuPctSum_ = 0.0; double cpuPctMax_ = 0.0; uint64_t cpuBlocks_ = 0; uint64_t cpuOverruns_ = 0;
   std::vector<long double> nodeNsSum_{}; std::vector<double> nodeNsMax_{}; std::vector<uint64_t> nodeCalls_{};
+
+  // Optional performance trace (Chrome trace JSON events)
+  bool traceEnabled_ = false;
+  std::string tracePath_{};
+  struct TraceEvt { std::string name; double ts_us; double dur_us; };
+  std::vector<TraceEvt> trace_{};
+  std::chrono::steady_clock::time_point traceEpoch_{};
 
   void initStats() {
     nodeAccums_.assign(nodes_.size(), NodeAccum{});
@@ -236,6 +267,23 @@ public:
       cpuNsSum_ = 0.0L; cpuNsMax_ = 0.0; cpuPctSum_ = 0.0; cpuPctMax_ = 0.0; cpuBlocks_ = 0; cpuOverruns_ = 0;
       nodeNsSum_.assign(nodes_.size(), 0.0L); nodeNsMax_.assign(nodes_.size(), 0.0); nodeCalls_.assign(nodes_.size(), 0u);
     }
+  }
+  void enableTrace(const char* path) {
+    if (path && *path) { traceEnabled_ = true; tracePath_ = path; trace_.clear(); traceEpoch_ = std::chrono::steady_clock::time_point{}; }
+  }
+  void flushTrace() {
+    if (!traceEnabled_ || tracePath_.empty()) return;
+    FILE* f = std::fopen(tracePath_.c_str(), "wb");
+    if (!f) return;
+    std::fprintf(f, "{\n  \"traceEvents\": [\n");
+    for (size_t i = 0; i < trace_.size(); ++i) {
+      const auto& e = trace_[i];
+      std::fprintf(f,
+        "    {\"name\":\"%s\",\"ph\":\"X\",\"ts\":%.3f,\"dur\":%.3f,\"pid\":1,\"tid\":1}%s\n",
+        e.name.c_str(), e.ts_us, e.dur_us, (i + 1 < trace_.size()) ? "," : "");
+    }
+    std::fprintf(f, "  ]\n}\n");
+    std::fclose(f);
   }
   struct NodeMeter { std::string id; double peakDb; double rmsDb; };
   std::vector<NodeMeter> getNodeMeters(uint32_t /*channels*/) const {

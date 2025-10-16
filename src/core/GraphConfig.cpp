@@ -206,6 +206,7 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
     spec.transport.lengthBars = t.value("lengthBars", 1u);
     spec.transport.resolution = t.value("resolution", 16u);
     spec.transport.swingPercent = t.value("swingPercent", 0.0f);
+    spec.transport.swingExponent = t.value("swingExponent", 1.0f);
     if (t.contains("tempoRamps")) {
       for (const auto& tp : t.at("tempoRamps")) {
         GraphSpec::Transport::TempoPoint pnt;

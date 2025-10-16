@@ -29,6 +29,12 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - **Concurrency scaffolding**: Command queue for sample-accurate control, offline job pool.
   - Benefit: glitch-free control changes in realtime and faster-than-realtime offline renders.
 
+### New in this build
+
+- **Ports visibility (`--print-ports`)**: Print declared `ports.inputs[]` / `ports.outputs[]` per node, including roles and channel counts. Handy to author sidechains and multi-channel graphs.
+- **Preroll reported in offline export**: Export summary now includes computed graph preroll in ms (derived from node latencies) for transparent start transients.
+- **Performance trace export (`--trace-json`)**: Write Chrome/Perfetto-compatible JSON traces with per-node timings to analyze hot spots.
+
 ### Done
 
 - Modularized build: `mam_core`, `mam_dsp`, `mam_io`, `mam_render` (INTERFACE)
@@ -114,6 +120,9 @@ open build-xcode/mam.xcodeproj
 ./build/mam --validate examples/demo.json
 ./build/mam --list-nodes examples/demo.json
 ./build/mam --list-params kick
+./build/mam --print-ports --rack examples/rack/demo.json           # show ports per node
+./build/mam --trace-json trace.json --rack examples/rack/demo.json  # export performance trace (Chrome/Perfetto)
+./build/mam --rack examples/rack/swing_extreme.json --wav --sha1     # export WAV and print SHA1 of samples
 ./build/mam --dump-events --rack examples/rack/acid303_sidechain.json   # print command timeline (time/bar/step)
 ```
 
@@ -182,10 +191,14 @@ Render without using CoreAudio to an uncompressed audio file. Defaults to 48 kHz
   - `--duration SEC`: hard duration; bypasses auto logic.
   - `--bars N`: force N bars from `transport` (if present).
   - `--loop-count N`: repeat the transport sequence N times.
+  - `--start-bar B`: start rendering from bar B (0-based) when using transport.
+  - `--end-bar E`: end rendering at bar E (exclusive) when using transport. Combined with start-bar to render a subrange.
   - `--loop-minutes M` / `--loop-seconds S`: auto-derive loop-count to reach at least M minutes / S seconds.
   - `--tail-ms MS`: change the decay tail (default 250).
   - Preroll: offline export automatically adds graph preroll derived from node latencies (e.g., delay lines) so transients start fully formed.
   - When looping, export prints planned duration (incl. preroll/tail).
+  - Auto naming: if you pass `--wav` without a filename, the exporter auto-names the file as `<rack_basename>_<frames>f.wav` (or `render_<frames>f.wav` if no rack path is set).
+  - Sample hash: `--sha1` prints `SHA1(samples)` of the rendered float samples for deterministic comparisons across renders.
 
 Examples:
 
@@ -210,12 +223,14 @@ Examples:
 #### Topology and meters
 
 - `--print-topo`: print a simple topological order derived from `connections` (MVP). Helpful to validate routing intent.
+- `--print-ports`: print declared ports (inputs/outputs), roles, and channel counts per node.
 - `--meters`: realtime sessions print periodic per-rack and per-bus meters (when buses are defined); offline export prints a concise mix line with peak and RMS in dBFS. Adjust interval with `--meters-interval SEC` (min 0.05s, default 1.0s).
 - `--metrics-ndjson path.ndjson`: write NDJSON metrics each interval for tooling (one line per rack/bus). Scope with `--metrics-scope racks,buses`.
 - `--verbose`: in realtime, print loop counter and elapsed time at loop boundaries.
 - `--meters-per-node`: print per-node peak/RMS and mark nodes with no audio as `inactive`.
   - When combined with `--verbose` in realtime, per-node meters are printed each time the loop boundary is crossed.
 - `--schema-strict`: enforce JSON Schema `docs/schema.graph.v1.json` on load (realtime/offline). Requires validator available (see build note).
+- `--trace-json path.json`: write Chrome/Perfetto-compatible trace events with per-node timings; open in Chrome `chrome://tracing` or Perfetto.
 
 LFOs and modulation matrix:
 - See `docs/LFO.md` for a guide to authoring LFOs, routing to params, LFO-on-LFO frequency modulation, per-step transport locks, and mapped routes (`min`/`max`, `map: linear|exp`).
@@ -349,6 +364,7 @@ Generalized N↔M adaptation guided by declared port channel counts:
 Authoring:
 - Declare `channels` in `ports.inputs[].channels` / `ports.outputs[].channels` to hint adapters. `0` or omitted means “use graph channels”.
 - If neither side declares channels, the graph’s channel count is used.
+ - Tip: Use `--print-ports` to confirm declared port layouts while designing graphs/sidechains.
 
 ## Graph configuration (JSON)
 
@@ -420,6 +436,7 @@ Example:
     "lengthBars": 4,
     "resolution": 16,
     "swingPercent": 10,
+    "swingExponent": 1.0,
     "tempoRamps": [ { "bar": 2, "bpm": 140 } ],
     "patterns": [
       { "nodeId": "kick1", "steps": "x...x..x..x..." },
@@ -433,6 +450,7 @@ Example:
 Notes:
 - Unknown node types or params are warned (to be expanded later).
 - Multi-node routing via `connections` is reserved for future versions.
+- Swing: `swingPercent` shifts odd steps; shape it with `swingExponent` (1=linear; >1 softer feel; <1 stronger). See `examples/rack/swing_linear.json` and `examples/rack/swing_shaped.json`.
 
 ### Deterministic random seed
 
@@ -954,7 +972,7 @@ If helpful, I can start by:
   - `gainPercent` (wet): level of the source signal into the destination node. 100 = unity (0 dB), 50 ≈ -6 dB, 200 ≈ +6 dB.
   - `dryPercent` (dry tap): additional copy of the source mixed directly into the final output bus, bypassing the destination node. 0 = none, 100 = unity.
   - `fromPort`/`toPort` (future): multi-port routing indices (0 = main).
-- Authoring caution: if you also include the same source in the mixer inputs, and/or set a non-zero `dryPercent` on one or more connections, those dry paths are summed. Be mindful of double-counting and headroom.
+  - Dry/wet ergonomics: to prevent double-count, if a source is present in the mixer inputs, its dry taps are suppressed in the final mix. Prefer either a mixer input or a dry tap for the same source, not both.
 
 Example:
 

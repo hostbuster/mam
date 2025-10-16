@@ -45,6 +45,7 @@
 #include "core/Random.hpp"
 #include "core/GraphUtils.hpp"
 #include "core/SchemaValidate.hpp"
+#include "core/Sha1.hpp"
 
 // Use KickSynth (from dsp/) for both realtime and offline paths
 
@@ -246,6 +247,23 @@ static void warnSidechainConnectivity(const GraphSpec& spec) {
   for (const auto& kv : compHasKey) {
     if (!kv.second) {
       std::fprintf(stderr, "Warning: compressor '%s' has no sidechain key connected (toPort=1); using self-detection.\n", kv.first.c_str());
+    }
+  }
+}
+
+
+// Advisory: when a source has non-zero dryPercent taps and is also present in the mixer inputs,
+// the engine suppresses those dry taps to prevent double-count. Print an authoring hint.
+static void warnDrySuppression(const GraphSpec& spec) {
+  if (!spec.hasMixer || spec.mixer.inputs.empty() || spec.connections.empty()) return;
+  std::unordered_set<std::string> mixerIds;
+  mixerIds.reserve(spec.mixer.inputs.size());
+  for (const auto& mi : spec.mixer.inputs) mixerIds.insert(mi.id);
+  std::unordered_set<std::string> warned;
+  for (const auto& c : spec.connections) {
+    if (c.dryPercent > 0.0f && mixerIds.count(c.from) && !warned.count(c.from)) {
+      std::fprintf(stderr, "Info: dry tap(s) from '%s' will be suppressed because it is in the mixer inputs. Prefer either mixer input or dry tap, not both.\n", c.from.c_str());
+      warned.insert(c.from);
     }
   }
 }
@@ -630,16 +648,20 @@ int main(int argc, char** argv) {
   bool pcm16 = false;
   double quitAfterSec = 0.0;
   uint32_t offlineThreads = 0; // 0=auto (fallback to single-thread renderer if 0)
+  bool autoWavName = false;     // if --wav provided without filename, auto-name output
   // Export behavior controls
   double overrideDurationSec = -1.0; // < 0 means auto
   uint32_t overrideBars = 0;         // 0 means use transport length
   uint32_t overrideLoopCount = 0;    // 0 means single pass
+  uint32_t overrideStartBar = 0;     // start bar (0-based), 0 means beginning
+  uint32_t overrideEndBar = 0;       // end bar (exclusive), 0 means transport length
   double loopMinutes = 0.0;          // derive loop-count if > 0
   double loopSeconds = 0.0;          // derive loop-count if > 0
   double tailMs = 250.0;             // default decay tail
   bool doNormalize = false;          // normalize to peak target if true
   double peakTargetDb = -1.0;        // default peak target when normalizing
   bool printTopo = false;            // print topo order from connections
+  bool printPorts = false;           // print declared ports per node
   bool printMeters = false;          // print meter summary explicitly
   double metersIntervalSec = 1.0;    // realtime meters print interval
   bool tailOverridden = false;
@@ -649,6 +671,8 @@ int main(int argc, char** argv) {
   std::string metricsNdjsonPath; bool metricsScopeRacks = true; bool metricsScopeBuses = true; // nodes later
   std::string exportMermaidSessionPath;
   std::string exportMermaidGraphPath;
+  std::string traceJsonPath;
+  bool printSha1 = false;
   bool cpuStats = false;
   bool cpuStatsPerNode = false;
   bool rtDebugFeed = false;
@@ -689,7 +713,12 @@ int main(int argc, char** argv) {
     } else if (std::strcmp(a, "--click") == 0) {
       need(1); params.click = static_cast<float>(std::atof(argv[++i]));
     } else if (std::strcmp(a, "--wav") == 0) {
-      need(1); wavPath = argv[++i];
+      // Optional filename: if omitted or next arg looks like a flag, auto-name later
+      if (i + 1 >= argc || (argv[i+1] && argv[i+1][0] == '-')) {
+        autoWavName = true;
+      } else {
+        wavPath = argv[++i];
+      }
     } else if (std::strcmp(a, "--sr") == 0) {
       need(1); offlineSr = std::atof(argv[++i]);
       if (offlineSr <= 8000.0) offlineSr = 8000.0;
@@ -717,6 +746,10 @@ int main(int argc, char** argv) {
       need(1); overrideBars = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--loop-count") == 0) {
       need(1); overrideLoopCount = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--start-bar") == 0) {
+      need(1); overrideStartBar = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--end-bar") == 0) {
+      need(1); overrideEndBar = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--loop-minutes") == 0) {
       need(1); loopMinutes = std::max(0.0, std::atof(argv[++i]));
     } else if (std::strcmp(a, "--loop-seconds") == 0) {
@@ -747,6 +780,8 @@ int main(int argc, char** argv) {
       need(1); exportMermaidGraphPath = argv[++i];
     } else if (std::strcmp(a, "--print-topo") == 0) {
       printTopo = true;
+    } else if (std::strcmp(a, "--print-ports") == 0) {
+      printPorts = true;
     } else if (std::strcmp(a, "--meters") == 0) {
       printMeters = true;
     } else if (std::strcmp(a, "--meters-interval") == 0) {
@@ -777,6 +812,10 @@ int main(int argc, char** argv) {
       dumpEvents = true;
     } else if (std::strcmp(a, "--schema-strict") == 0) {
       schemaStrict = true;
+    } else if (std::strcmp(a, "--trace-json") == 0) {
+      need(1); traceJsonPath = argv[++i];
+    } else if (std::strcmp(a, "--sha1") == 0) {
+      printSha1 = true;
     } else if (std::strcmp(a, "--validate") == 0) {
       need(1); validatePath = argv[++i];
     } else if (std::strcmp(a, "--list-nodes") == 0) {
@@ -822,15 +861,18 @@ int main(int argc, char** argv) {
   if (params.click < 0.0f) params.click = 0.0f;
   if (params.click > 1.0f) params.click = 1.0f;
 
+  // If --wav was provided without a filename, set a placeholder so we take the offline path;
+  // we'll generate the final name (with frames) right before writing.
+  if (autoWavName && wavPath.empty()) wavPath = "__AUTO__";
+
   // Utilities
   if (rackPath.size() && graphPath.empty()) graphPath = rackPath;
-  if (printTopo && !graphPath.empty()) {
+  if ((printTopo || printPorts) && !graphPath.empty()) {
     try {
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
       warnSidechainConnectivity(spec);
-      printTopoOrderFromSpec(spec);
-      printConnectionsSummary(spec);
-      printPortsSummary(spec);
+      if (printTopo) { printTopoOrderFromSpec(spec); printConnectionsSummary(spec); }
+      if (printPorts) { printPortsSummary(spec); }
     } catch (...) {}
     // If only inspecting topology, exit early to avoid entering realtime
     if (wavPath.empty() && validatePath.empty() && listNodesPath.empty() && listParamsType.empty()) {
@@ -1184,6 +1226,7 @@ int main(int argc, char** argv) {
         }
         GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
         warnSidechainConnectivity(spec);
+        warnDrySuppression(spec);
         if (randomSeedOverride != 0) setGlobalSeed(randomSeedOverride);
         else if (spec.randomSeed != 0) setGlobalSeed(spec.randomSeed);
         for (const auto& ns : spec.nodes) {
@@ -1202,9 +1245,12 @@ int main(int argc, char** argv) {
       if (!spec.connections.empty()) {
           graph.setConnections(spec.connections);
         }
+      // Provide port descriptors to graph (for channel adapters)
+      graph.setPortDescriptors(spec.nodes);
       if (printTopo) printTopoOrderFromSpec(spec);
       if (metersPerNode) graph.enableStats(true);
       if (cpuStats || cpuStatsPerNode) graph.enableCpuStats(true);
+      if (!traceJsonPath.empty()) graph.enableTrace(traceJsonPath.c_str());
       if (cpuStats || cpuStatsPerNode) graph.enableCpuStats(true);
       } catch (const std::exception& e) {
         std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
@@ -1216,6 +1262,7 @@ int main(int argc, char** argv) {
       graph.addNode("kick_default", std::make_unique<KickNode>(p));
     }
     std::vector<float> interleaved;
+    double prerollMsForSummary = 0.0; // computed when preroll is applied in offline export
     if (!graphPath.empty()) {
       try {
         GraphSpec spec2 = loadGraphSpecFromJsonFile(graphPath);
@@ -1243,6 +1290,17 @@ int main(int argc, char** argv) {
           }
           tgen.lengthBars = useBars * loops;
           auto gen = generateCommandsFromTransport(tgen, sr);
+          // Optional slicing to a bar range [startBar, endBar)
+          if (overrideStartBar > 0 || overrideEndBar > 0) {
+            const uint32_t startBar = overrideStartBar;
+            const uint32_t endBar = (overrideEndBar > 0) ? overrideEndBar : tgen.lengthBars;
+            const double secPerBar = 4.0 * (60.0 / (tgen.bpm > 0.0 ? tgen.bpm : 120.0));
+            const uint64_t framesPerBar0 = static_cast<uint64_t>(secPerBar * static_cast<double>(sr) + 0.5);
+            const uint64_t startFrames = framesPerBar0 * static_cast<uint64_t>(startBar);
+            const uint64_t endFrames = framesPerBar0 * static_cast<uint64_t>(std::max(endBar, startBar));
+            gen.erase(std::remove_if(gen.begin(), gen.end(), [&](const auto& c){ return c.sampleTime < startFrames || c.sampleTime >= endFrames; }), gen.end());
+            for (auto& c : gen) c.sampleTime -= startFrames;
+          }
           cmds.insert(cmds.end(), gen.begin(), gen.end());
         }
         // Resolve named params to IDs based on node type
@@ -1285,17 +1343,20 @@ int main(int argc, char** argv) {
           };
           const uint32_t baseBars = spec2.transport.lengthBars ? spec2.transport.lengthBars : 1u;
           const uint32_t useBars = overrideBars > 0 ? overrideBars : baseBars;
+          const uint32_t startBar = overrideStartBar;
+          const uint32_t endBar = (overrideEndBar > 0) ? overrideEndBar : useBars;
           const uint32_t loops = overrideLoopCount > 0 ? overrideLoopCount : 1u;
-          const uint64_t totalBars = static_cast<uint64_t>(useBars) * static_cast<uint64_t>(loops);
+          const uint64_t spanBars = static_cast<uint64_t>((endBar > startBar ? (endBar - startBar) : 0u));
+          const uint64_t totalBars = spanBars * static_cast<uint64_t>(loops);
           totalFrames = 0;
-          for (uint64_t b = 0; b < totalBars; ++b) totalFrames += framesPerBarAt(static_cast<uint32_t>(b));
+          for (uint64_t b = 0; b < totalBars; ++b) totalFrames += framesPerBarAt(static_cast<uint32_t>(startBar + b));
         } else if (!cmds.empty()) {
           uint64_t last = 0; for (const auto& c : cmds) if (c.sampleTime > last) last = c.sampleTime;
           totalFrames = last;
         } else {
           totalFrames = static_cast<uint64_t>(2.0 * static_cast<double>(sr) + 0.5);
         }
-        // Add preroll (graph latency) and tail
+    // Add preroll (graph latency) and tail
         // Suggest longer tail for long delays/reverb if not overridden
         double tailMsLocal = tailMs;
         if (!tailOverridden) {
@@ -1313,6 +1374,7 @@ int main(int argc, char** argv) {
           tailMsLocal = suggested;
         }
         const uint64_t preroll = computeGraphPrerollSamples(spec2, sr);
+        prerollMsForSummary = 1000.0 * static_cast<double>(preroll) / static_cast<double>(sr);
         totalFrames += preroll + static_cast<uint64_t>((tailMsLocal / 1000.0) * static_cast<double>(sr) + 0.5);
         // Print planned duration info when looping or bars override is used
         if (overrideBars > 0 || overrideLoopCount > 0 || loopMinutes > 0.0 || loopSeconds > 0.0) {
@@ -1334,6 +1396,22 @@ int main(int argc, char** argv) {
       totalFrames += static_cast<uint64_t>((tailMs / 1000.0) * static_cast<double>(sr) + 0.5);
       interleaved = (offlineThreads > 1) ? renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads)
                                          : renderGraphInterleaved(graph, sr, channels, totalFrames);
+    }
+
+    // Auto-name WAV if requested and no explicit path was provided (or placeholder present)
+    if (autoWavName && (wavPath.empty() || wavPath == "__AUTO__")) {
+      std::string base = "render";
+      if (!graphPath.empty()) {
+        // derive basename from graphPath
+        const std::string& p = graphPath;
+        size_t slash = p.find_last_of("/\\");
+        const std::string fname = (slash == std::string::npos) ? p : p.substr(slash + 1);
+        size_t dot = fname.find_last_of('.');
+        base = (dot == std::string::npos) ? fname : fname.substr(0, dot);
+      }
+      char buf[256];
+      std::snprintf(buf, sizeof(buf), "%s_%lluf.wav", base.c_str(), (unsigned long long)totalFrames);
+      wavPath = std::string(buf);
     }
 
     AudioFileSpec spec;
@@ -1359,9 +1437,14 @@ int main(int argc, char** argv) {
       const std::string hhmmss = formatDuration(seconds);
       const double nyquist = static_cast<double>(sr) * 0.5;
       std::fprintf(stderr,
-                   "Exported %s\n  Frames: %llu\n  Duration: %s (%.3fs)\n  Sample rate: %u Hz (Nyquist %.1f Hz)\n  Channels: %u\n  Format: %s / %s\n  Peak: %.2f dBFS (pre: %.2f dBFS, gain: %+0.2f dB)\n  RMS: %.2f dBFS\n",
+                   "Exported %s\n  Frames: %llu\n  Duration: %s (%.3fs)\n  Sample rate: %u Hz (Nyquist %.1f Hz)\n  Channels: %u\n  Format: %s / %s\n  Peak: %.2f dBFS (pre: %.2f dBFS, gain: %+0.2f dB)\n  RMS: %.2f dBFS\n  Preroll: %.3f ms\n",
                    wavPath.c_str(), static_cast<unsigned long long>(totalFrames), hhmmss.c_str(), seconds,
-                   sr, nyquist, channels, toStr(spec.format), toStr(spec.bitDepth), peakDb, prePeakDb, appliedGainDb, rmsDb);
+                   sr, nyquist, channels, toStr(spec.format), toStr(spec.bitDepth), peakDb, prePeakDb, appliedGainDb, rmsDb,
+                   prerollMsForSummary);
+      if (printSha1 && !interleaved.empty()) {
+        const std::string h = computeSha1Hex(interleaved.data(), interleaved.size() * sizeof(float));
+        std::fprintf(stderr, "SHA1(samples): %s\n", h.c_str());
+      }
       if (printMeters) {
         // duplicate a concise meters line for easy parsing
         std::fprintf(stderr, "Meters: peak_dBFS=%.2f rms_dBFS=%.2f\n", peakDb, rmsDb);
@@ -1391,6 +1474,7 @@ int main(int argc, char** argv) {
       std::fprintf(stderr, "Audio file write failed: %s\n", e.what());
       return 1;
     }
+    graph.flushTrace();
     return 0;
   }
 
@@ -1412,6 +1496,7 @@ int main(int argc, char** argv) {
         if (vs != 0) { std::fprintf(stderr, "Schema validation failed: %s\n", diag.c_str()); return 1; }
       }
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
+      warnDrySuppression(spec);
       if (randomSeedOverride != 0) setGlobalSeed(randomSeedOverride);
       else if (spec.randomSeed != 0) setGlobalSeed(spec.randomSeed);
       for (const auto& ns : spec.nodes) {

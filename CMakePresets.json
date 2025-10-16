@@ -7,7 +7,8 @@
       "binaryDir": "build",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "RelWithDebInfo",
-        "MAM_WARNINGS_AS_ERRORS": "ON"
+        "MAM_WARNINGS_AS_ERRORS": "ON",
+        "MAM_USE_JSON_SCHEMA": "ON"
       }
     },
     {

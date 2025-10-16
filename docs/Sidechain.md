@@ -144,7 +144,7 @@ If your key source is stereo and the detector is mono (recommended), leave the s
 - Schema checks (when enabled) verify that `fromPort`/`toPort` indices exist and port types are compatible (`audio`->`audio`).
 - Engine warnings:
   - Duplicate mixer input IDs
-  - Dry tap double-count risks when also mixing source directly
+  - Dry tap double-count risks when also mixing source directly (the engine suppresses dry taps for sources present in the mixer to avoid double-count)
   - Sidechain advisory: compressor without a `toPort=1` key prints a warning and falls back to self-detection
 
 ### Debugging tips

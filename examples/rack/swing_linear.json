@@ -1,0 +1,36 @@
+{
+  "kind": "rack",
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+
+  "nodes": [
+    { "id": "hat1", "type": "clap",
+      "params": { "ampDecayMs": 60, "gain": 0.7, "bpm": 0, "loop": false } },
+    { "id": "kick1", "type": "kick",
+      "params": { "f0": 120, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 220, "gain": 0.8, "click": 0.1, "bpm": 0, "loop": false } }
+  ],
+
+  "mixer": {
+    "masterPercent": 90,
+    "softClip": true,
+    "inputs": [ { "id": "hat1", "gainPercent": 100 }, { "id": "kick1", "gainPercent": 75 } ]
+  },
+
+  "transport": {
+    "bpm": 125,
+    "lengthBars": 2,
+    "resolution": 16,
+    "swingPercent": 20,
+    "swingExponent": 1.0,
+    "patterns": [
+      { "nodeId": "kick1", "steps": "x...x...x...x..." },
+      { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x." }
+    ]
+  },
+
+  "connections": [],
+  "commands": []
+}
+
+

@@ -29,6 +29,12 @@ An innovative, realtime-first audio core that unifies live performance and studi
 - Mid/Side and multichannel: Session bus supports MS and N channels; racks declare channel config.
 - Inserts/Sends: Session-level inserts (e.g., limiter) and per-rack sends with pre/post options.
 
+Authoring aids:
+- `--print-ports`: Prints declared `ports.inputs[]` / `ports.outputs[]` per node, including roles and channel counts. Use this to validate sidechain and channel layouts while authoring racks.
+- Offline preroll reporting: Offline export summary prints computed graph preroll in milliseconds (derived from node latencies) so you can see exactly how much preroll was added for clean transients.
+ - `--trace-json path.json`: Export Chrome/Perfetto‑compatible performance traces (per‑node timings) for offline analysis.
+ - Transport subrange: `--start-bar B` / `--end-bar E` slices offline transport renders to a bar range [B, E) and rebases time to 0.
+
 ## Recording & Playback
 - Record modes:
   - Live overdub: Append commands with source tags (MIDI, UI, automation).

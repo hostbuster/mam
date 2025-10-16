@@ -19,7 +19,7 @@
  - Export normalization: `--normalize` (-1 dBFS) and `--peak-target dB`, with printed pre-/post-peak and applied gain
 - Mixer: per-input gains + master gain with optional soft clip
 - Routing: topological execution via `connections` with per-edge gains; cycle checks; per-edge `dryPercent` tap to master; `fromPort`/`toPort` fields scaffolded
- - Latency & preroll: nodes report latency; offline export adds preroll automatically to capture full transients
+ - Latency & preroll: nodes report latency; offline export adds preroll automatically to capture full transients; offline export summary now prints `Preroll: ... ms`
 - CLI: `--graph`, `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
 - Validation: named-param resolution; transport pattern target/steps checks; duplicate mixer input detection; dry+mixed double-count warnings; type param sanity (delay, meter)
 - Scaffolds: `BufferPool` and `OfflineTopoScheduler` for future topo/latency work
@@ -30,12 +30,18 @@
  - Observability: per-node meter printing after offline export and at realtime loop boundaries (`--verbose` + `--meters-per-node`)
  - Docs: `demo.json` refined; new `demo2.json` (16‑bar techno); sidechain cookbook; enhanced `--print-topo` with port channel info
  - Schema: strict validation toggle via `-DMAM_USE_JSON_SCHEMA=ON`
+ - Ports visibility: `--print-ports` CLI prints declared ports and channel layouts per node; Graph now consumes port descriptors in both realtime and offline paths for channel adapters
+ - Observability: `--trace-json` exports Chrome/Perfetto-compatible timing traces for offline analysis
+ - Offline UX: `--start-bar`/`--end-bar` slice transport renders to a subrange; export summary prints preroll; dry-tap double-count prevention by suppressing dry taps when source is also in mixer
 
 ### Top priority (next)
 - Multi-port routing (beyond MVP)
   - Full per-port accumulation and delivery (no collapse to port 0); port-aware processing in nodes (e.g., compressor sidechain)
   - Sidechain ergonomics: examples and validation for multi-consumer keys; clarify dry/wet interactions
+  - Wet/dry semantics avoid double-count by design
 - Latency reporting UI and preroll accounting in CLI output (offline and realtime stats print)
+  - Nodes report `latencySamples()`; graph preroll is computed and printed
+  - Offline exports include preroll automatically and print in export summary; realtime prints total algorithmic latency
 - JSON Schema validation default path
   - Prefer enabling `MAM_USE_JSON_SCHEMA` by default in developer presets; keep semantic checks after schema
 
@@ -47,6 +53,7 @@
 - Transport timing: finalize swing behavior and ramp curves; seek/loop ranges and duration hints
 - Parameters: complete name→id coverage across all nodes; stricter load-time validation/clamping using `ParamMap`
 - Observability: lightweight JSON perf trace; per-node counters; optional realtime perf dump
+  - Metrics NDJSON expansion: include xruns, avg/max block time, per-node µs, rack/bus meters; scope filters
 - Authoring/UX: refine examples (`acid303_sidechain` with LFO locks and clap), document TB‑303 LFO phase/locks; DAW parity notes (sample rate/headroom/bit depth).
 - Validation & tooling: schema-on by default in dev; golden renders; CI with sanitizers and clang-tidy
 
@@ -75,10 +82,13 @@
 - CLI printing for params/nodes; golden renders and fuzzed event streams in CI presets.
 
 ### Proposed acceptance criteria
+- Multi-port routing: per-port accumulation/delivery in realtime and offline; compressor sidechain example passes; `--print-ports` shows port/channel info; wet/dry avoids double-count
+- Latency/preroll: nodes expose `latencySamples()`; offline exports include and print preroll; realtime prints graph latency summary
 - Transport param-locks: JSON allows `patterns[i].locks` with `{param|paramId, value|rampMs}`; both realtime and offline render identical automation.
 - Schema validation: `--validate` reports unknown node types/params, invalid ranges, and bad pattern targets/lengths; exits non-zero on failures.
 - Offline scheduler: rendering via scheduler matches baseline buffer within -120 dBFS; parallel mode does not deadlock; lints clean.
 - Param maps: all instrument params documented in `docs/ParamTables.md`; name→id mapping covers all used names in examples.
+- Observability traces: `--trace-json path.json` exports a viewer-compatible trace (block/node timings, loop markers); NDJSON metrics include xruns and per-node µs when enabled.
 
 ## Phased Roadmap
 

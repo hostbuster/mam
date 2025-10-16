@@ -37,7 +37,11 @@ inline std::vector<GraphSpec::CommandSpec> generateCommandsFromTransport(const G
     // Within current bar, accumulate previous steps with symmetric swing (+ on even, - on odd)
     for (uint32_t s = 0; s < withinBar; ++s) {
       const bool prevEven = (s % 2) == 0;
-      const double swingAmt = static_cast<double>(baseFramesPerStep) * (tr.swingPercent / 100.0) * 0.5;
+      const double swingLin = (tr.swingPercent / 100.0) * 0.5; // +/- 50% of step
+      const double shaped = (tr.swingExponent != 1.0f)
+        ? std::pow(std::abs(swingLin), static_cast<double>(tr.swingExponent)) * (swingLin >= 0.0 ? 1.0 : -1.0)
+        : swingLin;
+      const double swingAmt = static_cast<double>(baseFramesPerStep) * shaped;
       const double delta = static_cast<double>(baseFramesPerStep) + (prevEven ? swingAmt : -swingAmt);
       stepStart += static_cast<uint64_t>(delta + 0.5);
     }
