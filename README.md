@@ -808,6 +808,8 @@ Current limitations: a single inline pattern per `transport` node (scaffold). Th
 
 - `--verbose`: prints "Loop N" exactly at transport loop boundaries in the audio callback, before any triggers in that block.
 - `--print-triggers`: prints sample-accurate set/ramp/trigger lines with absolute time, 1-based bar/step, node id, and command info.
+  - Output includes an origin tag: `RACK` (transport/graph) or `SESS` (session command).
+    - Example: `0.750000  SET  SESS  node=rack1:kick1   F0  800.000`
 - `--rt-debug-session`: extra realtime session diagnostics (initial command preview, drained-per-block counts).
 - `--dump-events`: offline/prepare-time dump of the command list with time/bar/step for debugging authoring issues.
 - When `--print-triggers` is active, main-thread loop prints are suppressed to avoid duplicates; boundary printing remains precise in the callback.

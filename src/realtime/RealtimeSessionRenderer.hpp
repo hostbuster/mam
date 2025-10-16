@@ -374,11 +374,12 @@ private:
 
   void printEvent(const Command& c, SampleTime segAbsStart) const {
     const double tSec = static_cast<double>(segAbsStart) / sampleRate_;
+    const char* src = (c.source == 1 ? "SESS" : "RACK");
     const char* tag = (c.type == CommandType::Trigger) ? "TRIGGER" : (c.type == CommandType::SetParam ? "SET" : "RAMP");
     const char* node = c.nodeId ? c.nodeId : "";
     // For triggers, omit pid entirely
     if (c.type == CommandType::Trigger) {
-      std::fprintf(stderr, "%.6f\t%s\tnode=%s\n", tSec, tag, node);
+      std::fprintf(stderr, "%.6f\t%s\t%s\tnode=%s\n", tSec, tag, src, node);
       return;
     }
     // Prefer param name when available for known node types, and special-case xfader:x
@@ -408,8 +409,8 @@ private:
       }
     }
     // Print with extra tab spacing after node and without labels
-    if (pname) std::fprintf(stderr, "%.6f\t%s\tnode=%s\t\t%s\t%.3f\n", tSec, tag, node, pname, static_cast<double>(c.value));
-    else std::fprintf(stderr, "%.6f\t%s\tnode=%s\t\t%.3f\n", tSec, tag, node, static_cast<double>(c.value));
+    if (pname) std::fprintf(stderr, "%.6f\t%s\t%s\tnode=%s\t\t%s\t%.3f\n", tSec, tag, src, node, pname, static_cast<double>(c.value));
+    else std::fprintf(stderr, "%.6f\t%s\t%s\tnode=%s\t\t%.3f\n", tSec, tag, src, node, static_cast<double>(c.value));
   }
 
   AudioUnitHandle unit_{};

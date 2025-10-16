@@ -1104,6 +1104,7 @@ int main(int argc, char** argv) {
           cmd.value = sc.value;
           cmd.rampMs = sc.rampMs;
           if (!sc.paramName.empty()) cmd.paramNameStr = internNodeId(sc.paramName);
+          cmd.source = 1; // session
           sessionInitCmds.push_back(cmd);
         }
       }
@@ -1162,6 +1163,7 @@ int main(int argc, char** argv) {
               cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp;
               cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
               if (!c.paramName.empty()) cmd.paramNameStr = internNodeId(c.paramName);
+              cmd.source = 0;
               combined.push_back(cmd);
             }
           }
@@ -1204,7 +1206,7 @@ int main(int argc, char** argv) {
             }
             while (!pq.empty() && gRunning.load()) {
               Item it = pq.top(); pq.pop(); const auto& c = rackRTs[it.ri].baseCmds[it.ci];
-              Command cmd{}; cmd.sampleTime = c.sampleTime + nextOffset[it.ri]; cmd.nodeId = internNodeId(c.nodeId); cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs; if (!c.paramName.empty()) cmd.paramNameStr = internNodeId(c.paramName);
+              Command cmd{}; cmd.sampleTime = c.sampleTime + nextOffset[it.ri]; cmd.nodeId = internNodeId(c.nodeId); cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs; if (!c.paramName.empty()) cmd.paramNameStr = internNodeId(c.paramName); cmd.source = 0;
               while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1)); if (!gRunning.load()) break;
               const size_t nextCi = it.ci + 1; if (nextCi < rackRTs[it.ri].baseCmds.size()) pq.push(Item{rackRTs[it.ri].baseCmds[nextCi].sampleTime + nextOffset[it.ri], it.ri, nextCi});
             }

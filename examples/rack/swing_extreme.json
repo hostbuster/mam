@@ -6,11 +6,13 @@
 
   "nodes": [
     { "id": "kick1", "type": "kick",
-      "params": { "f0": 120, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 220, "gain": 0.9, "click": 0.1, "bpm": 0, "loop": false } },
+      "params": { "f0": 120, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 220, "gain": 0.9, "click": 0.1, "bpm": 0, "loop": true } },
+    { "id": "kicklow", "type": "kick",
+      "params": { "f0": 20, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 220, "gain": 0.9, "click": 0.1, "bpm": 0, "loop": true } },
     { "id": "hat1",  "type": "clap",
-      "params": { "ampDecayMs": 60, "gain": 0.8, "bpm": 0, "loop": false } },
+      "params": { "ampDecayMs": 60, "gain": 0.8, "bpm": 0, "loop": true } },
     { "id": "clp",   "type": "clap",
-      "params": { "ampDecayMs": 120, "gain": 0.6, "bpm": 0, "loop": false } }
+      "params": { "ampDecayMs": 120, "gain": 0.6, "bpm": 0, "loop": true } }
   ],
 
   "mixer": {
@@ -25,14 +27,15 @@
 
   "transport": {
     "bpm": 80,
-    "lengthBars": 22,
+    "lengthBars": 1,
     "resolution": 16,
     "swingPercent": 55,
     "swingExponent": 1.9,
     "patterns": [
-      { "nodeId": "kick1", "steps": "x...x...x...x..." },
-      { "nodeId": "clp",   "steps": "..x...x...x...x." },
-      { "nodeId": "hat1",  "steps": "x.x.x.x.x.x.x.x." }
+      { "nodeId": "kick1",   "steps": "x...x...x...x..." },   
+      { "nodeId": "kicklow", "steps": "x.......x......." },
+      { "nodeId": "clp",     "steps": "..x...x...x...x." },
+      { "nodeId": "hat1",    "steps": "x.x.x.x.x.x.x.x." }
     ]
   },
 

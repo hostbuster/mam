@@ -18,6 +18,7 @@ struct Command {
   float value = 0.0f;         // new value
   float rampMs = 0.0f;        // for SetParamRamp
   const char* paramNameStr = nullptr; // optional diagnostics fallback for printing
+  uint8_t source = 0;         // 0 = rack (graph/transport), 1 = session
 };
 
 template <size_t Capacity>
