@@ -693,6 +693,7 @@ int main(int argc, char** argv) {
   bool printTriggers = false;
   bool dumpEvents = false;
   bool schemaStrict = false;         // enforce JSON Schema on load
+  bool printLatency = false;         // print preroll/latency info
   // Startup banner (binary identity)
   {
     static const char* kMamVersion = "0.0.1";
@@ -823,6 +824,8 @@ int main(int argc, char** argv) {
       printTriggers = true;
     } else if (std::strcmp(a, "--dump-events") == 0) {
       dumpEvents = true;
+    } else if (std::strcmp(a, "--print-latency") == 0) {
+      printLatency = true;
     } else if (std::strcmp(a, "--schema-strict") == 0) {
       schemaStrict = true;
     } else if (std::strcmp(a, "--trace-json") == 0) {
@@ -1035,7 +1038,23 @@ int main(int argc, char** argv) {
         srt.setXfaders(sess.xfaders, cfg);
       }
       std::vector<RealtimeSessionRenderer::Rack> rracks; rracks.reserve(graphsOwned.size()); for (size_t i = 0; i < graphsOwned.size(); ++i) rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain, sess.racks[i].muted, sess.racks[i].solo});
-      srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
+      const double rtSr = offlineSr > 0.0 ? offlineSr : 48000.0;
+      if (printLatency) {
+        uint64_t totalPreroll = 0;
+        for (const auto& r : rackRTs) {
+          // Estimate per-rack preroll using each rack's spec via type map size as proxy is not possible here;
+          // reuse computeGraphPrerollSamples by reloading spec for path
+          auto it = std::find_if(sess.racks.begin(), sess.racks.end(), [&](const auto& rx){ return rx.id == r.rackId; });
+          if (it != sess.racks.end()) {
+            try {
+              GraphSpec gsLat = loadGraphSpecFromJsonFile(it->path);
+              totalPreroll = std::max<uint64_t>(totalPreroll, computeGraphPrerollSamples(gsLat, static_cast<uint32_t>(rtSr + 0.5)));
+            } catch (...) {}
+          }
+        }
+        std::fprintf(stderr, "Session preroll (max rack): %.3f ms\n", 1000.0 * static_cast<double>(totalPreroll) / rtSr);
+      }
+      srt.start(rracks, sess.buses, sess.routes, rtSr, 2);
       // Collect session-level commands (absolute time or musical time, realtime) for initial enqueue
       std::vector<Command> sessionInitCmds;
       if (!sess.commands.empty()) {
@@ -1570,6 +1589,11 @@ int main(int argc, char** argv) {
         if (vs != 0) { std::fprintf(stderr, "Schema validation failed: %s\n", diag.c_str()); return 1; }
       }
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
+      if (printLatency) {
+        const double rtsr = 48000.0; // realtime graph uses fixed start sr below
+        const uint64_t preroll = computeGraphPrerollSamples(spec, static_cast<uint32_t>(rtsr + 0.5));
+        std::fprintf(stderr, "Graph preroll: %.3f ms\n", 1000.0 * static_cast<double>(preroll) / rtsr);
+      }
       warnDrySuppression(spec);
       if (randomSeedOverride != 0) setGlobalSeed(randomSeedOverride);
       else if (spec.randomSeed != 0) setGlobalSeed(spec.randomSeed);

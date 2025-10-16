@@ -33,6 +33,7 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 
 - **Ports visibility (`--print-ports`)**: Print declared `ports.inputs[]` / `ports.outputs[]` per node, including roles and channel counts. Handy to author sidechains and multi-channel graphs.
 - **Preroll reported in offline export**: Export summary now includes computed graph preroll in ms (derived from node latencies) for transparent start transients.
+- **Realtime preroll print (`--print-latency`)**: Print estimated graph preroll for racks, and maximum rack preroll for sessions at startup.
 - **Performance trace export (`--trace-json`)**: Write Chrome/Perfetto-compatible JSON traces with per-node timings to analyze hot spots.
 
 ### Done
@@ -231,6 +232,7 @@ Examples:
   - When combined with `--verbose` in realtime, per-node meters are printed each time the loop boundary is crossed.
 - `--schema-strict`: enforce JSON Schema `docs/schema.graph.v1.json` on load (realtime/offline). Enabled by default in dev builds (MAM_USE_JSON_SCHEMA=ON). Requires validator available (see build note).
 - `--trace-json path.json`: write Chrome/Perfetto-compatible trace events with per-node timings; open in Chrome `chrome://tracing` or Perfetto.
+- `--print-latency`: realtime only — print estimated graph preroll (rack) or max preroll across racks (session) at startup.
 
 LFOs and modulation matrix:
 - See `docs/LFO.md` for a guide to authoring LFOs, routing to params, LFO-on-LFO frequency modulation, per-step transport locks, and mapped routes (`min`/`max`, `map: linear|exp`).
