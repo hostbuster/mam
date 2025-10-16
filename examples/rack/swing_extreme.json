@@ -25,7 +25,7 @@
 
   "transport": {
     "bpm": 80,
-    "lengthBars": 2,
+    "lengthBars": 22,
     "resolution": 16,
     "swingPercent": 55,
     "swingExponent": 1.9,

@@ -946,8 +946,10 @@ int main(int argc, char** argv) {
       SessionSpec sess = loadSessionSpecFromJsonFile(sessionPath);
       // Build per-rack graphs with prefixed node ids, synthesize base commands for one loop, compute loopLen
       std::vector<std::unique_ptr<Graph>> graphsOwned;
-      struct RackRT { std::string rackId; std::vector<GraphSpec::CommandSpec> baseCmds; uint64_t loopLen=0; };
+      struct RackRT { std::string rackId; std::vector<GraphSpec::CommandSpec> baseCmds; uint64_t loopLen=0; uint64_t framesPerBar=0; };
       std::vector<RackRT> rackRTs;
+      // Global map: full node id (rack:node) -> node type (e.g., "kick") for session command param-name mapping
+      std::unordered_map<std::string, std::string> typeByFullNodeId;
       const uint32_t sessionSrU32 = static_cast<uint32_t>((offlineSr > 0.0 ? offlineSr : 48000.0) + 0.5);
       std::fprintf(stderr, "[rt-session] starting: racks=%zu sr=%u\n", sess.racks.size(), sessionSrU32);
       // Determine solo/mute policy once
@@ -959,6 +961,8 @@ int main(int argc, char** argv) {
         for (const auto& ns : gs.nodes) {
           auto node = createNodeFromSpec(ns);
           if (node) g->addNode(rr.id + ":" + ns.id, std::move(node));
+          // Accumulate type mapping for session-level param-name resolution
+          typeByFullNodeId.emplace(rr.id + ":" + ns.id, ns.type);
         }
         if (gs.hasMixer) {
           std::vector<MixerChannel> chans;
@@ -972,9 +976,15 @@ int main(int argc, char** argv) {
         }
         // Synthesize commands
         std::vector<GraphSpec::CommandSpec> cmds = gs.commands;
+        uint32_t effectiveBars = 0;
         if (gs.hasTransport) {
-          GraphSpec::Transport tgen = gs.transport; uint32_t baseBars = (gs.transport.lengthBars > 0) ? gs.transport.lengthBars : 1u; if (rr.bars > 0) baseBars = rr.bars; tgen.lengthBars = baseBars;
-          auto gen = generateCommandsFromTransport(tgen, sessionSrU32); cmds.insert(cmds.end(), gen.begin(), gen.end());
+          GraphSpec::Transport tgen = gs.transport;
+          uint32_t baseBars = (gs.transport.lengthBars > 0) ? gs.transport.lengthBars : 1u;
+          if (rr.bars > 0) baseBars = rr.bars;
+          tgen.lengthBars = baseBars;
+          effectiveBars = baseBars;
+          auto gen = generateCommandsFromTransport(tgen, sessionSrU32);
+          cmds.insert(cmds.end(), gen.begin(), gen.end());
         }
         // Apply solo/mute policy: if any solo, only racks with rr.solo emit; otherwise skip muted
         const bool activeRack = anySoloGlobal ? rr.solo : !rr.muted;
@@ -990,8 +1000,16 @@ int main(int argc, char** argv) {
           return 0;
         };
         for (auto& c : cmds) { c.nodeId = rr.id + ":" + c.nodeId; if (c.paramId == 0 && !c.paramName.empty()) { auto it = nodeIdToType.find(c.nodeId.substr(rr.id.size()+1)); const std::string nodeType = (it != nodeIdToType.end()) ? it->second : std::string(); c.paramId = mapParam(nodeType, c.paramName);} }
-        // Compute loopLen
-        uint64_t loopLen = 0; if (gs.hasTransport) { const double bpm = (gs.transport.bpm > 0.0) ? gs.transport.bpm : 120.0; const double secPerBar = 4.0 * (60.0 / bpm); const uint64_t framesPerBar = static_cast<uint64_t>(secPerBar * sessionSrU32 + 0.5); const uint32_t bars = (gs.transport.lengthBars > 0) ? gs.transport.lengthBars : 1u; loopLen = framesPerBar * static_cast<uint64_t>(bars);}        
+        // Compute loopLen and framesPerBar from effective bars (after overrides)
+        uint64_t loopLen = 0;
+        uint64_t framesPerBar = 0;
+        if (gs.hasTransport) {
+          const double bpm = (gs.transport.bpm > 0.0) ? gs.transport.bpm : 120.0;
+          const double secPerBar = 4.0 * (60.0 / bpm);
+          framesPerBar = static_cast<uint64_t>(secPerBar * sessionSrU32 + 0.5);
+          const uint32_t bars = (effectiveBars > 0) ? effectiveBars : ((gs.transport.lengthBars > 0) ? gs.transport.lengthBars : 1u);
+          loopLen = framesPerBar * static_cast<uint64_t>(bars);
+        }
         if (rtDebugSession) {
           size_t preview = std::min<size_t>(cmds.size(), 12);
           for (size_t i = 0; i < preview; ++i) {
@@ -1000,7 +1018,7 @@ int main(int argc, char** argv) {
               i, static_cast<double>(c.sampleTime) / static_cast<double>(sessionSrU32), c.type.c_str(), c.nodeId.c_str());
           }
         }
-        rackRTs.push_back(RackRT{rr.id, cmds, loopLen});
+        rackRTs.push_back(RackRT{rr.id, cmds, loopLen, framesPerBar});
         graphsOwned.push_back(std::move(g));
         std::fprintf(stderr, "[rt-session] rack=%s cmds=%zu loopLen=%llu\n", rr.id.c_str(), cmds.size(), (unsigned long long)loopLen);
       }
@@ -1021,6 +1039,14 @@ int main(int argc, char** argv) {
       // Collect session-level commands (absolute time or musical time, realtime) for initial enqueue
       std::vector<Command> sessionInitCmds;
       if (!sess.commands.empty()) {
+        // Use typeByFullNodeId from specs for param name resolution (prefixed ids)
+        auto mapParamId = [](const std::string& type, const std::string& name) -> uint16_t {
+          if (type == std::string("kick")) return resolveParamIdByName(kKickParamMap, name);
+          if (type == std::string("clap")) return resolveParamIdByName(kClapParamMap, name);
+          if (type == std::string("tb303_ext")) return resolveParamIdByName(kTb303ParamMap, name);
+          if (type == std::string("mam_chip")) return resolveParamIdByName(kMamChipParamMap, name);
+          return 0;
+        };
         for (const auto& sc : sess.commands) {
           double resolvedTimeSec = sc.timeSec;
 
@@ -1047,8 +1073,8 @@ int main(int argc, char** argv) {
             const uint32_t step = (sc.step > 0) ? sc.step - 1 : 0; // Convert to 0-based, default to bar start
             const uint32_t stepsPerBar = sc.res;
 
-            if (rackRtIt->loopLen > 0) {
-              const double secPerBar = static_cast<double>(rackRtIt->loopLen) / srt.sampleRate();
+            if (rackRtIt->framesPerBar > 0) {
+              const double secPerBar = static_cast<double>(rackRtIt->framesPerBar) / srt.sampleRate();
               const double stepsPerSec = static_cast<double>(stepsPerBar) / secPerBar;
               const double stepSec = static_cast<double>(step) / stepsPerSec;
 
@@ -1067,10 +1093,17 @@ int main(int argc, char** argv) {
           cmd.sampleTime = static_cast<uint64_t>(std::llround(resolvedTimeSec * srt.sampleRate()));
           cmd.nodeId = internNodeId(sc.nodeId);
           cmd.type = (sc.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParam;
-          cmd.paramId = 0;
+          // Resolve parameter id from name (if provided)
+          uint16_t pid = 0;
+          if (!sc.paramName.empty()) {
+            auto it = typeByFullNodeId.find(sc.nodeId);
+            const std::string nodeType = (it != typeByFullNodeId.end()) ? it->second : std::string();
+            pid = mapParamId(nodeType, sc.paramName);
+          }
+          cmd.paramId = pid;
           cmd.value = sc.value;
           cmd.rampMs = sc.rampMs;
-          if (!sc.rack.empty()) cmd.paramNameStr = nullptr; // session-level targets resolved by nodeId, keep null
+          if (!sc.paramName.empty()) cmd.paramNameStr = internNodeId(sc.paramName);
           sessionInitCmds.push_back(cmd);
         }
       }
@@ -1118,14 +1151,19 @@ int main(int argc, char** argv) {
         for (const auto& rr : sess.racks) activeFlags.push_back(anySolo ? rr.solo : !rr.muted);
         // Build combined list
         std::vector<Command> combined; combined.reserve(sessionInitCmds.size() + 1024);
-        // Rack events
+        // Rack events (seed initial loop and a small horizon of extra loops to avoid early gaps)
+        const uint32_t initAheadLoops = 2;
         for (size_t i = 0; i < rackRTs.size(); ++i) if (i < activeFlags.size() && activeFlags[i]) {
-          for (const auto& c : rackRTs[i].baseCmds) {
-            Command cmd{}; cmd.sampleTime = c.sampleTime; cmd.nodeId = internNodeId(c.nodeId);
-            cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp;
-            cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
-            if (!c.paramName.empty()) cmd.paramNameStr = internNodeId(c.paramName);
-            combined.push_back(cmd);
+          const uint64_t ll = rackRTs[i].loopLen;
+          for (uint32_t rep = 0; rep < 1u + initAheadLoops; ++rep) {
+            const uint64_t offset = (ll > 0) ? (rep * ll) : 0ull;
+            for (const auto& c : rackRTs[i].baseCmds) {
+              Command cmd{}; cmd.sampleTime = c.sampleTime + offset; cmd.nodeId = internNodeId(c.nodeId);
+              cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp;
+              cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
+              if (!c.paramName.empty()) cmd.paramNameStr = internNodeId(c.paramName);
+              combined.push_back(cmd);
+            }
           }
         }
         // Session-level

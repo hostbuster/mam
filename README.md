@@ -657,6 +657,29 @@ TBD. Until specified, treat the code as All Rights Reserved.
   - `ProcessContext.blockStart` contains the absolute sample start of the current block
   - Nodes implement `handleEvent(const Command&)`; realtime now routes commands by `nodeId`
 
+### Session commands (rack-time addressing)
+
+- Author session-level commands under `session.commands[]` to affect racks during realtime playback or offline export.
+- Address targets with the full, prefixed node id: `"nodeId": "<rackId>:<nodeId>"`.
+- Timing options:
+  - Absolute time: `{ "timeSec": 0.5, ... }` executes exactly at 0.5 s.
+  - Musical rack-time: `{ "rack": "rackId", "bar": 1, "step": 5, "res": 16, ... }` resolves to absolute time using that rack’s transport (frames per bar), then executes at that time.
+- Parameter addressing:
+  - Prefer names: `{ "param": "F0" }` (resolved using the rack node’s type → ParamMap). Numeric `paramId` also supported.
+  - Session command names are mapped to ids at load using graph specs (stable), not runtime types.
+- Ordering at the block boundary: SetParam/SetParamRamp are applied before Trigger for sample-accurate results.
+- Transport interaction and precedence:
+  - Transport locks in the rack may subsequently set the same parameter within the bar; the last write at a given time wins.
+  - For unambiguous audible proof, choose params the transport doesn’t touch (e.g., `GAIN`) or schedule session SETs after the transport step.
+- Debugging and proof:
+  - `--rt-debug-session` prints resolved musical times: `resolved musical command: rack=... bar=... step=... -> X.XXX sec`.
+  - `--print-triggers` shows SET/RAMP/TRIGGER at their exact execution times in the audio callback.
+  - Use `--quit-after` long enough to reach the scheduled events; or schedule near-start `timeSec` events for immediate proof.
+
+Implementation notes:
+- On realtime startup, the engine enqueues a globally time-sorted combined list (rack transport triggers + session commands) before starting audio, so no downbeat is missed.
+- Session param names are mapped to ids with the node type taken from the rack’s graph specs (`kick`, `clap`, `tb303_ext`, `mam_chip`).
+
 Smoothed parameters (current):
 
 - kick: `f0`, `fend`, `pitchDecayMs`, `ampDecayMs`, `gain`
