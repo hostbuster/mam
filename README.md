@@ -229,7 +229,7 @@ Examples:
 - `--verbose`: in realtime, print loop counter and elapsed time at loop boundaries.
 - `--meters-per-node`: print per-node peak/RMS and mark nodes with no audio as `inactive`.
   - When combined with `--verbose` in realtime, per-node meters are printed each time the loop boundary is crossed.
-- `--schema-strict`: enforce JSON Schema `docs/schema.graph.v1.json` on load (realtime/offline). Requires validator available (see build note).
+- `--schema-strict`: enforce JSON Schema `docs/schema.graph.v1.json` on load (realtime/offline). Enabled by default in dev builds (MAM_USE_JSON_SCHEMA=ON). Requires validator available (see build note).
 - `--trace-json path.json`: write Chrome/Perfetto-compatible trace events with per-node timings; open in Chrome `chrome://tracing` or Perfetto.
 
 LFOs and modulation matrix:

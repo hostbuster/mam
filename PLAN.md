@@ -18,7 +18,7 @@
 - Export UX: auto-duration (transport bars/ramps or last command) with tail; flags `--duration`, `--bars`, `--loop-count`, `--tail-ms`
  - Export normalization: `--normalize` (-1 dBFS) and `--peak-target dB`, with printed pre-/post-peak and applied gain
 - Mixer: per-input gains + master gain with optional soft clip
-- Routing: topological execution via `connections` with per-edge gains; cycle checks; per-edge `dryPercent` tap to master; `fromPort`/`toPort` fields scaffolded
+- Routing: topological execution via `connections` with per-edge gains; cycle checks; per-edge `dryPercent` tap to master; `fromPort`/`toPort` multi-port routing implemented (per-port accumulation), compressor sidechain reads port 1
  - Latency & preroll: nodes report latency; offline export adds preroll automatically to capture full transients; offline export summary now prints `Preroll: ... ms`
 - CLI: `--graph`, `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
 - Validation: named-param resolution; transport pattern target/steps checks; duplicate mixer input detection; dry+mixed double-count warnings; type param sanity (delay, meter)
@@ -27,6 +27,8 @@
  - Channel adapters: generalized N↔M adaptation guided by declared port `channels` (mono↔stereo and N→M modulo mapping)
  - Realtime loop stability: exact loop length from transport bars; throttled rolling feeder; interned nodeId strings; seamless 1‑bar looping
 - Realtime parity hardening: SetParam/SetParamRamp before Trigger at identical timestamps; multi‑loop pre‑synthesis to avoid boundary rounding; device‑rate aligned loop length; robust feeder shutdown.
+- Realtime diagnostics: `--print-triggers` shows origin tag (`RACK` vs `SESS`); session commands (rack-time and absolute) supported with name→id mapping at load
+- JSON: optional top-level `description` supported for rack/session files to document purpose
  - Observability: per-node meter printing after offline export and at realtime loop boundaries (`--verbose` + `--meters-per-node`)
  - Docs: `demo.json` refined; new `demo2.json` (16‑bar techno); sidechain cookbook; enhanced `--print-topo` with port channel info
  - Schema: strict validation toggle via `-DMAM_USE_JSON_SCHEMA=ON`
@@ -35,10 +37,8 @@
  - Offline UX: `--start-bar`/`--end-bar` slice transport renders to a subrange; export summary prints preroll; dry-tap double-count prevention by suppressing dry taps when source is also in mixer
 
 ### Top priority (next)
-- Multi-port routing (beyond MVP)
-  - Full per-port accumulation and delivery (no collapse to port 0); port-aware processing in nodes (e.g., compressor sidechain)
-  - Sidechain ergonomics: examples and validation for multi-consumer keys; clarify dry/wet interactions
-  - Wet/dry semantics avoid double-count by design
+- Multi-port routing (finish polish)
+  - Add examples/validation for multi-consumer keys; clarify dry/wet interactions; ensure wet/dry avoids double‑count by design
 - Latency reporting UI and preroll accounting in CLI output (offline and realtime stats print)
   - Nodes report `latencySamples()`; graph preroll is computed and printed
   - Offline exports include preroll automatically and print in export summary; realtime prints total algorithmic latency
@@ -82,9 +82,10 @@
 - CLI printing for params/nodes; golden renders and fuzzed event streams in CI presets.
 
 ### Proposed acceptance criteria
-- Multi-port routing: per-port accumulation/delivery in realtime and offline; compressor sidechain example passes; `--print-ports` shows port/channel info; wet/dry avoids double-count
+- Multi-port routing: per-port accumulation/delivery in realtime and offline; compressor sidechain example passes; `--print-ports` shows port/channel info; wet/dry avoids double-count; multi-consumer sidechain example documented
 - Latency/preroll: nodes expose `latencySamples()`; offline exports include and print preroll; realtime prints graph latency summary
 - Transport param-locks: JSON allows `patterns[i].locks` with `{param|paramId, value|rampMs}`; both realtime and offline render identical automation.
+- Realtime diagnostics: `--print-triggers` prints `RACK`/`SESS` origin tags; session commands name→id mapping documented; examples include `description` fields
 - Schema validation: `--validate` reports unknown node types/params, invalid ranges, and bad pattern targets/lengths; exits non-zero on failures.
 - Offline scheduler: rendering via scheduler matches baseline buffer within -120 dBFS; parallel mode does not deadlock; lints clean.
 - Param maps: all instrument params documented in `docs/ParamTables.md`; name→id mapping covers all used names in examples.

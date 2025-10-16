@@ -9,7 +9,7 @@ option(MAM_WARNINGS_AS_ERRORS "Treat warnings as errors" OFF)
 option(MAM_ENABLE_ASAN "Enable AddressSanitizer" OFF)
 option(MAM_ENABLE_UBSAN "Enable UndefinedBehaviorSanitizer" OFF)
 option(MAM_ENABLE_LTO "Enable Link-Time Optimization" OFF)
-option(MAM_USE_JSON_SCHEMA "Enable strict JSON Schema validation (requires json-schema.hpp)" OFF)
+option(MAM_USE_JSON_SCHEMA "Enable strict JSON Schema validation (requires json-schema.hpp)" ON)
 
 include_directories(third_party)
 
