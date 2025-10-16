@@ -135,12 +135,57 @@ Musical (anchored to rack1 transport):
 - Sessions without `commands`, `durationSec`, or `loop` behave exactly as before.
 - Musical mode requires at least one rack with transport to anchor timing.
 
-### Implementation Plan (Incremental)
-1) Add `commands[]` to `SessionSpec` with `timeSec` support (absolute time). Plan and enqueue into realtime/offline paths.
-2) Add musical addressing (`rack`, `bar`, `step`, `res`) resolving to `timeSec` using the referenced rack’s transport.
-3) Add `durationSec`/`loop` handling in realtime player; offline renders through duration + tail.
-4) Scenes and `RecallScene` command (optional).
-5) Extended targets: `bus:<id>:param` (optional, post-mix inserts etc.).
+### Implementation Status (October 2025)
+
+✅ **Phase 1 COMPLETED**: Add `commands[]` to `SessionSpec` with `timeSec` support (absolute time).
+- Session commands are supported in both realtime and offline rendering
+- Commands are resolved to sample time and enqueued with proper priority
+- Session-level targets like `xfader:<id>:x` are supported
+
+✅ **Phase 2 COMPLETED**: Add musical addressing (`rack`, `bar`, `step`, `res`) resolving to `timeSec` using the referenced rack's transport.
+- Musical time commands are fully implemented and tested
+- Supports bar-level and step-level precision (e.g., bar 2, step 9)
+- Resolution uses the referenced rack's BPM and transport settings
+- Works in both realtime and offline rendering modes
+
+✅ **Phase 3 COMPLETED**: Add `durationSec`/`loop` handling in realtime player; offline renders through duration + tail.
+- `durationSec` is fully supported for both realtime and offline rendering
+- `loop` functionality implemented with proper session restart for realtime playback
+- Loop duration calculation based on rack transport settings (BPM, bars, resolution)
+- Offline rendering supports loop-aware duration planning and multi-loop rendering
+- Seamless musical looping with proper state reset and command feeder restart
+
+❌ **Phase 4 PENDING**: Scenes and `RecallScene` command (optional).
+❌ **Phase 5 PENDING**: Extended targets: `bus:<id>:param` (optional, post-mix inserts etc.).
+
+### Current Capabilities
+
+**Supported Session Features:**
+```json
+{
+  // Session-level duration and looping
+  "durationSec": 60.0,    // Hard duration cap
+  "loop": true,           // Enable looping when duration reached
+
+  "commands": [
+    // Absolute time addressing
+    { "timeSec": 4.0, "nodeId": "xfader:main:x", "type": "SetParam", "value": 0.0, "rampMs": 250 },
+
+    // Musical time addressing (NEW!)
+    { "rack": "rack1", "bar": 8, "step": 1, "res": 16,
+      "nodeId": "xfader:main:x", "type": "SetParam", "value": 1.0, "rampMs": 1000 }
+  ]
+}
+```
+
+**Key Features:**
+- **Hybrid addressing**: Commands can use either absolute time (`timeSec`) or musical time (`rack` + `bar`/`step`)
+- **Priority handling**: When both addressing modes are present, `timeSec` takes precedence with a warning
+- **Rack anchoring**: Musical time is resolved using the specified rack's transport (BPM, bars, resolution)
+- **Sample accuracy**: All commands are resolved to exact sample times during session planning
+- **Offline parity**: Musical addressing works identically in realtime and offline rendering modes
+- **Seamless looping**: Realtime and offline sessions support proper loop restart with state reset
+- **Loop-aware duration**: Session duration calculation respects loop settings and transport timing
 
 ### Rationale
 - Supporting both absolute and musical timing covers live performance and song-like authoring.

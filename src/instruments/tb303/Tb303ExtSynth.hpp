@@ -47,6 +47,7 @@ public:
     if (params_.envMode > 0.5f) {
       fStage_ = Stage::Attack; aStage_ = Stage::Attack; envF_ = 0.0f; envA_ = 0.0f; stageSamples_ = 0.0f;
     } else {
+      // Reset envelope state for legacy decay-only mode to ensure clean retriggers
       envF_ = 1.0f * std::fmin(1.5f, 1.0f + 0.8f * (velocity + accent));
       envA_ = 1.0f * std::fmin(1.5f, 1.0f + 0.5f * (velocity + 0.5f * accent));
     }

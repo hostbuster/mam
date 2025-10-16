@@ -106,6 +106,7 @@ public:
   void stop() { if (metricsFile_) { std::fclose(metricsFile_); metricsFile_ = nullptr; } unit_.release(); }
   double sampleRate() const noexcept { return sampleRate_; }
   SampleTime sampleCounter() const noexcept { return sampleCounter_.load(std::memory_order_relaxed); }
+  void resetSampleCounter() { sampleCounter_.store(0, std::memory_order_relaxed); }
 
 private:
   static OSStatus render(void* inRefCon, AudioUnitRenderActionFlags*, const AudioTimeStamp*, UInt32, UInt32 inNumberFrames, AudioBufferList* ioData) noexcept {
@@ -157,11 +158,21 @@ private:
       }
       // Apply events at segment boundary: SetParam first, then Trigger across all racks
       for (const auto& ev : drained) if (ev.sampleTime == segAbsStart && (ev.type == CommandType::SetParam || ev.type == CommandType::SetParamRamp)) {
-        for (const auto& r : self->racks_) if (r.graph) r.graph->forEachNode([&](const std::string& id, Node& n){ if (ev.nodeId && id == ev.nodeId) n.handleEvent(ev); });
+        // Route events by matching full, prefixed nodeId against graph node ids
+        for (const auto& r : self->racks_) if (r.graph) {
+          if (!ev.nodeId) continue;
+          const char* fullId = ev.nodeId;
+          r.graph->forEachNode([&](const std::string& id, Node& n){ if (id == fullId) n.handleEvent(ev); });
+        }
         if (self->printTriggers_) self->printEvent(ev, segAbsStart);
       }
       for (const auto& ev : drained) if (ev.sampleTime == segAbsStart && ev.type == CommandType::Trigger) {
-        for (const auto& r : self->racks_) if (r.graph) r.graph->forEachNode([&](const std::string& id, Node& n){ if (ev.nodeId && id == ev.nodeId) n.handleEvent(ev); });
+        // Route events by matching full, prefixed nodeId against graph node ids
+        for (const auto& r : self->racks_) if (r.graph) {
+          if (!ev.nodeId) continue;
+          const char* fullId = ev.nodeId;
+          r.graph->forEachNode([&](const std::string& id, Node& n){ if (id == fullId) n.handleEvent(ev); });
+        }
         if (self->printTriggers_) self->printEvent(ev, segAbsStart);
       }
 

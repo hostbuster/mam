@@ -946,12 +946,57 @@ int main(int argc, char** argv) {
       }
       std::vector<RealtimeSessionRenderer::Rack> rracks; rracks.reserve(graphsOwned.size()); for (size_t i = 0; i < graphsOwned.size(); ++i) rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain});
       srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
-      // Enqueue session-level commands (absolute time, realtime)
+      // Enqueue session-level commands (absolute time or musical time, realtime)
       if (!sess.commands.empty()) {
         for (const auto& sc : sess.commands) {
-          Command cmd{}; cmd.sampleTime = static_cast<uint64_t>(std::llround(sc.timeSec * srt.sampleRate()));
-          cmd.nodeId = internNodeId(sc.nodeId); cmd.type = (sc.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParam;
-          cmd.paramId = 0; cmd.value = sc.value; cmd.rampMs = sc.rampMs;
+          double resolvedTimeSec = sc.timeSec;
+
+          // Resolve musical time if absolute time not provided
+          if (sc.timeSec == 0.0 && !sc.rack.empty() && sc.bar > 0) {
+            // Find the referenced rack
+            auto rackIt = std::find_if(sess.racks.begin(), sess.racks.end(),
+              [&](const SessionSpec::RackRef& r) { return r.id == sc.rack; });
+            if (rackIt == sess.racks.end()) {
+              std::fprintf(stderr, "[rt-session] warning: musical command references unknown rack '%s'\n", sc.rack.c_str());
+              continue;
+            }
+
+            // Find the corresponding rack runtime info
+            auto rackRtIt = std::find_if(rackRTs.begin(), rackRTs.end(),
+              [&](const RackRT& r) { return r.rackId == sc.rack; });
+            if (rackRtIt == rackRTs.end()) {
+              std::fprintf(stderr, "[rt-session] warning: no runtime info for rack '%s'\n", sc.rack.c_str());
+              continue;
+            }
+
+            // Convert musical time to seconds using the rack's transport
+            const uint32_t bar = sc.bar - 1; // Convert to 0-based
+            const uint32_t step = (sc.step > 0) ? sc.step - 1 : 0; // Convert to 0-based, default to bar start
+            const uint32_t stepsPerBar = sc.res;
+
+            if (rackRtIt->loopLen > 0) {
+              const double secPerBar = static_cast<double>(rackRtIt->loopLen) / srt.sampleRate();
+              const double stepsPerSec = static_cast<double>(stepsPerBar) / secPerBar;
+              const double stepSec = static_cast<double>(step) / stepsPerSec;
+
+              resolvedTimeSec = static_cast<double>(bar) * secPerBar + stepSec;
+              std::fprintf(stderr, "[rt-session] resolved musical command: rack=%s bar=%u step=%u res=%u -> %.3f sec\n",
+                sc.rack.c_str(), sc.bar, sc.step, sc.res, resolvedTimeSec);
+            } else {
+              std::fprintf(stderr, "[rt-session] warning: rack '%s' has zero loop length, cannot resolve musical time\n", sc.rack.c_str());
+              continue;
+            }
+          } else if (sc.timeSec > 0.0 && (!sc.rack.empty() || sc.bar > 0)) {
+            std::fprintf(stderr, "[rt-session] warning: command has both timeSec and musical fields, using timeSec\n");
+          }
+
+          Command cmd{};
+          cmd.sampleTime = static_cast<uint64_t>(std::llround(resolvedTimeSec * srt.sampleRate()));
+          cmd.nodeId = internNodeId(sc.nodeId);
+          cmd.type = (sc.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParam;
+          cmd.paramId = 0;
+          cmd.value = sc.value;
+          cmd.rampMs = sc.rampMs;
           while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
       }
@@ -1062,13 +1107,40 @@ int main(int argc, char** argv) {
         SessionSpec sess = loadSessionSpecFromJsonFile(sessionPath);
         if (offlineSr > 0.0) sess.sampleRate = sr;
         SessionRuntime runtime; runtime.loadFromSpec(sess);
-        totalFrames = runtime.planTotalFrames(tailMs);
+
+        // Handle loop-aware duration planning
+        uint32_t maxLoops = 1;
+        if (sess.loop && sess.durationSec > 0.0) {
+          // For looping sessions, calculate frames for multiple loops
+          uint64_t singleLoopFrames = runtime.planTotalFrames(tailMs, false, 1);
+          if (singleLoopFrames > 0) {
+            double singleLoopSec = static_cast<double>(singleLoopFrames) / sr;
+            maxLoops = static_cast<uint32_t>(std::ceil(sess.durationSec / singleLoopSec));
+            totalFrames = runtime.planTotalFrames(tailMs, true, maxLoops);
+            std::fprintf(stderr, "[offline-session] looping session: %u loops (%.3fs each), total duration=%.3f sec\n",
+              maxLoops, singleLoopSec, static_cast<double>(totalFrames) / sr);
+          } else {
+            totalFrames = runtime.planTotalFrames(tailMs);
+          }
+        } else {
+          totalFrames = runtime.planTotalFrames(tailMs);
+        }
+
         if (overrideDurationSec >= 0.0) totalFrames = static_cast<uint64_t>(overrideDurationSec * static_cast<double>(sr) + 0.5);
         // Enable per-rack meters if requested
         std::vector<SessionRuntime::RackStats> rstats;
         runtime.setPerRackMeters(printMeters);
         runtime.setPerRackCpu(cpuStats || cpuStatsPerNode);
-        auto interleaved = runtime.renderOffline(totalFrames, printMeters ? &rstats : nullptr);
+
+        std::vector<float> interleaved;
+        if (sess.loop && sess.durationSec > 0.0 && maxLoops > 1) {
+          // Use loop-aware rendering for looping sessions
+          std::fprintf(stderr, "[offline-session] rendering %u loops for session\n", maxLoops);
+          interleaved = runtime.renderOfflineWithLoop(totalFrames, maxLoops, printMeters ? &rstats : nullptr);
+        } else {
+          // Standard rendering for non-looping sessions
+          interleaved = runtime.renderOffline(totalFrames, printMeters ? &rstats : nullptr);
+        }
         AudioFileSpec spec; spec.format = outFormat; spec.bitDepth = pcm16 ? BitDepth::Pcm16 : outDepth; spec.sampleRate = sr; spec.channels = channels;
         writeWithExtAudioFile(wavPath, spec, interleaved);
         const double seconds = static_cast<double>(totalFrames) / static_cast<double>(sr);
@@ -1622,7 +1694,26 @@ int main(int argc, char** argv) {
       while (gRunning.load()) {
         if (sess.durationSec > 0.0) {
           const double tNow = static_cast<double>(srt.sampleCounter()) / srt.sampleRate();
-          if (tNow >= sess.durationSec) { if (sess.loop) { /* future: restart */ } else { gRunning.store(false); break; } }
+          if (tNow >= sess.durationSec) {
+            if (sess.loop) {
+              // Restart session: reset sample counter and restart command feeders
+              std::fprintf(stderr, "[rt-session] looping back to start (duration=%.3f sec)\n", sess.durationSec);
+              srt.resetSampleCounter();
+
+              // Reset all rack graphs to initial state for seamless looping
+              for (size_t i = 0; i < graphsOwned.size(); ++i) {
+                if (graphsOwned[i]) {
+                  graphsOwned[i]->reset();
+                }
+              }
+
+              // Note: The feeder thread already handles looping by resetting nextOffset to loopLen
+              // when it reaches the end, so we don't need to do anything special here
+            } else {
+              gRunning.store(false);
+              break;
+            }
+          }
         }
         if (isStdinReady()) {
           char buf[4]; (void)read(STDIN_FILENO, buf, sizeof(buf)); gRunning.store(false); break;

@@ -42,6 +42,8 @@ struct SessionRuntime {
   std::vector<Bus> buses;
   struct Route { std::string from; std::string to; float gain = 1.0f; };
   std::vector<Route> routes;
+  // Session-level commands (resolved to sample time)
+  std::vector<GraphSpec::CommandSpec> sessionCommands;
 
   void setPerRackMeters(bool v) { enablePerRackMeters = v; }
   void setPerRackCpu(bool v) { enablePerRackCpu = v; }
@@ -127,6 +129,56 @@ struct SessionRuntime {
       Bus bb; bb.id = b.id; bb.channels = b.channels; bb.inserts = b.inserts; buses.push_back(std::move(bb));
     }
     for (const auto& r : s.routes) { Route rr; rr.from = r.from; rr.to = r.to; rr.gain = r.gain; routes.push_back(rr); }
+
+    // Resolve session commands from musical time to sample time
+    sessionCommands.clear();
+    for (const auto& sc : s.commands) {
+      double resolvedTimeSec = sc.timeSec;
+
+      // Resolve musical time if absolute time not provided
+      if (sc.timeSec == 0.0 && !sc.rack.empty() && sc.bar > 0) {
+        // Find the referenced rack
+        auto rackIt = std::find_if(racks.begin(), racks.end(),
+          [&](const Rack& r) { return r.id == sc.rack; });
+        if (rackIt == racks.end()) {
+          // Warning already printed in main.cpp, just skip
+          continue;
+        }
+
+        // Convert musical time to seconds using the rack's transport info
+        const uint32_t bar = sc.bar - 1; // Convert to 0-based
+        const uint32_t step = (sc.step > 0) ? sc.step - 1 : 0; // Convert to 0-based, default to bar start
+        const uint32_t stepsPerBar = sc.res;
+
+        // Calculate loop length for this rack
+        uint64_t loopLen = 0;
+        if (rackIt->spec.hasTransport) {
+          const double bpm = (rackIt->spec.transport.bpm > 0.0) ? rackIt->spec.transport.bpm : 120.0;
+          const double secPerBar = 4.0 * (60.0 / bpm);
+          const uint64_t framesPerBar = static_cast<uint64_t>(secPerBar * sampleRate + 0.5);
+          const uint32_t bars = (rackIt->spec.transport.lengthBars > 0) ? rackIt->spec.transport.lengthBars : 1u;
+          loopLen = framesPerBar * static_cast<uint64_t>(bars);
+        }
+
+        if (loopLen > 0) {
+          const double secPerBar = static_cast<double>(loopLen) / sampleRate;
+          const double stepsPerSec = static_cast<double>(stepsPerBar) / secPerBar;
+          const double stepSec = static_cast<double>(step) / stepsPerSec;
+
+          resolvedTimeSec = static_cast<double>(bar) * secPerBar + stepSec;
+        }
+      }
+
+      // Convert to CommandSpec format
+      GraphSpec::CommandSpec cmd;
+      cmd.sampleTime = static_cast<uint64_t>(std::llround(resolvedTimeSec * sampleRate));
+      cmd.nodeId = sc.nodeId;
+      cmd.type = sc.type;
+      cmd.paramId = 0; // Session commands use nodeId targeting, not paramId
+      cmd.value = sc.value;
+      cmd.rampMs = sc.rampMs;
+      sessionCommands.push_back(cmd);
+    }
   }
 
   // Render offline: mix simple sum with per-rack gain and start offset (silence before start)
@@ -136,9 +188,15 @@ struct SessionRuntime {
     if (outStats) outStats->clear();
     // Prepare bus buffers
     for (auto& b : buses) b.buffer.assign(static_cast<size_t>(frames * b.channels), 0.0f);
+
+    // Session commands are resolved but not yet applied in offline rendering
+    // This provides the foundation for musical time addressing in offline sessions
+
     struct RackOutput { std::string id; std::vector<float> audio; int64_t startOffsetFrames = 0; float gain = 1.0f; };
     std::vector<RackOutput> outputs;
     outputs.reserve(racks.size());
+
+    // Render each rack with its commands
     for (auto& r : racks) {
       const uint64_t rackFrames = frames > static_cast<uint64_t>(std::max<int64_t>(0, -r.startOffsetFrames))
         ? (frames - static_cast<uint64_t>(std::max<int64_t>(0, -r.startOffsetFrames))) : 0ull;
@@ -237,20 +295,62 @@ struct SessionRuntime {
     return mix;
   }
 
-  // Plan total frames considering content length, preroll, and start offsets
-  uint64_t planTotalFrames(double sessionTailMs) const {
+  // Plan total frames considering content length, preroll, start offsets, and looping
+  uint64_t planTotalFrames(double sessionTailMs, bool enableLoop = false, uint32_t maxLoops = 1) const {
     uint64_t maxEnd = 0;
-    for (const auto& r : racks) {
-      // Determine content duration from actual command tail (respects per-rack overrides)
-      uint64_t content = 0;
-      for (const auto& c : r.cmds) if (c.sampleTime > content) content = c.sampleTime;
-      const uint64_t preroll = computeGraphPrerollSamples(r.spec, sampleRate);
-      const uint64_t start = static_cast<uint64_t>(std::max<int64_t>(0, r.startOffsetFrames));
-      const uint64_t end = start + preroll + content;
-      if (end > maxEnd) maxEnd = end;
+
+    if (enableLoop && maxLoops > 0) {
+      // For looping, calculate based on the loop duration (max of rack loop lengths)
+      for (const auto& r : racks) {
+        uint64_t loopLen = 0;
+        if (r.spec.hasTransport) {
+          const double bpm = (r.spec.transport.bpm > 0.0) ? r.spec.transport.bpm : 120.0;
+          const double secPerBar = 4.0 * (60.0 / bpm);
+          const uint64_t framesPerBar = static_cast<uint64_t>(secPerBar * sampleRate + 0.5);
+          const uint32_t bars = (r.spec.transport.lengthBars > 0) ? r.spec.transport.lengthBars : 1u;
+          loopLen = framesPerBar * static_cast<uint64_t>(bars);
+        }
+        if (loopLen > maxEnd) maxEnd = loopLen;
+      }
+      maxEnd = maxEnd * maxLoops;
+    } else {
+      // Standard calculation: max of rack content
+      for (const auto& r : racks) {
+        // Determine content duration from actual command tail (respects per-rack overrides)
+        uint64_t content = 0;
+        for (const auto& c : r.cmds) if (c.sampleTime > content) content = c.sampleTime;
+        const uint64_t preroll = computeGraphPrerollSamples(r.spec, sampleRate);
+        const uint64_t start = static_cast<uint64_t>(std::max<int64_t>(0, r.startOffsetFrames));
+        const uint64_t end = start + preroll + content;
+        if (end > maxEnd) maxEnd = end;
+      }
     }
+
     const uint64_t tail = static_cast<uint64_t>((sessionTailMs / 1000.0) * static_cast<double>(sampleRate) + 0.5);
     return maxEnd + tail;
+  }
+
+  // Render with optional looping support
+  std::vector<float> renderOfflineWithLoop(uint64_t frames, uint32_t maxLoops = 1, std::vector<RackStats>* outStats = nullptr) {
+    std::vector<float> mix;
+    mix.assign(static_cast<size_t>(frames * channels), 0.0f);
+    if (outStats) outStats->clear();
+
+    // Render multiple loops if requested
+    uint64_t framesRendered = 0;
+    for (uint32_t loop = 0; loop < maxLoops && framesRendered < frames; ++loop) {
+      uint64_t loopFrames = std::min(frames - framesRendered, frames / maxLoops); // Distribute frames across loops
+      if (loopFrames == 0) break;
+
+      std::vector<float> loopMix = renderOffline(loopFrames, outStats);
+      // Copy loop audio to the appropriate position in the final mix
+      for (size_t i = 0; i < loopMix.size() && framesRendered + i < mix.size(); ++i) {
+        mix[framesRendered + i] += loopMix[i];
+      }
+      framesRendered += loopFrames;
+    }
+
+    return mix;
   }
 };
 

@@ -32,7 +32,20 @@ struct SessionSpec {
     double smoothingMs = 10.0; // slew for x changes
     struct Lfo { std::string wave = "sine"; float freqHz = 0.25f; float phase01 = 0.0f; bool has = false; } lfo;
   };
-  struct SessCommand { double timeSec = 0.0; std::string nodeId; std::string type; float value = 0.0f; float rampMs = 0.0f; };
+  struct SessCommand {
+    // Absolute time addressing (existing)
+    double timeSec = 0.0;
+    // Musical time addressing (new)
+    std::string rack;           // reference rack for musical time
+    uint32_t bar = 0;           // bar number (1-based)
+    uint32_t step = 0;          // step within bar (1-based, optional)
+    uint32_t res = 16;          // resolution (steps per bar, default 16)
+    // Command details
+    std::string nodeId;
+    std::string type;
+    float value = 0.0f;
+    float rampMs = 0.0f;
+  };
   uint32_t sampleRate = 48000;
   uint32_t channels = 2;
   double durationSec = 0.0; // 0 = auto
@@ -123,7 +136,14 @@ inline SessionSpec loadSessionSpecFromJsonFile(const std::string& path) {
   if (j.contains("commands")) {
     for (const auto& cj : j["commands"]) {
       SessionSpec::SessCommand sc;
+      // Absolute time addressing (existing)
       sc.timeSec = cj.value("timeSec", 0.0);
+      // Musical time addressing (new)
+      sc.rack = cj.value("rack", std::string());
+      sc.bar = cj.value("bar", 0u);
+      sc.step = cj.value("step", 0u);
+      sc.res = cj.value("res", 16u);
+      // Command details
       sc.nodeId = cj.value("nodeId", std::string());
       sc.type = cj.value("type", std::string("SetParam"));
       sc.value = cj.value("value", 0.0f);
