@@ -1,0 +1,30 @@
+{
+  "kind": "rack",
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+
+  "nodes": [
+    { "id": "kick1", "type": "kick",
+      "params": { "f0": 120, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 220, "gain": 0.9, "click": 0.1, "bpm": 120, "loop": true },
+      "ports": { "outputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ] } },
+
+    { "id": "pad", "type": "clap",
+      "params": { "ampDecayMs": 200, "gain": 0.6, "bpm": 60, "loop": true },
+      "ports": { "outputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ] } },
+
+    { "id": "compA", "type": "compressor",
+      "params": { "thresholdDb": -6, "ratio": 3.0, "attackMs": 8, "releaseMs": 140, "makeupDb": 0 },
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ],
+                 "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
+  ],
+
+  "connections": [
+    { "from": "pad",   "to": "compA", "fromPort": 0, "toPort": 0, "gainPercent": 100 },
+    { "from": "kick1", "to": "compA", "fromPort": 0, "toPort": 1, "gainPercent": 100 }
+  ],
+
+  "commands": []
+}
+
+

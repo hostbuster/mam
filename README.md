@@ -360,6 +360,27 @@ Generalized N↔M adaptation guided by declared port channel counts:
 - mono→stereo (or mono→N): average source to mono and duplicate across destination width
 - stereo→mono (or N→mono): average to mono, then duplicate to graph width
 - N→M where N,M>1: simple modulo mapping within graph channel width
+- Multi-port routing (sidechain example):
+
+```json
+{
+  "nodes": [
+    { "id": "compA", "type": "compressor",
+      "ports": { "inputs": [ { "index": 0, "type": "audio", "role": "main" }, { "index": 1, "type": "audio", "role": "sidechain", "channels": 1 } ],
+                  "outputs": [ { "index": 0, "type": "audio", "role": "main" } ] } }
+  ],
+  "connections": [
+    { "from": "pad",   "to": "compA", "fromPort": 0, "toPort": 0 },
+    { "from": "kick1", "to": "compA", "fromPort": 0, "toPort": 1 }
+  ]
+}
+```
+
+Use `examples/rack/multiport_sidechain.json` and run:
+
+```bash
+./build/mam --rack examples/rack/multiport_sidechain.json --print-triggers --quit-after 3
+```
 
 Authoring:
 - Declare `channels` in `ports.inputs[].channels` / `ports.outputs[].channels` to hint adapters. `0` or omitted means “use graph channels”.
