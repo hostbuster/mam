@@ -15,6 +15,8 @@ struct SessionSpec {
     std::string path;
     int64_t startOffsetFrames = 0;
     float gain = 1.0f;
+    bool muted = false;
+    bool solo = false;
     // Optional transport overrides per rack
     uint32_t bars = 0;           // force bars (0 = use graph)
     uint32_t loopCount = 0;      // repeat bars N times
@@ -76,6 +78,8 @@ inline SessionSpec loadSessionSpecFromJsonFile(const std::string& path) {
       rr.path = r.value("path", std::string());
       rr.startOffsetFrames = r.value("startOffsetFrames", 0);
       rr.gain = r.value("gain", 1.0f);
+      rr.muted = r.value("muted", false);
+      rr.solo = r.value("solo", false);
       rr.bars = r.value("bars", 0u);
       rr.loopCount = r.value("loopCount", 0u);
       rr.loopMinutes = r.value("loopMinutes", 0.0);

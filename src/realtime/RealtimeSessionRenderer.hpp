@@ -23,7 +23,7 @@ public:
   RealtimeSessionRenderer() = default;
   ~RealtimeSessionRenderer() { stop(); }
 
-  struct Rack { Graph* graph=nullptr; std::string id; float gain=1.0f; };
+  struct Rack { Graph* graph=nullptr; std::string id; float gain=1.0f; bool muted=false; bool solo=false; };
   template <size_t N>
   void setCommandQueue(SpscCommandQueue<N>* q) { cmdQueue_ = reinterpret_cast<void*>(q); queueDrain_ = [](void* p, SampleTime cutoff, std::vector<Command>& out){ static_cast<SpscCommandQueue<N>*>(p)->drainUpTo(cutoff, out); }; }
   void setDiagnostics(bool printTriggers) { printTriggers_ = printTriggers; }
@@ -180,9 +180,14 @@ private:
       float* outPtr = interleaved + static_cast<size_t>(segStart) * self->channels_;
       std::memset(outPtr, 0, static_cast<size_t>(segFrames) * self->channels_ * sizeof(float));
 
+      // Determine solo mode for this segment
+      bool anySolo = false; for (const auto& r : self->racks_) if (r.solo) { anySolo = true; break; }
       // Render each rack graph to its scratch
       for (size_t ri = 0; ri < self->racks_.size(); ++ri) {
-        auto* g = self->racks_[ri].graph; if (!g) continue;
+        const auto& rackCfg = self->racks_[ri];
+        if (rackCfg.muted) continue;
+        if (anySolo && !rackCfg.solo) continue;
+        auto* g = rackCfg.graph; if (!g) continue;
         ProcessContext ctx{}; ctx.sampleRate = self->sampleRate_; ctx.frames = segFrames; ctx.blockStart = segAbsStart;
         float* dst = self->rackScratch_[ri].data();
         for (size_t i = 0; i < static_cast<size_t>(segFrames) * self->channels_; ++i) dst[i] = 0.0f;
@@ -229,6 +234,10 @@ private:
       for (const auto& rt : self->routes_) {
         size_t ri = 0; bool foundRack = false; for (; ri < self->racks_.size(); ++ri) if (self->racks_[ri].id == rt.from) { foundRack = true; break; }
         if (!foundRack) continue;
+        if (self->racks_[ri].muted) continue; // muted racks do not route
+        // honor solo globally: if anySolo and this rack not solo, skip
+        bool anySolo2 = false; for (const auto& r : self->racks_) if (r.solo) { anySolo2 = true; break; }
+        if (anySolo2 && !self->racks_[ri].solo) continue;
         size_t bi = 0; bool foundBus = false; for (; bi < self->buses_.size(); ++bi) if (self->buses_[bi].id == rt.to) { foundBus = true; break; }
         if (!foundBus) continue;
         const float gain = self->racks_[ri].gain * rt.gain * ((ri < rackGainMul.size()) ? rackGainMul[ri] : 1.0f);
@@ -240,6 +249,9 @@ private:
       // Fallback: racks without routes → sum to output
       for (size_t ri = 0; ri < self->racks_.size(); ++ri) {
         if (ri >= rackHadRoute.size() || rackHadRoute[ri]) continue;
+        if (self->racks_[ri].muted) continue;
+        bool anySolo3 = false; for (const auto& r : self->racks_) if (r.solo) { anySolo3 = true; break; }
+        if (anySolo3 && !self->racks_[ri].solo) continue;
         const float* src = self->rackScratch_[ri].data();
         float* dst = outPtr;
         const size_t n = static_cast<size_t>(segFrames) * self->channels_;

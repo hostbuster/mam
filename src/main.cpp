@@ -941,10 +941,10 @@ int main(int argc, char** argv) {
       // Configure session xfaders (if any)
       {
         std::vector<RealtimeSessionRenderer::Rack> cfg; cfg.reserve(graphsOwned.size());
-        for (size_t i = 0; i < graphsOwned.size(); ++i) cfg.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain});
+        for (size_t i = 0; i < graphsOwned.size(); ++i) cfg.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain, sess.racks[i].muted, sess.racks[i].solo});
         srt.setXfaders(sess.xfaders, cfg);
       }
-      std::vector<RealtimeSessionRenderer::Rack> rracks; rracks.reserve(graphsOwned.size()); for (size_t i = 0; i < graphsOwned.size(); ++i) rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain});
+      std::vector<RealtimeSessionRenderer::Rack> rracks; rracks.reserve(graphsOwned.size()); for (size_t i = 0; i < graphsOwned.size(); ++i) rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain, sess.racks[i].muted, sess.racks[i].solo});
       srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
       // Enqueue session-level commands (absolute time or musical time, realtime)
       if (!sess.commands.empty()) {
@@ -1643,14 +1643,14 @@ int main(int argc, char** argv) {
       // Configure session xfaders (if any)
       {
         std::vector<RealtimeSessionRenderer::Rack> cfg; cfg.reserve(graphsOwned.size());
-        for (size_t i = 0; i < graphsOwned.size(); ++i) cfg.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, 1.0f});
+        for (size_t i = 0; i < graphsOwned.size(); ++i) cfg.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, 1.0f, sess.racks[i].muted, sess.racks[i].solo});
         srt.setXfaders(sess.xfaders, cfg);
       }
       // Build racks vector with per-rack gain (from session routes we still route to buses; use 1.0 here)
       std::vector<RealtimeSessionRenderer::Rack> rracks;
       rracks.reserve(graphsOwned.size());
       for (size_t i = 0; i < graphsOwned.size(); ++i) {
-        rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, 1.0f});
+        rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, 1.0f, sess.racks[i].muted, sess.racks[i].solo});
       }
       srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
 

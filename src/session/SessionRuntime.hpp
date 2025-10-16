@@ -22,6 +22,8 @@ struct SessionRuntime {
     std::vector<GraphSpec::CommandSpec> cmds;
     int64_t startOffsetFrames = 0;
     float gain = 1.0f;
+    bool muted = false;
+    bool solo = false;
   };
 
   struct RackStats {
@@ -121,7 +123,7 @@ struct SessionRuntime {
           }
         }
       }
-      Rack r; r.id = rr.id; r.graph = std::move(g); r.spec = std::move(gs); r.cmds = std::move(rackCmds); r.startOffsetFrames = rr.startOffsetFrames; r.gain = rr.gain;
+      Rack r; r.id = rr.id; r.graph = std::move(g); r.spec = std::move(gs); r.cmds = std::move(rackCmds); r.startOffsetFrames = rr.startOffsetFrames; r.gain = rr.gain; r.muted = rr.muted; r.solo = rr.solo;
       racks.push_back(std::move(r));
     }
     // Initialize buses and routes
@@ -196,8 +198,12 @@ struct SessionRuntime {
     std::vector<RackOutput> outputs;
     outputs.reserve(racks.size());
 
+    // Determine solo mode: if any rack is solo, only those racks render
+    bool anySolo = false; for (const auto& r : racks) if (r.solo) { anySolo = true; break; }
     // Render each rack with its commands
     for (auto& r : racks) {
+      if (r.muted) continue;
+      if (anySolo && !r.solo) continue;
       const uint64_t rackFrames = frames > static_cast<uint64_t>(std::max<int64_t>(0, -r.startOffsetFrames))
         ? (frames - static_cast<uint64_t>(std::max<int64_t>(0, -r.startOffsetFrames))) : 0ull;
       if (rackFrames == 0) continue;
