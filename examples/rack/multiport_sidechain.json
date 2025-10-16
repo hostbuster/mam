@@ -6,11 +6,11 @@
 
   "nodes": [
     { "id": "kick1", "type": "kick",
-      "params": { "f0": 120, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 220, "gain": 0.9, "click": 0.1, "bpm": 120, "loop": true },
+      "params": { "f0": 120, "fend": 35, "pitchDecayMs": 55, "ampDecayMs": 220, "gain": 0.9, "click": 0.1 },
       "ports": { "outputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ] } },
 
     { "id": "pad", "type": "clap",
-      "params": { "ampDecayMs": 200, "gain": 0.6, "bpm": 60, "loop": true },
+      "params": { "ampDecayMs": 240, "gain": 0.6 },
       "ports": { "outputs": [ { "index": 0, "type": "audio", "channels": 2, "role": "main" } ] } },
 
     { "id": "compA", "type": "compressor",
@@ -23,6 +23,16 @@
     { "from": "pad",   "to": "compA", "fromPort": 0, "toPort": 0, "gainPercent": 100 },
     { "from": "kick1", "to": "compA", "fromPort": 0, "toPort": 1, "gainPercent": 100 }
   ],
+
+  "transport": {
+    "bpm": 120,
+    "lengthBars": 2,
+    "resolution": 16,
+    "patterns": [
+      { "nodeId": "kick1", "steps": "x...x...x...x..." },
+      { "nodeId": "pad",   "steps": "x.x.x.x.x.x.x.x." }
+    ]
+  },
 
   "commands": []
 }
