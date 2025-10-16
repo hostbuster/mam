@@ -79,7 +79,16 @@ struct GraphSpec {
   std::vector<CommandSpec> commands;
 
   struct TransportLock { uint32_t step = 0; std::string paramName; uint16_t paramId = 0; float value = 0.0f; float rampMs = 0.0f; };
-  struct TransportPattern { std::string nodeId; std::string steps; std::vector<TransportLock> locks; };
+  struct TransportPattern {
+    std::string nodeId;
+    // Single-bar legacy notation (uses transport.resolution)
+    std::string steps;
+    // Multi-bar notation: one string per bar; optional per-pattern overrides below
+    std::vector<std::string> stepsBars;
+    uint32_t resolution = 0;   // optional per-pattern steps-per-bar; 0 => inherit transport.resolution
+    uint32_t lengthBars = 0;   // optional per-pattern bar length; 0 => infer from stepsBars.size() or 1
+    std::vector<TransportLock> locks;
+  };
   struct Transport {
     float bpm = 120.0f;
     uint32_t lengthBars = 1;   // number of bars

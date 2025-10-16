@@ -37,12 +37,17 @@
  - Offline UX: `--start-bar`/`--end-bar` slice transport renders to a subrange; export summary prints preroll; dry-tap double-count prevention by suppressing dry taps when source is also in mixer
 
 ### Top priority (next)
+- Transport: Multi-bar patterns and richer timing (backward compatible)
+  - Add multi-bar pattern notation: `stepsBars: ["...", "..."]` with optional per-pattern `lengthBars`.
+  - Support per-pattern `resolution` that overrides transport default for that pattern.
+  - Generator reads `stepsBars` (array) or legacy single `steps` (string); resolves per-pattern grid.
+  - Keep current per-step locks; future: bar+step addressing for locks and microtiming.
 - Multi-port routing (finish polish)
   - Add examples/validation for multi-consumer keys; clarify dry/wet interactions; ensure wet/dry avoids double‑count by design
 - Latency reporting UI and preroll accounting in CLI output (offline and realtime stats print)
   - Nodes report `latencySamples()`; graph preroll is computed and printed
   - Offline exports include preroll automatically and print in export summary; realtime prints total algorithmic latency
-- JSON Schema validation default path
+-- JSON Schema validation default path
   - Prefer enabling `MAM_USE_JSON_SCHEMA` by default in developer presets; keep semantic checks after schema
 
 ### Next up

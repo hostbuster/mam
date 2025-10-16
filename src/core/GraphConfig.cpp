@@ -221,6 +221,11 @@ GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
         GraphSpec::TransportPattern tp;
         tp.nodeId = p.value("nodeId", "");
         tp.steps = p.value("steps", "");
+        if (p.contains("stepsBars")) {
+          for (const auto& sb : p.at("stepsBars")) tp.stepsBars.push_back(sb.get<std::string>());
+        }
+        tp.resolution = p.value("resolution", 0u);
+        tp.lengthBars = p.value("lengthBars", 0u);
         if (p.contains("locks")) {
           for (const auto& lk : p.at("locks")) {
             GraphSpec::TransportLock L;

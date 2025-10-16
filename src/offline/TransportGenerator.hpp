@@ -7,7 +7,8 @@
 
 inline std::vector<GraphSpec::CommandSpec> generateCommandsFromTransport(const GraphSpec::Transport& tr, uint32_t sampleRate) {
   std::vector<GraphSpec::CommandSpec> out;
-  const uint32_t stepsPerBar = tr.resolution ? tr.resolution : 16u;
+  const uint32_t defaultStepsPerBar = tr.resolution ? tr.resolution : 16u;
+  const uint32_t stepsPerBar = defaultStepsPerBar;
   const uint64_t totalBars = tr.lengthBars ? tr.lengthBars : 1;
   const uint64_t totalSteps = totalBars * stepsPerBar;
   auto bpmAtBar = [&](uint32_t barIndex) -> double {
@@ -47,9 +48,24 @@ inline std::vector<GraphSpec::CommandSpec> generateCommandsFromTransport(const G
     }
     // Now at this step's start time; emit triggers and locks per pattern
     for (const auto& pat : tr.patterns) {
-      if (pat.steps.empty()) continue;
-      const size_t idx = static_cast<size_t>(withinBar % static_cast<uint32_t>(pat.steps.size()));
-      if (idx < pat.steps.size() && pat.steps[idx] == 'x') {
+      if (pat.steps.empty() && pat.stepsBars.empty()) continue;
+      // Determine active steps view for this pattern: stepsBars (flattened) or single steps string
+      const uint32_t patRes = (pat.resolution > 0) ? pat.resolution : defaultStepsPerBar;
+      // Same-bar addressing for now: position within current bar
+      bool hit = false;
+      if (!pat.stepsBars.empty()) {
+        const uint32_t barsForPat = (pat.lengthBars > 0) ? pat.lengthBars : static_cast<uint32_t>(pat.stepsBars.size());
+        const uint32_t idxInBar = withinBar % patRes;
+        const uint32_t barIdxLocal = barIndex % barsForPat;
+        if (barIdxLocal < pat.stepsBars.size()) {
+          const std::string& s = pat.stepsBars[barIdxLocal];
+          if (idxInBar < s.size() && s[idxInBar] == 'x') hit = true;
+        }
+      } else {
+        const size_t idx = static_cast<size_t>(withinBar % static_cast<uint32_t>(pat.steps.size()));
+        if (idx < pat.steps.size() && pat.steps[idx] == 'x') hit = true;
+      }
+      if (hit) {
         GraphSpec::CommandSpec c;
         c.sampleTime = stepStart;
         c.nodeId = pat.nodeId;
@@ -58,7 +74,7 @@ inline std::vector<GraphSpec::CommandSpec> generateCommandsFromTransport(const G
       }
       // Locks for this step
       for (const auto& L : pat.locks) {
-        if (L.step != withinBar) continue;
+        if (L.step != withinBar) continue; // TODO: support bar+step addressing later
         GraphSpec::CommandSpec lc;
         lc.sampleTime = stepStart;
         lc.nodeId = pat.nodeId;
