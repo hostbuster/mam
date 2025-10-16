@@ -47,6 +47,7 @@ struct SessionSpec {
     // Command details
     std::string nodeId;
     std::string type;
+    std::string paramName;     // optional named param (e.g., "F0")
     float value = 0.0f;
     float rampMs = 0.0f;
   };
@@ -169,6 +170,7 @@ inline SessionSpec loadSessionSpecFromJsonFile(const std::string& path) {
       // Command details
       sc.nodeId = cj.value("nodeId", std::string());
       sc.type = cj.value("type", std::string("SetParam"));
+      sc.paramName = cj.value("param", std::string());
       sc.value = cj.value("value", 0.0f);
       sc.rampMs = cj.value("rampMs", 0.0f);
       if (sc.nodeId.empty()) throw std::runtime_error("Session command requires nodeId");

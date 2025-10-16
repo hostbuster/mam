@@ -506,14 +506,27 @@ static int validateGraphJson(const std::string& path) {
           std::fprintf(stderr, "Connection %s->%s dryPercent out of range: %g\n", c.from.c_str(), c.to.c_str(), c.dryPercent); errors++;
         }
       }
-      // warn if dry tap and also mixed directly (double-count risk)
+      // mixer input validation and dry/wet ergonomics
       if (spec.hasMixer) {
-        std::unordered_set<std::string> mixed;
-        for (const auto& mi : spec.mixer.inputs) mixed.insert(mi.id);
-        for (const auto& c : spec.connections) {
-          if (c.dryPercent > 0.0f && mixed.count(c.from)) {
-            std::fprintf(stderr, "Warning: %s is in mixer inputs and has dryPercent>0 on edge %s->%s (double-count).\n",
-                         c.from.c_str(), c.from.c_str(), c.to.c_str());
+        // duplicate mixer inputs
+        {
+          std::unordered_map<std::string, int> mixCount;
+          for (const auto& mi : spec.mixer.inputs) mixCount[mi.id]++;
+          for (const auto& kv : mixCount) {
+            if (kv.second > 1) {
+              std::fprintf(stderr, "Warning: duplicate mixer input id '%s' appears %d times\n", kv.first.c_str(), kv.second);
+            }
+          }
+        }
+        // warn if dry tap and also mixed directly (double-count risk)
+        {
+          std::unordered_set<std::string> mixed;
+          for (const auto& mi : spec.mixer.inputs) mixed.insert(mi.id);
+          for (const auto& c : spec.connections) {
+            if (c.dryPercent > 0.0f && mixed.count(c.from)) {
+              std::fprintf(stderr, "Warning: %s is in mixer inputs and has dryPercent>0 on edge %s->%s (double-count).\n",
+                           c.from.c_str(), c.from.c_str(), c.to.c_str());
+            }
           }
         }
       }
@@ -979,6 +992,14 @@ int main(int argc, char** argv) {
         for (auto& c : cmds) { c.nodeId = rr.id + ":" + c.nodeId; if (c.paramId == 0 && !c.paramName.empty()) { auto it = nodeIdToType.find(c.nodeId.substr(rr.id.size()+1)); const std::string nodeType = (it != nodeIdToType.end()) ? it->second : std::string(); c.paramId = mapParam(nodeType, c.paramName);} }
         // Compute loopLen
         uint64_t loopLen = 0; if (gs.hasTransport) { const double bpm = (gs.transport.bpm > 0.0) ? gs.transport.bpm : 120.0; const double secPerBar = 4.0 * (60.0 / bpm); const uint64_t framesPerBar = static_cast<uint64_t>(secPerBar * sessionSrU32 + 0.5); const uint32_t bars = (gs.transport.lengthBars > 0) ? gs.transport.lengthBars : 1u; loopLen = framesPerBar * static_cast<uint64_t>(bars);}        
+        if (rtDebugSession) {
+          size_t preview = std::min<size_t>(cmds.size(), 12);
+          for (size_t i = 0; i < preview; ++i) {
+            const auto& c = cmds[i];
+            std::fprintf(stderr, "[rt-session] preview cmd[%zu]: t=%.3fs type=%s node=%s\n",
+              i, static_cast<double>(c.sampleTime) / static_cast<double>(sessionSrU32), c.type.c_str(), c.nodeId.c_str());
+          }
+        }
         rackRTs.push_back(RackRT{rr.id, cmds, loopLen});
         graphsOwned.push_back(std::move(g));
         std::fprintf(stderr, "[rt-session] rack=%s cmds=%zu loopLen=%llu\n", rr.id.c_str(), cmds.size(), (unsigned long long)loopLen);
@@ -987,7 +1008,7 @@ int main(int argc, char** argv) {
       size_t totalCmds = 0; for (const auto& r : rackRTs) totalCmds += r.baseCmds.size(); if (totalCmds == 0) std::fprintf(stderr, "[rt-session] error: synthesized zero commands across racks\n");
       // Start realtime renderer
       RealtimeSessionRenderer srt; SpscCommandQueue<16384> cmdQueue;
-      srt.setCommandQueue(&cmdQueue); srt.setDiagnostics(printTriggers); srt.setMeters(printMeters || metersPerNode, metersIntervalSec);
+      srt.setCommandQueue(&cmdQueue); srt.setDiagnostics(printTriggers); srt.setDebug(rtDebugSession); srt.setMeters(printMeters || metersPerNode, metersIntervalSec);
       if (!metricsNdjsonPath.empty()) srt.setMetricsNdjson(metricsNdjsonPath.c_str(), metricsScopeRacks, metricsScopeBuses);
       // Configure session xfaders (if any)
       {
@@ -997,7 +1018,8 @@ int main(int argc, char** argv) {
       }
       std::vector<RealtimeSessionRenderer::Rack> rracks; rracks.reserve(graphsOwned.size()); for (size_t i = 0; i < graphsOwned.size(); ++i) rracks.push_back(RealtimeSessionRenderer::Rack{graphsOwned[i].get(), sess.racks[i].id, sess.racks[i].gain, sess.racks[i].muted, sess.racks[i].solo});
       srt.start(rracks, sess.buses, sess.routes, offlineSr > 0.0 ? offlineSr : 48000.0, 2);
-      // Enqueue session-level commands (absolute time or musical time, realtime)
+      // Collect session-level commands (absolute time or musical time, realtime) for initial enqueue
+      std::vector<Command> sessionInitCmds;
       if (!sess.commands.empty()) {
         for (const auto& sc : sess.commands) {
           double resolvedTimeSec = sc.timeSec;
@@ -1049,7 +1071,7 @@ int main(int argc, char** argv) {
           cmd.value = sc.value;
           cmd.rampMs = sc.rampMs;
           if (!sc.rack.empty()) cmd.paramNameStr = nullptr; // session-level targets resolved by nodeId, keep null
-          while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
+          sessionInitCmds.push_back(cmd);
         }
       }
       // Adjust pre-synthesized command timing to actual device sample rate if needed
@@ -1088,29 +1110,41 @@ int main(int argc, char** argv) {
         }
       }
 
-      // Initial enqueue (globally time-sorted merge across racks)
+      // Initial enqueue (globally time-sorted merge across racks + session-level cmds)
       {
         // Determine active racks for enqueue (skip muted; if any solo, only solo)
         bool anySolo = false; for (const auto& rr : sess.racks) if (rr.solo) { anySolo = true; break; }
         std::vector<bool> activeFlags; activeFlags.reserve(sess.racks.size());
         for (const auto& rr : sess.racks) activeFlags.push_back(anySolo ? rr.solo : !rr.muted);
-        struct Item { uint64_t t; size_t ri; size_t ci; };
-        auto cmp = [](const Item& a, const Item& b){ return a.t > b.t; };
-        std::priority_queue<Item, std::vector<Item>, decltype(cmp)> pq(cmp);
-        for (size_t i = 0; i < rackRTs.size(); ++i) if (i < activeFlags.size() && activeFlags[i]) { if (!rackRTs[i].baseCmds.empty()) pq.push(Item{rackRTs[i].baseCmds[0].sampleTime, i, 0}); }
-        size_t totalPushed = 0;
-        while (!pq.empty() && gRunning.load()) {
-          Item it = pq.top(); pq.pop(); const auto& c = rackRTs[it.ri].baseCmds[it.ci];
-          Command cmd{}; cmd.sampleTime = c.sampleTime; cmd.nodeId = internNodeId(c.nodeId);
-          cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp;
-          cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
-          if (!c.paramName.empty()) cmd.paramNameStr = internNodeId(c.paramName);
-          while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
-          if (!gRunning.load()) break; totalPushed++;
-          const size_t nextCi = it.ci + 1; if (nextCi < rackRTs[it.ri].baseCmds.size()) pq.push(Item{rackRTs[it.ri].baseCmds[nextCi].sampleTime, it.ri, nextCi});
+        // Build combined list
+        std::vector<Command> combined; combined.reserve(sessionInitCmds.size() + 1024);
+        // Rack events
+        for (size_t i = 0; i < rackRTs.size(); ++i) if (i < activeFlags.size() && activeFlags[i]) {
+          for (const auto& c : rackRTs[i].baseCmds) {
+            Command cmd{}; cmd.sampleTime = c.sampleTime; cmd.nodeId = internNodeId(c.nodeId);
+            cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp;
+            cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
+            if (!c.paramName.empty()) cmd.paramNameStr = internNodeId(c.paramName);
+            combined.push_back(cmd);
+          }
         }
-        std::fprintf(stderr, "[rt-session] init enqueued total cmds=%zu across %zu racks (time-sorted)\n", totalPushed, rackRTs.size());
+        // Session-level
+        combined.insert(combined.end(), sessionInitCmds.begin(), sessionInitCmds.end());
+        // Sort globally: by time, then nodeId, then type (Set before Trigger), then paramId
+        std::stable_sort(combined.begin(), combined.end(), [](const Command& a, const Command& b){
+          if (a.sampleTime != b.sampleTime) return a.sampleTime < b.sampleTime;
+          const char* an = a.nodeId ? a.nodeId : ""; const char* bn = b.nodeId ? b.nodeId : "";
+          int cmp = std::strcmp(an, bn); if (cmp != 0) return cmp < 0;
+          auto ord = [](CommandType t){ return (t == CommandType::SetParam) ? 0 : (t == CommandType::SetParamRamp ? 1 : 2); };
+          if (ord(a.type) != ord(b.type)) return ord(a.type) < ord(b.type);
+          if (a.paramId != b.paramId) return a.paramId < b.paramId;
+          return a.value < b.value;
+        });
+        size_t totalPushed = 0; for (const auto& ev : combined) { while (gRunning.load() && !cmdQueue.push(ev)) std::this_thread::sleep_for(std::chrono::milliseconds(1)); if (!gRunning.load()) break; totalPushed++; }
+        std::fprintf(stderr, "[rt-session] init enqueued total cmds=%zu (combined)\n", totalPushed);
       }
+      // Start audio after initial enqueue to ensure first triggers are applied in the very first block
+      srt.begin();
       // Feeder thread
       std::thread feeder([&cmdQueue, &rackRTs, &srt, sess]() mutable {
         const uint64_t desiredAhead = static_cast<uint64_t>(3.0 * srt.sampleRate());
@@ -1572,7 +1606,7 @@ int main(int argc, char** argv) {
         auto gen = generateCommandsFromTransport(chunk, static_cast<uint32_t>(rt.sampleRate() + 0.5));
         baseCmds.insert(baseCmds.end(), gen.begin(), gen.end());
       }
-      // Resolve named params to IDs based on node type
+      // Resolve named params to IDs based on node type and prefix nodeIds with rack id
       {
         std::unordered_map<std::string, std::string> nodeIdToType;
         for (const auto& ns : spec.nodes) nodeIdToType.emplace(ns.id, ns.type);

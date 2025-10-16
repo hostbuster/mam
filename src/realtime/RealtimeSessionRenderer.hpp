@@ -29,6 +29,7 @@ public:
   template <size_t N>
   void setCommandQueue(SpscCommandQueue<N>* q) { cmdQueue_ = reinterpret_cast<void*>(q); queueDrain_ = [](void* p, SampleTime cutoff, std::vector<Command>& out){ static_cast<SpscCommandQueue<N>*>(p)->drainUpTo(cutoff, out); }; }
   void setDiagnostics(bool printTriggers) { printTriggers_ = printTriggers; }
+  void setDebug(bool debug) { debug_ = debug; }
   void setMeters(bool enabled, double intervalSec) { metersEnabled_ = enabled; metersIntervalSec_ = (intervalSec > 0.05 ? intervalSec : 1.0); }
   void setMetricsNdjson(const char* path, bool includeRacks, bool includeBuses) {
     metricsIncludeRacks_ = includeRacks; metricsIncludeBuses_ = includeBuses;
@@ -106,7 +107,13 @@ public:
     busMeters_.assign(buses_.size(), Meter{});
     lastMetersPrintSec_ = 0.0;
 
-    err = AudioOutputUnitStart(unit_.get());
+    // Do not start audio yet; allow caller to enqueue initial commands first.
+    sampleCounter_.store(0, std::memory_order_relaxed);
+  }
+
+  void begin() {
+    if (!unit_.valid()) return;
+    OSStatus err = AudioOutputUnitStart(unit_.get());
     if (err != noErr) throw std::runtime_error(std::string("AudioOutputUnitStart failed: ") + osstatusToString(err));
     sampleCounter_.store(0, std::memory_order_relaxed);
   }
@@ -126,6 +133,10 @@ private:
     // Drain commands up to cutoff
     std::vector<Command> drained; drained.clear();
     if (self->cmdQueue_) self->queueDrain_(self->cmdQueue_, cutoff, drained);
+    if (self->debug_) {
+      std::fprintf(stderr, "[rt-session] drained=%zu at t=%.3f..%.3f sec\n",
+                   drained.size(), static_cast<double>(blockStartAbs)/self->sampleRate_, static_cast<double>(cutoff)/self->sampleRate_);
+    }
 
     // Determine split offsets
     std::vector<uint32_t> splits; splits.reserve(8); splits.push_back(0); splits.push_back(inNumberFrames);
@@ -410,6 +421,7 @@ private:
   std::atomic<SampleTime> sampleCounter_{0};
   void* cmdQueue_ = nullptr; using DrainFn = void(*)(void*, SampleTime, std::vector<Command>&); DrainFn queueDrain_ = nullptr;
   bool printTriggers_ = false;
+  bool debug_ = false;
   std::vector<std::vector<float>> rackScratch_{};
   std::vector<std::vector<float>> busScratch_{};
   struct Meter { double sumSq = 0.0; double peak = 0.0; uint64_t frames = 0; };

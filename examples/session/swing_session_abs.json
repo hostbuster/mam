@@ -1,0 +1,24 @@
+{
+  "kind": "session",
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "durationSec": 125.0,
+  "loop": false,
+
+  "racks": [
+    { "id": "groove", "path": "../rack/swing_extreme.json", "bars": 2, "loopCount": 20 }
+  ],
+
+  "commands": [
+    { "timeSec": 0.0,   "nodeId": "groove:kick1", "type": "SetParam", "param": "F0", "value": 110.0 },
+    { "timeSec": 10.0,  "nodeId": "groove:kick1", "type": "SetParam", "param": "F0", "value": 90.0 },
+    { "timeSec": 20.0,  "nodeId": "groove:kick1", "type": "SetParam", "param": "F0", "value": 130.0 },
+    { "timeSec": 40.0,  "nodeId": "groove:kick1", "type": "SetParam", "param": "F0", "value": 100.0 },
+    { "timeSec": 60.0,  "nodeId": "groove:kick1", "type": "SetParam", "param": "F0", "value": 120.0 },
+    { "timeSec": 80.0,  "nodeId": "groove:kick1", "type": "SetParamRamp", "param": "F0", "value": 100.0, "rampMs": 5000.0 },
+    { "timeSec": 100.0, "nodeId": "groove:kick1", "type": "SetParam", "param": "F0", "value": 115.0 }
+  ]
+}
+
+

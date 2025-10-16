@@ -785,6 +785,7 @@ Current limitations: a single inline pattern per `transport` node (scaffold). Th
 
 - `--verbose`: prints "Loop N" exactly at transport loop boundaries in the audio callback, before any triggers in that block.
 - `--print-triggers`: prints sample-accurate set/ramp/trigger lines with absolute time, 1-based bar/step, node id, and command info.
+- `--rt-debug-session`: extra realtime session diagnostics (initial command preview, drained-per-block counts).
 - `--dump-events`: offline/prepare-time dump of the command list with time/bar/step for debugging authoring issues.
 - When `--print-triggers` is active, main-thread loop prints are suppressed to avoid duplicates; boundary printing remains precise in the callback.
 - Bar/step indices are derived from `framesNow % loopLen` and `framesPerBar` for exact musical alignment.
@@ -1103,7 +1104,7 @@ Behavior:
 - If `kind` is missing, the loader infers and prints a warning (backward compatible).
 - `--schema-strict` can be used in conjunction with schemas to enforce `kind`.
 
-### Path resolution policy
+### Path resolution policy (racks and sessions)
 
 - Racks (`--rack path.json`):
   - If `path.json` is absolute or exists relative to the current working directory, it’s used as-is.
@@ -1113,3 +1114,4 @@ Behavior:
 - Sessions (`--session path.json`):
   - `racks[].path` inside the session is resolved relative to the session file’s directory if it’s a relative path. This makes sharing a self-contained folder (one session + its racks) work without installing into global folders.
   - Absolute rack paths continue to work as-is.
+  - Realtime session startup enqueues a globally time-sorted combined list (rack transport triggers + session-level commands) before starting audio so the first downbeat is never missed.
