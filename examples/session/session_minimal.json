@@ -1,0 +1,11 @@
+{
+  "kind": "session",
+  "version": 1,
+  "sampleRate": 48000,
+  "channels": 2,
+  "racks": [
+    { "id": "rack1", "path": "../rack/acid303_sidechain_spectral.json", "startOffsetFrames": 0, "gain": 1.0, "loopSeconds": 30, "muted": false, "solo": false },
+    { "id": "rack2", "path": "../rack/mamic_song.json", "startOffsetFrames": 0, "gain": 0.1, "bars": 32, "loopCount": 1, "muted": false, "solo": false }
+  ]
+}
+

@@ -3,29 +3,70 @@
 #include <sstream>
 #include <stdexcept>
 #include <unordered_map>
+#include <cstdlib>
+#include <filesystem>
 #include "ParamMap.hpp"
 #include <nlohmann/json.hpp>
 
 using nlohmann::json;
 
 static std::string readFileToString(const std::string& path) {
-  std::ifstream f(path);
-  if (!f) throw std::runtime_error("Failed to open JSON file: " + path);
-  std::ostringstream ss; ss << f.rdbuf();
-  return ss.str();
+  auto tryRead = [](const std::string& p, std::string& out) -> bool {
+    std::ifstream f(p);
+    if (!f) return false;
+    std::ostringstream ss; ss << f.rdbuf();
+    out = ss.str();
+    return true;
+  };
+
+  // Fast path: as-is
+  std::string text;
+  if (tryRead(path, text)) return text;
+
+  // If absolute and failed, bail
+  std::error_code ec;
+  if (std::filesystem::path(path).is_absolute()) {
+    throw std::runtime_error("Failed to open JSON file: " + path);
+  }
+
+  // Build search roots: CWD, examples/rack, env MAM_SEARCH_PATHS (colon-separated)
+  std::vector<std::string> roots;
+  roots.emplace_back("");
+  roots.emplace_back("examples/rack/");
+  if (const char* env = std::getenv("MAM_SEARCH_PATHS")) {
+    std::string s(env);
+    size_t start = 0; while (start <= s.size()) {
+      size_t sep = s.find(':', start);
+      std::string tok = (sep == std::string::npos) ? s.substr(start) : s.substr(start, sep - start);
+      if (!tok.empty()) {
+        if (tok.back() != '/') tok.push_back('/');
+        roots.push_back(tok);
+      }
+      if (sep == std::string::npos) break; else start = sep + 1;
+    }
+  }
+  for (const auto& r : roots) {
+    const std::string candidate = r.empty() ? path : (r + path);
+    if (tryRead(candidate, text)) return text;
+  }
+  throw std::runtime_error("Failed to open JSON file: " + path);
 }
 
 GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
   const std::string text = readFileToString(path);
   json j = json::parse(text);
-  // Discriminator: kind
+  // Discriminator: kind (prefer 'rack'; accept legacy 'graph')
   if (j.contains("kind")) {
     const std::string k = j.at("kind").get<std::string>();
-    if (k != std::string("graph")) {
-      throw std::runtime_error("JSON kind mismatch: expected 'graph' but got '" + k + "' in " + path);
+    if (k == std::string("rack")) {
+      // ok
+    } else if (k == std::string("graph")) {
+      std::fprintf(stderr, "Warning: kind=graph is deprecated; use kind=rack (%s)\n", path.c_str());
+    } else {
+      throw std::runtime_error("JSON kind mismatch: expected 'rack' but got '" + k + "' in " + path);
     }
   } else {
-    std::fprintf(stderr, "Warning: graph JSON missing 'kind'; defaulting to 'graph' (%s)\n", path.c_str());
+    std::fprintf(stderr, "Warning: rack JSON missing 'kind'; defaulting to legacy graph (%s)\n", path.c_str());
   }
 
   GraphSpec spec;

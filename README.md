@@ -40,7 +40,7 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 - Transport param-locks (realtime + offline); schema and examples updated
 - Parameter system with registry, smoothing types (step/linear/exp), and named params via `ParamMap`
 - Mixer with per-input gains and master with optional soft clip
-- CLI: `--graph`, `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
+- CLI: `--rack` (preferred; `--graph` deprecated), `--validate`, `--list-nodes`, `--list-params`, `--quit-after`
 - IO: `ExtAudioFile` writer (WAV/AIFF/CAF) with 16/24/32f
 - Docs: auto-generated `docs/ParamTables.md` from `ParamMap.hpp`; expanded README
 - Tools: `gen_params` for docs; JSON examples under `examples/` (`demo.json`, `demo2.json`, sidechain variants)
@@ -114,51 +114,51 @@ open build-xcode/mam.xcodeproj
 ./build/mam --validate examples/demo.json
 ./build/mam --list-nodes examples/demo.json
 ./build/mam --list-params kick
-./build/mam --dump-events --graph examples/acid303_sidechain.json   # print command timeline (time/bar/step)
+./build/mam --dump-events --rack examples/rack/acid303_sidechain.json   # print command timeline (time/bar/step)
 ```
 
 ### Full-feature example (recommended)
 
-Use `examples/demo.json` to try multi-pattern transport with swing and tempo ramps:
+Use `examples/rack/demo.json` to try multi-pattern transport with swing and tempo ramps:
 
 - Realtime playback:
 
 ```bash
-./build/mam --graph examples/demo.json
-./build/mam --graph examples/demo.json --verbose                 # loop diagnostics
-./build/mam --graph examples/demo.json --random-seed 42          # deterministic randomness override
-./build/mam --graph examples/acid303_sidechain.json              # TB-303 + kick sidechain groove
+./build/mam --rack examples/rack/demo.json
+./build/mam --rack examples/rack/demo.json --verbose                 # loop diagnostics
+./build/mam --rack examples/rack/demo.json --random-seed 42          # deterministic randomness override
+./build/mam --rack examples/rack/acid303_sidechain.json              # TB-303 + kick sidechain groove
 ```
 
-Longer techno demo (16-bar) in `examples/demo2.json`:
+Longer techno demo (16-bar) in `examples/rack/demo2.json`:
 
 Realtime:
 
 ```bash
-./build/mam --graph examples/demo2.json --verbose
+./build/mam --rack examples/rack/demo2.json --verbose
 # For loop testing, you can set lengthBars to 1 and verify seamless boundaries
 ```
 
 Offline export (auto-duration from transport bars, includes preroll/tail):
 
 ```bash
-./build/mam --graph examples/demo2.json --wav techno.wav --sr 48000 --normalize --peak-target -1.0
-./build/mam --graph examples/demo2.json --schema-strict --wav techno.wav  # validate against schema before export
+./build/mam --rack examples/rack/demo2.json --wav techno.wav --sr 48000 --normalize --peak-target -1.0
+./build/mam --rack examples/rack/demo2.json --schema-strict --wav techno.wav  # validate against schema before export
 ```
 
 - Offline render to WAV (48 kHz float32), with optional parallelism:
 
 ```bash
-./build/mam --graph examples/demo.json --wav out.wav --sr 48000
-./build/mam --graph examples/demo.json --wav out.wav --random-seed 123  # deterministic export
+./build/mam --rack examples/rack/demo.json --wav out.wav --sr 48000
+./build/mam --rack examples/rack/demo.json --wav out.wav --random-seed 123  # deterministic export
 # Parallel offline rendering (e.g., 4 worker threads):
-./build/mam --graph examples/demo.json --wav out.wav --sr 48000 --offline-threads 4
+./build/mam --rack examples/demo.json --wav out.wav --sr 48000 --offline-threads 4
 ```
 
 - Validate the example graph:
 
 ```bash
-./build/mam --validate examples/demo.json
+./build/mam --validate examples/rack/demo.json
 ```
 
 ### Offline rendering
@@ -191,13 +191,13 @@ Examples:
 
 ```bash
 # Auto-duration from transport (bars + tail)
-./build/mam --graph examples/demo.json --wav demo.wav
+./build/mam --rack examples/rack/demo.json --wav demo.wav
 
 # Force 8 bars with a shorter tail
-./build/mam --graph examples/demo.json --wav demo.wav --bars 8 --tail-ms 100
+./build/mam --rack examples/rack/demo.json --wav demo.wav --bars 8 --tail-ms 100
 
 # Hard 10-second render (overrides everything)
-./build/mam --graph examples/demo.json --wav demo.wav --duration 10
+./build/mam --rack examples/rack/demo.json --wav demo.wav --duration 10
 ```
 
 #### Normalization
@@ -320,13 +320,13 @@ Examples:
 
 ```bash
 # Print topo order without exporting (dry inspection)
-./build/mam --graph examples/demo.json --print-topo --validate examples/demo.json
+./build/mam --rack examples/rack/demo.json --print-topo --validate examples/rack/demo.json
 
 # Export and show meters (offline)
-./build/mam --graph examples/demo.json --wav demo.wav --meters
+./build/mam --rack examples/rack/demo.json --wav demo.wav --meters
 
 # Export, show topo order and meters together
-./build/mam --graph examples/demo.json --wav demo.wav --print-topo --meters
+./build/mam --rack examples/rack/demo.json --wav demo.wav --print-topo --meters
 ```
 
 Transport and looping notes (realtime):
@@ -336,7 +336,7 @@ Transport and looping notes (realtime):
 Timed realtime exit:
 
 ```bash
-./build/mam --graph examples/demo.json --quit-after 10
+./build/mam --rack examples/rack/demo.json --quit-after 10
 ```
 
 #### Channel adapters
@@ -352,7 +352,8 @@ Authoring:
 
 ## Graph configuration (JSON)
 
-You can define instruments and their parameters using a JSON graph file and pass it with `--graph path.json`.
+You can define instruments and their parameters using a JSON rack file and pass it with `--rack path.json`.
+By default, relative paths are resolved against the current working directory. If a relative rack path isn’t found, the loader will also try `examples/rack/` and any additional directories listed in the `MAM_SEARCH_PATHS` environment variable (colon-separated).
 
 ### Schema (v1)
 See `docs/schema.graph.v1.json` for a machine-readable schema.
@@ -399,13 +400,13 @@ See `docs/schema.graph.v1.json` for a machine-readable schema.
 Run it in realtime:
 
 ```bash
-./build/mam --graph mygraph.json
+./build/mam --rack myrack.json
 ```
 
 Render offline to WAV:
 
 ```bash
-./build/mam --graph mygraph.json --wav out.wav --sr 48000 --duration 2.0
+./build/mam --rack myrack.json --wav out.wav --sr 48000 --duration 2.0
 ```
 
 ### Transport (multi-patterns, swing, ramps)
@@ -465,7 +466,7 @@ The engine seeds its global RNG once at load; use non-zero seeds for repeatable 
 | `--format` | enum | wav | One of: `wav`, `aiff`, `caf` |
 | `--bitdepth` | enum | 32f | One of: `16`, `24`, `32f` (float32) |
 | `--offline-threads` | int | 0 | Use parallel offline renderer with N threads (0=single-thread) |
-| `--graph` | path | — | Load a JSON graph file to build instruments/mixer |
+| `--rack` | path | — | Load a JSON rack (graph) file to build instruments/mixer |
 | `--quit-after` | float (sec) | 0 | Realtime: auto-stop after given seconds (0 = disabled) |
 | `--help`, `-h` | flag | — | Print usage |
 
@@ -737,10 +738,10 @@ Examples:
 
 ```bash
 # Short demo with param changes
-./build/mam --graph two_kicks.json --wav two_kicks.wav --sr 48000 --duration 8
+./build/mam --rack two_kicks.json --wav two_kicks.wav --sr 48000 --duration 8
 
 # Oldschool breakbeat (~16s) with evolving params and parallel render
-./build/mam --graph breakbeat.json --wav breakbeat.wav --sr 48000 --duration 16 --offline-threads 4
+./build/mam --rack breakbeat.json --wav breakbeat.wav --sr 48000 --duration 16 --offline-threads 4
 ```
 
 ### Realtime Transport (TransportNode)
@@ -773,9 +774,9 @@ Current limitations: a single inline pattern per `transport` node (scaffold). Th
 Examples:
 
 ```bash
-./build/mam --graph examples/sidechain_mono_key.json --verbose --print-triggers
+./build/mam --rack examples/rack/sidechain_mono_key.json --verbose --print-triggers
 # Combine with per-node meters at realtime loop boundaries:
-./build/mam --graph examples/demo2.json --verbose --meters-per-node
+./build/mam --rack examples/rack/demo2.json --verbose --meters-per-node
 
 # Realtime session with rack meters every ~1s:
 ./build/mam --session examples/session_minimal.json --meters
@@ -823,7 +824,7 @@ This project is designed for realtime playback and identical offline exports. Th
 Example (realtime):
 
 ```bash
-./build/mam --graph examples/acid303_sidechain_spectral_midSide.json --cpu-stats --cpu-stats-per-node
+./build/mam --rack examples/rack/acid303_sidechain_spectral_midSide.json --cpu-stats --cpu-stats-per-node
 ```
 
 Interpretation:
@@ -1008,12 +1009,12 @@ You can print Mermaid diagrams for documentation and paste them into README/wiki
 
 - Session (racks/buses/routes):
 ```bash
-./build/mam --export-mermaid-session examples/session_minimal.json > session.mmd
+./build/mam --export-mermaid-session examples/session/session_minimal.json > session.mmd
 ```
 
-- Graph (nodes/connections/mixer):
+-- Rack (nodes/connections/mixer):
 ```bash
-./build/mam --export-mermaid-graph examples/demo.json > graph_topo.mmd
+./build/mam --export-mermaid-graph examples/rack/demo.json > graph_topo.mmd
 ```
 
 Render in GitHub/Markdown using a mermaid code block:
@@ -1059,11 +1060,11 @@ Notes:
 
 Add a top-level field `kind` to future-proof loading and validation:
 
-- Graph (rack) files:
+- Rack (graph) files:
 
 ```json
 {
-  "kind": "graph",
+  "kind": "rack",
   "version": 1,
   "nodes": [ /* ... */ ]
 }
@@ -1083,3 +1084,14 @@ Behavior:
 - If `kind` is present and mismatches the loader, the app errors clearly.
 - If `kind` is missing, the loader infers and prints a warning (backward compatible).
 - `--schema-strict` can be used in conjunction with schemas to enforce `kind`.
+
+### Path resolution policy
+
+- Racks (`--rack path.json`):
+  - If `path.json` is absolute or exists relative to the current working directory, it’s used as-is.
+  - Otherwise, the loader tries `examples/rack/path.json`.
+  - Finally, it searches each directory listed in `MAM_SEARCH_PATHS` (colon-separated), prepending each to the given relative path.
+
+- Sessions (`--session path.json`):
+  - `racks[].path` inside the session is resolved relative to the session file’s directory if it’s a relative path. This makes sharing a self-contained folder (one session + its racks) work without installing into global folders.
+  - Absolute rack paths continue to work as-is.

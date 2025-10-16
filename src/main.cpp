@@ -123,7 +123,7 @@ static void printUsage(const char* exe) {
                "Usage: %s [--f0 Hz] [--fend Hz] [--pitch-decay ms] [--amp-decay ms]\n"
                "          [--gain 0..1] [--bpm N] [--click 0..1]\n"
                "          [--wav path] [--sr Hz] [--pcm16] [--format wav|aiff|caf] [--bitdepth 16|24|32f] [--offline-threads N]\n"
-               "          [--graph path.json] [--quit-after sec]\\\n\n"
+               "          [--rack path.json] [--quit-after sec]\\n\n"
                "\nOffline export controls (auto-duration by default):\n"
                "  --duration SEC     Hard duration (overrides auto)\n"
                "  --bars N           Force N bars from transport (if present)\n"
@@ -158,7 +158,7 @@ static void printUsage(const char* exe) {
                "Examples:\n"
                "  mam                       # one-shot, defaults (real-time)\n"
                "  mam --bpm 120            # 120 BPM continuous till Ctrl-C (real-time)\n"
-               "  mam --graph demo.json --wav demo.wav         # export using auto-duration\n",
+               "  mam --rack demo.json --wav demo.wav         # export using auto-duration\n",
                exe);
 }
 // Generate a simple Mermaid flowchart for a SessionSpec (racks/buses/routes)
@@ -620,6 +620,7 @@ int main(int argc, char** argv) {
   FileFormat outFormat = FileFormat::Wav;
   BitDepth outDepth = BitDepth::Float32;
   std::string graphPath;
+  std::string rackPath; // preferred alias for graphPath
   std::string sessionPath;
   std::string validatePath;
   std::string listNodesPath;
@@ -728,8 +729,8 @@ int main(int argc, char** argv) {
       need(1); doNormalize = true; peakTargetDb = std::atof(argv[++i]);
     } else if (std::strcmp(a, "--verbose") == 0 || std::strcmp(a, "-v") == 0) {
       verbose = true;
-    } else if (std::strcmp(a, "--graph") == 0) {
-      need(1); graphPath = argv[++i];
+    } else if (std::strcmp(a, "--rack") == 0) {
+      need(1); rackPath = argv[++i];
     } else if (std::strcmp(a, "--session") == 0) {
       need(1); sessionPath = argv[++i];
     } else if (std::strcmp(a, "--metrics-ndjson") == 0) {
@@ -822,6 +823,7 @@ int main(int argc, char** argv) {
   if (params.click > 1.0f) params.click = 1.0f;
 
   // Utilities
+  if (rackPath.size() && graphPath.empty()) graphPath = rackPath;
   if (printTopo && !graphPath.empty()) {
     try {
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
@@ -1398,7 +1400,9 @@ int main(int argc, char** argv) {
   uint64_t rtLoopLen = 0; // frames
   if (!sessionPath.empty()) {
     // Defer: the session realtime branch is handled below in this control flow.
-  } else if (!graphPath.empty()) {
+  } else {
+    if (rackPath.size() && graphPath.empty()) graphPath = rackPath;
+    if (!graphPath.empty()) {
     std::fprintf(stderr, "[rt-graph] starting: path=%s\n", graphPath.c_str());
     try {
       if (schemaStrict) {
@@ -1434,8 +1438,9 @@ int main(int argc, char** argv) {
       std::fprintf(stderr, "Failed to load graph JSON: %s\n", e.what());
       return 1;
     }
-  } else {
+    } else {
     graph.addNode("kick_default", std::make_unique<KickNode>(params));
+    }
   }
   RealtimeGraphRenderer rt;
   SpscCommandQueue<2048> cmdQueue;
@@ -1444,6 +1449,8 @@ int main(int argc, char** argv) {
   // Try to infer transport resolution and bpm from graph for diagnostics; defaults: res=16, bpm=120
   uint32_t diagRes = 16;
   double diagBpm = 120.0;
+  if (rackPath.size() && graphPath.empty()) graphPath = rackPath;
+  if (rackPath.size() && graphPath.empty()) graphPath = rackPath;
   if (!graphPath.empty()) {
     try {
       GraphSpec tmp = loadGraphSpecFromJsonFile(graphPath);
@@ -1465,7 +1472,8 @@ int main(int argc, char** argv) {
 
   // Always allow Ctrl-C or Enter to stop in realtime
   // If a graph was provided and it has commands/transport, enqueue them (demo horizon)
-  if (!graphPath.empty()) {
+    if (rackPath.size() && graphPath.empty()) graphPath = rackPath;
+    if (!graphPath.empty()) {
     try {
       GraphSpec spec = loadGraphSpecFromJsonFile(graphPath);
       // Build initial command set (explicit + transport)

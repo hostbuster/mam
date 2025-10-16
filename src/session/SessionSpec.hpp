@@ -9,6 +9,7 @@
 #include <sstream>
 #include "../core/GraphConfig.hpp"
 #include "../../third_party/nlohmann/json.hpp"
+#include <filesystem>
 
 struct SessionSpec {
   struct RackRef {
@@ -96,6 +97,14 @@ inline SessionSpec loadSessionSpecFromJsonFile(const std::string& path) {
       rr.loopSeconds = r.value("loopSeconds", 0.0);
       rr.tailMs = r.value("tailMs", 0.0);
       if (rr.id.empty() || rr.path.empty()) throw std::runtime_error("Session rack requires id and path");
+      // Resolve rack path relative to session file directory when given as relative
+      try {
+        std::filesystem::path sessPath(path);
+        if (!std::filesystem::path(rr.path).is_absolute()) {
+          std::filesystem::path resolved = std::filesystem::path(sessPath).parent_path() / rr.path;
+          rr.path = resolved.lexically_normal().string();
+        }
+      } catch (...) {}
       s.racks.push_back(rr);
     }
   }

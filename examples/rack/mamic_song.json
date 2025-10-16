@@ -1,4 +1,5 @@
 {
+  "kind": "rack",
   "version": 1,
   "sampleRate": 48000,
   "channels": 2,
@@ -22,7 +23,7 @@
   },
   "transport": {
     "bpm": 128,
-    "lengthBars": 32,
+    "lengthBars": 192,
     "resolution": 16,
     "patterns": [
       

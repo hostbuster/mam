@@ -1,4 +1,5 @@
 {
+  "kind": "rack",
   "version": 1,
   "randomSeed": 1337,
   "sampleRate": 48000,
