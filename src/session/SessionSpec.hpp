@@ -4,6 +4,7 @@
 #include <vector>
 #include <cstdint>
 #include <stdexcept>
+#include <cstdio>
 #include <fstream>
 #include <sstream>
 #include "../core/GraphConfig.hpp"
@@ -65,6 +66,15 @@ inline SessionSpec loadSessionSpecFromJsonFile(const std::string& path) {
   if (!f) throw std::runtime_error("Failed to open session file: " + path);
   std::stringstream ss; ss << f.rdbuf();
   auto j = nlohmann::json::parse(ss.str());
+  // Discriminator: kind
+  if (j.contains("kind")) {
+    const std::string k = j["kind"].get<std::string>();
+    if (k != std::string("session")) {
+      throw std::runtime_error("JSON kind mismatch: expected 'session' but got '" + k + "' in " + path);
+    }
+  } else {
+    std::fprintf(stderr, "Warning: session JSON missing 'kind'; defaulting to 'session' (%s)\n", path.c_str());
+  }
   SessionSpec s;
   if (j.contains("sampleRate")) s.sampleRate = j["sampleRate"].get<uint32_t>();
   if (j.contains("channels")) s.channels = j["channels"].get<uint32_t>();

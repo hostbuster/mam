@@ -18,6 +18,15 @@ static std::string readFileToString(const std::string& path) {
 GraphSpec loadGraphSpecFromJsonFile(const std::string& path) {
   const std::string text = readFileToString(path);
   json j = json::parse(text);
+  // Discriminator: kind
+  if (j.contains("kind")) {
+    const std::string k = j.at("kind").get<std::string>();
+    if (k != std::string("graph")) {
+      throw std::runtime_error("JSON kind mismatch: expected 'graph' but got '" + k + "' in " + path);
+    }
+  } else {
+    std::fprintf(stderr, "Warning: graph JSON missing 'kind'; defaulting to 'graph' (%s)\n", path.c_str());
+  }
 
   GraphSpec spec;
   if (j.contains("version")) spec.version = j.at("version").get<int>();

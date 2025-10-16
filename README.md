@@ -1054,3 +1054,32 @@ Notes:
 - Equal‑power uses gA=cos(pi/2·x), gB=sin(pi/2·x) for smooth perceived loudness.
 - Set both rack base gains to comparable values for a balanced crossfade.
 - LFO is optional; future versions will expose a param `xfader:<id>:x` for automation.
+
+## JSON file kinds (discriminator)
+
+Add a top-level field `kind` to future-proof loading and validation:
+
+- Graph (rack) files:
+
+```json
+{
+  "kind": "graph",
+  "version": 1,
+  "nodes": [ /* ... */ ]
+}
+```
+
+- Session files:
+
+```json
+{
+  "kind": "session",
+  "version": 1,
+  "racks": [ /* ... */ ]
+}
+```
+
+Behavior:
+- If `kind` is present and mismatches the loader, the app errors clearly.
+- If `kind` is missing, the loader infers and prints a warning (backward compatible).
+- `--schema-strict` can be used in conjunction with schemas to enforce `kind`.

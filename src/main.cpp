@@ -896,6 +896,7 @@ int main(int argc, char** argv) {
       // Determine solo/mute policy once
       bool anySoloGlobal = false; for (const auto& rr : sess.racks) if (rr.solo) { anySoloGlobal = true; break; }
       for (const auto& rr : sess.racks) {
+        std::fprintf(stderr, "[rt-session] rack-config id=%s muted=%s solo=%s\n", rr.id.c_str(), rr.muted?"true":"false", rr.solo?"true":"false");
         GraphSpec gs = loadGraphSpecFromJsonFile(rr.path);
         auto g = std::make_unique<Graph>();
         for (const auto& ns : gs.nodes) {
@@ -920,6 +921,7 @@ int main(int argc, char** argv) {
         }
         // Apply solo/mute policy: if any solo, only racks with rr.solo emit; otherwise skip muted
         const bool activeRack = anySoloGlobal ? rr.solo : !rr.muted;
+        std::fprintf(stderr, "[rt-session] rack-active id=%s active=%s (anySolo=%s)\n", rr.id.c_str(), activeRack?"true":"false", anySoloGlobal?"true":"false");
         if (!activeRack) cmds.clear();
         // Resolve params and prefix nodeIds
         std::unordered_map<std::string, std::string> nodeIdToType; for (const auto& ns : gs.nodes) nodeIdToType.emplace(ns.id, ns.type);
@@ -1002,6 +1004,7 @@ int main(int argc, char** argv) {
           cmd.paramId = 0;
           cmd.value = sc.value;
           cmd.rampMs = sc.rampMs;
+          if (!sc.rack.empty()) cmd.paramNameStr = nullptr; // session-level targets resolved by nodeId, keep null
           while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
         }
       }
@@ -1057,6 +1060,7 @@ int main(int argc, char** argv) {
           Command cmd{}; cmd.sampleTime = c.sampleTime; cmd.nodeId = internNodeId(c.nodeId);
           cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp;
           cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
+          if (!c.paramName.empty()) cmd.paramNameStr = internNodeId(c.paramName);
           while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
           if (!gRunning.load()) break; totalPushed++;
           const size_t nextCi = it.ci + 1; if (nextCi < rackRTs[it.ri].baseCmds.size()) pq.push(Item{rackRTs[it.ri].baseCmds[nextCi].sampleTime, it.ri, nextCi});
@@ -1084,7 +1088,7 @@ int main(int argc, char** argv) {
             }
             while (!pq.empty() && gRunning.load()) {
               Item it = pq.top(); pq.pop(); const auto& c = rackRTs[it.ri].baseCmds[it.ci];
-              Command cmd{}; cmd.sampleTime = c.sampleTime + nextOffset[it.ri]; cmd.nodeId = internNodeId(c.nodeId); cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
+              Command cmd{}; cmd.sampleTime = c.sampleTime + nextOffset[it.ri]; cmd.nodeId = internNodeId(c.nodeId); cmd.type = (c.type == std::string("Trigger")) ? CommandType::Trigger : (c.type == std::string("SetParam")) ? CommandType::SetParam : CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs; if (!c.paramName.empty()) cmd.paramNameStr = internNodeId(c.paramName);
               while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1)); if (!gRunning.load()) break;
               const size_t nextCi = it.ci + 1; if (nextCi < rackRTs[it.ri].baseCmds.size()) pq.push(Item{rackRTs[it.ri].baseCmds[nextCi].sampleTime + nextOffset[it.ri], it.ri, nextCi});
             }
@@ -1553,6 +1557,7 @@ int main(int argc, char** argv) {
       bool anySoloGlobal2 = false; for (const auto& rr : sess.racks) if (rr.solo) { anySoloGlobal2 = true; break; }
       // Build graphs with rack-prefixed node ids; build base commands per rack
       for (const auto& rr : sess.racks) {
+        std::fprintf(stderr, "[rt-session] rack-config id=%s muted=%s solo=%s\n", rr.id.c_str(), rr.muted?"true":"false", rr.solo?"true":"false");
         GraphSpec gs = loadGraphSpecFromJsonFile(rr.path);
         auto g = std::make_unique<Graph>();
         // Add nodes with prefixed ids
@@ -1595,6 +1600,7 @@ int main(int argc, char** argv) {
         }
         // Apply solo/mute policy
         const bool activeRack2 = anySoloGlobal2 ? rr.solo : !rr.muted;
+        std::fprintf(stderr, "[rt-session] rack-active id=%s active=%s (anySolo=%s)\n", rr.id.c_str(), activeRack2?"true":"false", anySoloGlobal2?"true":"false");
         if (!activeRack2) cmds.clear();
         // Resolve named params and prefix nodeIds
         std::unordered_map<std::string, std::string> nodeIdToType;
@@ -1678,7 +1684,7 @@ int main(int argc, char** argv) {
           if (i >= activeFlags.size() || !activeFlags[i]) continue;
           size_t pushed = 0;
           for (const auto& c : rackRTs[i].baseCmds) {
-            Command cmd{}; cmd.sampleTime = c.sampleTime; cmd.nodeId = internNodeId(c.nodeId); if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger; else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam; else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs; (void)cmdQueue.push(cmd);
+          Command cmd{}; cmd.sampleTime = c.sampleTime; cmd.nodeId = internNodeId(c.nodeId); if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger; else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam; else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs; if (!c.paramName.empty()) cmd.paramNameStr = internNodeId(c.paramName); (void)cmdQueue.push(cmd);
             ++pushed;
           }
           if (rtDebugSession) std::fprintf(stderr, "[rt-session] init enqueued rack=%s cmds=%zu\n", rackRTs[i].rackId.c_str(), pushed);
@@ -1702,7 +1708,7 @@ int main(int argc, char** argv) {
             if (nextOffset[i] <= now + desiredAhead) {
               size_t pushed = 0;
               for (auto c : rackRTs[i].baseCmds) {
-                Command cmd{}; cmd.sampleTime = c.sampleTime + nextOffset[i]; cmd.nodeId = internNodeId(c.nodeId); if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger; else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam; else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs;
+                Command cmd{}; cmd.sampleTime = c.sampleTime + nextOffset[i]; cmd.nodeId = internNodeId(c.nodeId); if (c.type == std::string("Trigger")) cmd.type = CommandType::Trigger; else if (c.type == std::string("SetParam")) cmd.type = CommandType::SetParam; else if (c.type == std::string("SetParamRamp")) cmd.type = CommandType::SetParamRamp; cmd.paramId = c.paramId; cmd.value = c.value; cmd.rampMs = c.rampMs; if (!c.paramName.empty()) cmd.paramNameStr = internNodeId(c.paramName);
                 while (gRunning.load() && !cmdQueue.push(cmd)) std::this_thread::sleep_for(std::chrono::milliseconds(1));
                 ++pushed;
                 if (!gRunning.load()) break;

@@ -6,6 +6,7 @@
 #include <vector>
 #include <atomic>
 #include <algorithm>
+#include <unordered_map>
 #include <cstring>
 #include <string>
 #include <cstdio>
@@ -14,6 +15,7 @@
 #include "../core/ScopedAudioUnit.hpp"
 #include "../core/OsStatusUtils.hpp"
 #include "../core/Command.hpp"
+#include "../core/ParamMap.hpp"
 #include "../session/SessionSpec.hpp"
 #include "../core/SpectralDuckerNode.hpp"
 #include <cmath>
@@ -93,6 +95,12 @@ public:
     err = AudioUnitGetProperty(unit_.get(), kAudioUnitProperty_StreamFormat, kAudioUnitScope_Input, 0, &asbd, &size);
     sampleRate_ = (err == noErr && asbd.mSampleRate > 0.0) ? asbd.mSampleRate : requestedSampleRate;
     for (const auto& r : racks_) { if (r.graph) { r.graph->prepare(sampleRate_, 1024); r.graph->reset(); } }
+    // Build nodeId -> nodeType map for param name resolution in diagnostics
+    nodeTypeById_.clear();
+    for (const auto& r : racks_) {
+      if (!r.graph) continue;
+      r.graph->forEachNode([&](const std::string& id, Node& n){ (void)n; nodeTypeById_[id] = n.name(); });
+    }
     // Prepare meters accumulators
     rackMeters_.assign(racks_.size(), Meter{});
     busMeters_.assign(buses_.size(), Meter{});
@@ -356,7 +364,41 @@ private:
   void printEvent(const Command& c, SampleTime segAbsStart) const {
     const double tSec = static_cast<double>(segAbsStart) / sampleRate_;
     const char* tag = (c.type == CommandType::Trigger) ? "TRIGGER" : (c.type == CommandType::SetParam ? "SET" : "RAMP");
-    std::fprintf(stderr, "%.6f\t%s\tnode=%s\tpid=%u\tval=%.3f\n", tSec, tag, c.nodeId ? c.nodeId : "", c.paramId, static_cast<double>(c.value));
+    const char* node = c.nodeId ? c.nodeId : "";
+    // For triggers, omit pid entirely
+    if (c.type == CommandType::Trigger) {
+      std::fprintf(stderr, "%.6f\t%s\tnode=%s\n", tSec, tag, node);
+      return;
+    }
+    // Prefer param name when available for known node types, and special-case xfader:x
+    const char* pname = nullptr;
+    if (node && *node) {
+      // xfader special case: nodeId format "xfader:<id>:x"
+      if (std::strncmp(node, "xfader:", 8) == 0) {
+        const char* rest = node + 8; const char* colon = std::strchr(rest, ':');
+        if (colon && std::strcmp(colon + 1, "x") == 0) pname = "x";
+      }
+      if (!pname && c.paramNameStr && *c.paramNameStr) {
+        pname = c.paramNameStr; // fallback to carried name
+      }
+      if (!pname && c.paramId != 0) {
+        auto it = nodeTypeById_.find(std::string(node));
+        if (it != nodeTypeById_.end()) {
+          const std::string& t = it->second;
+          auto nameById = [&](const ParamMap& m, uint16_t id) -> const char* {
+            for (size_t i = 0; i < m.count; ++i) if (m.defs[i].id == id) return m.defs[i].name;
+            return nullptr;
+          };
+          if (t == std::string("kick")) pname = nameById(kKickParamMap, c.paramId);
+          else if (t == std::string("clap")) pname = nameById(kClapParamMap, c.paramId);
+          else if (t == std::string("tb303_ext")) pname = nameById(kTb303ParamMap, c.paramId);
+          else if (t == std::string("mam_chip")) pname = nameById(kMamChipParamMap, c.paramId);
+        }
+      }
+    }
+    // Print with extra tab spacing after node and without labels
+    if (pname) std::fprintf(stderr, "%.6f\t%s\tnode=%s\t\t%s\t%.3f\n", tSec, tag, node, pname, static_cast<double>(c.value));
+    else std::fprintf(stderr, "%.6f\t%s\tnode=%s\t\t%.3f\n", tSec, tag, node, static_cast<double>(c.value));
   }
 
   AudioUnitHandle unit_{};
@@ -377,6 +419,7 @@ private:
   bool metricsEnabled_ = false; FILE* metricsFile_ = nullptr; bool metricsIncludeRacks_ = true; bool metricsIncludeBuses_ = true; double startWallUnix_ = 0.0;
   struct XfaderState { std::string id; size_t aIndex=SIZE_MAX; size_t bIndex=SIZE_MAX; bool lawEqualPower=true; double smoothingMs=10.0; bool lfoEnabled=false; double freqHz=0.25; double phase01=0.0; double x=0.0; double xTarget=0.0; double lastGA=1.0; double lastGB=1.0; };
   std::vector<XfaderState> xfaders_{};
+  std::unordered_map<std::string, std::string> nodeTypeById_{};
 };
 
 

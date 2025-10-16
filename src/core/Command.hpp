@@ -17,6 +17,7 @@ struct Command {
   uint16_t paramId = 0;       // for SetParam/SetParamRamp
   float value = 0.0f;         // new value
   float rampMs = 0.0f;        // for SetParamRamp
+  const char* paramNameStr = nullptr; // optional diagnostics fallback for printing
 };
 
 template <size_t Capacity>
