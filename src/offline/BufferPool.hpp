@@ -30,6 +30,13 @@ public:
     for (auto& e : entries_) e.inUse = false;
   }
 
+  void release(float* ptr) {
+    if (!ptr) return;
+    for (auto& e : entries_) {
+      if (!e.data.empty() && e.data.data() == ptr) { e.inUse = false; break; }
+    }
+  }
+
 private:
   struct Entry { std::vector<float> data; bool inUse = false; };
   std::vector<Entry> entries_{};

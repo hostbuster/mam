@@ -119,11 +119,12 @@ public:
         graph.ensureTopology();
         const size_t totalSamples = static_cast<size_t>(segFrames) * channels;
         if (nodeBuffers_.size() != graph.nodeCount()) nodeBuffers_.assign(graph.nodeCount(), static_cast<float*>(nullptr));
-        // Acquire/zero output buffers for all nodes for this segment
+        // Acquire/zero output buffers for all nodes for this segment (reuse-aware)
         for (size_t i = 0; i < graph.nodeCount(); ++i) {
           auto& buf = pool_.acquire(segFrames);
           nodeBuffers_[i] = buf.data();
           std::fill(nodeBuffers_[i], nodeBuffers_[i] + totalSamples, 0.0f);
+          if (debug_) std::fprintf(stderr, "[offline-topo] buf node=%s ptr=%p\n", graph.nodeIdAt(i).c_str(), (void*)nodeBuffers_[i]);
         }
         // Per-port sums for current node
         std::unordered_map<uint32_t, std::vector<float>> portSums;
@@ -196,7 +197,8 @@ public:
           }
         }
 
-        pool_.releaseAll();
+        // Release node buffers (eligible for reuse next segment)
+        for (size_t i = 0; i < graph.nodeCount(); ++i) pool_.release(nodeBuffers_[i]);
       }
       while (cmdIndex < commands.size() && commands[cmdIndex].sampleTime < cutoff) ++cmdIndex;
 

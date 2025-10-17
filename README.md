@@ -237,6 +237,21 @@ Examples:
 - `--offline-block N` / `--topo-offline-blocks N`: set offline block size for the topo scheduler (default 1024; min 64).
 - `--topo-verbose`: print topo levels once at start for the current graph.
 
+#### Topo offline scheduler (experimental)
+
+- Purpose: deterministic, efficient offline rendering with an explicit topological scheduler.
+- Status:
+  - Stable per-edge mixing and deterministic reduction order (connections sorted once).
+  - Multi‑port accumulation, dry tap suppression, mixer gains, master/soft‑clip handled in scheduler.
+  - BufferPool reuse per segment to avoid repeated allocations (block-size configurable).
+  - Parity: results match baseline timeline renderer in sample‑exact tests so far.
+- Flags:
+  - `--topo-scheduler topo|baseline` (or `--offline-scheduler ...`)
+  - `--topo-offline-blocks N`
+  - `--topo-verbose`
+- Roadmap:
+  - Lifetime‑based buffer reuse across levels, optional level‑parallel execution, metrics/tracing, and a parity test suite.
+
 LFOs and modulation matrix:
 - See `docs/LFO.md` for a guide to authoring LFOs, routing to params, LFO-on-LFO frequency modulation, per-step transport locks, and mapped routes (`min`/`max`, `map: linear|exp`).
  - TB‑303 extras: per‑step pseudo‑params `LFO1_FREQ_HZ`/`LFO2_FREQ_HZ` and LFO phase target via `"LFO.<id>.phase"`.
