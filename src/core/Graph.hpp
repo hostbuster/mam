@@ -49,6 +49,51 @@ public:
     for (auto& e : nodes_) fn(e.id, *e.node);
   }
 
+  // Topo-scheduler facing minimal API
+  size_t nodeCount() const { return nodes_.size(); }
+  const std::string& nodeIdAt(size_t idx) const { return nodes_[idx].id; }
+  Node* nodeAt(size_t idx) { return nodes_[idx].node.get(); }
+  void ensureTopology() { if (topoDirty_ || (topoOrder_.empty() && insertionOrder_.empty())) rebuildTopology(); }
+  struct EdgeInfo { size_t fromIndex; float gain; uint32_t fromPort; uint32_t toPort; };
+  void getUpstreamEdgeInfos(size_t nodeIndex, std::vector<EdgeInfo>& out) const {
+    out.clear();
+    auto it = upstream_.find(nodeIndex);
+    if (it == upstream_.end()) return;
+    out.reserve(it->second.size());
+    for (const auto& e : it->second) out.push_back(EdgeInfo{e.fromIndex, e.gain, e.fromPort, e.toPort});
+  }
+  uint32_t getDeclaredInChannels(size_t nodeIndex, uint32_t toPort) const {
+    auto itN = inPortChannels_.find(nodeIndex);
+    if (itN != inPortChannels_.end()) {
+      auto itP = itN->second.find(toPort);
+      if (itP != itN->second.end()) return itP->second;
+    }
+    return 0u;
+  }
+  uint32_t getDeclaredOutChannels(size_t nodeIndex, uint32_t fromPort) const {
+    auto itN = outPortChannels_.find(nodeIndex);
+    if (itN != outPortChannels_.end()) {
+      auto itP = itN->second.find(fromPort);
+      if (itP != itN->second.end()) return itP->second;
+    }
+    return 0u;
+  }
+  // Accumulate an edge contribution with channel adaptation
+  void accumulateEdge(const float* src, std::vector<float>& dst,
+                      uint32_t frames, uint32_t graphCh,
+                      uint32_t srcDeclared, uint32_t dstDeclared,
+                      float gain) {
+    adaptAndAccumulate(src, dst, frames, graphCh, srcDeclared, dstDeclared, gain);
+  }
+  bool hasMixer() const { return static_cast<bool>(mixer_); }
+  float mixerMasterGain() const { return mixer_ ? mixer_->masterGain() : 1.0f; }
+  bool mixerSoftClipEnabled() const { return mixer_ ? mixer_->softClip() : true; }
+  float mixerGainForId(const std::string& id) const {
+    if (!mixer_) return 0.0f;
+    for (const auto& ch : mixer_->channels()) if (ch.id == id) return ch.gain;
+    return 0.0f;
+  }
+
   void prepare(double sampleRate, uint32_t maxBlock) {
     for (auto& e : nodes_) e.node->prepare(sampleRate, maxBlock);
     if (statsEnabled_) initStats();

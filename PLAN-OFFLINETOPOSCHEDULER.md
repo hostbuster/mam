@@ -6,9 +6,11 @@
 - Topo levels: built from `connections` (serial execution) and printed when `-v` is set.
 - Block size knob: `--offline-block N` controls topo scheduler block size.
 - Topo flag aliases: `--topo-scheduler`, `--topo-offline-blocks`, `--topo-verbose` for grouped discoverability.
-- Determinism: connections are stably sorted once in topo path and applied to the Graph, ensuring fixed per‑edge reduction order in mixing.
+- Determinism: connections are stably sorted once in topo path and applied to the Graph, ensuring fixed per‑edge reduction order.
+- Per‑edge mixing: moved into topo scheduler (stable accumulation, multi‑port, dry tap suppression, mixer gains, master/soft‑clip), parity preserved.
+- BufferPool reuse: active for per‑node buffers per segment; deeper lifetime‑based reuse across levels pending.
 - Parity: sample renders match baseline (peak/RMS, sample‑exact in checks so far).
-- Not yet implemented: per‑edge routing in scheduler (still delegated to graph.process), buffer reuse/aliasing, parallelism, metrics, deterministic stable reductions, validation.
+- Not yet implemented: lifetime‑based BufferPool reuse, parallel levels, metrics, validation, parity tests suite.
 
 ### Gaps / TODOs
 - Topological execution
@@ -43,11 +45,10 @@
    - Execute nodes in level order; keep using graph.process temporarily for mixing.
 
 2) Edge mixing in scheduler
-   - (Partial) Stable connection order applied globally for deterministic mixing.
-   - Next: move mixing from Graph into scheduler: per‑node input accumulators, apply `gainPercent`/`dryPercent`, multi‑port routing; stable reduction implemented locally.
+   - DONE: stable connection order + mixing in scheduler (per‑node accumulators, dry/wet, multi‑port, stable reduction, mixer/master/soft‑clip).
 
 3) BufferPool reuse/aliasing
-   - Liveness via last‑use analysis per buffer; reuse freed buffers between levels.
+   - NEXT: Liveness via last‑use analysis per buffer; reuse freed buffers between levels/segments.
    - Guard against alias hazards for nodes that read/write the same target.
 
 4) Parallel levels
@@ -66,9 +67,9 @@
    - README section documenting scheduler modes and trade‑offs.
 
 ### Work breakdown (next steps)
-- Swap mixing from graph.process to explicit per‑edge accumulation with stable order (keep serial; preserve parity). Stable connection ordering is in place; implement accumulators and dry/wet next.
-- Introduce BufferPool lifetimes and reuse in the topo loop.
-- Add a `topo_debug` mode to print levels and buffer reuse decisions (dev aid).
+- Introduce BufferPool lifetimes and reuse in the topo loop (last‑use analysis, free lists per level).
+- Add a `topo_debug` mode to print buffer lifetime/reuse decisions.
+- Parity tests vs. baseline and sample‑exact checks; then level‑parallel prototype via JobPool.
 
 ### Definition of done
 - For sample racks: topo serial == baseline timeline (sample‑exact).

@@ -4,11 +4,17 @@
 #include <string>
 #include <cstdint>
 #include <algorithm>
+#include <unordered_map>
+#include <unordered_set>
 #include "../core/Graph.hpp"
 #include "BufferPool.hpp"
 #include "OfflineProgress.hpp"
 #include "../core/GraphConfig.hpp"
 #include "../core/Command.hpp"
+#include <cmath>
+#include "../core/DelayNode.hpp"
+#include "../core/CompressorNode.hpp"
+#include "../core/MeterNode.hpp"
 
 // Scaffold: A minimal topological scheduler for offline rendering.
 // Current Graph has no explicit edges; this placeholder processes nodes then applies mixer.
@@ -57,6 +63,18 @@ public:
       levelsBuilt_ = true;
     }
     size_t cmdIndex = 0;
+    // Prepare ID→index for quick lookups
+    idToIdx_.clear(); ids_.clear(); graph.forEachNode([&](const std::string& id, Node&){ idToIdx_[id] = ids_.size(); ids_.push_back(id); });
+
+    // Copy sorted connections for dry taps and isSink computation
+    if (stableConns_.empty()) { stableConns_ = connections; }
+    // Compute sink flags from connections (nodes with no outgoing edges)
+    isSink_.assign(graph.nodeCount(), true);
+    for (const auto& e : stableConns_) {
+      auto itF = idToIdx_.find(e.from);
+      if (itF != idToIdx_.end()) isSink_[itF->second] = false;
+    }
+
     for (uint64_t f = 0; f < frames; f += blockSize) {
       const uint32_t thisBlock = static_cast<uint32_t>(std::min<uint64_t>(blockSize, frames - f));
       const uint64_t blockStart = f;
@@ -97,9 +115,88 @@ public:
           graph.forEachNode([&](const std::string& id, Node& n){ if (c.nodeId && id == c.nodeId) n.handleEvent(c); });
         }
 
-        ProcessContext ctx{}; ctx.sampleRate = sampleRate; ctx.frames = segFrames; ctx.blockStart = segAbs;
+        // Execute by topo levels with explicit per-edge accumulation and BufferPool reuse
+        graph.ensureTopology();
+        const size_t totalSamples = static_cast<size_t>(segFrames) * channels;
+        if (nodeBuffers_.size() != graph.nodeCount()) nodeBuffers_.assign(graph.nodeCount(), static_cast<float*>(nullptr));
+        // Acquire/zero output buffers for all nodes for this segment
+        for (size_t i = 0; i < graph.nodeCount(); ++i) {
+          auto& buf = pool_.acquire(segFrames);
+          nodeBuffers_[i] = buf.data();
+          std::fill(nodeBuffers_[i], nodeBuffers_[i] + totalSamples, 0.0f);
+        }
+        // Per-port sums for current node
+        std::unordered_map<uint32_t, std::vector<float>> portSums;
+
+        // Iterate levels
+        for (const auto& level : levels_) {
+          for (size_t ni : level) {
+            // Build per-port sums from upstream edges
+            portSums.clear();
+            std::vector<Graph::EdgeInfo> ups; graph.getUpstreamEdgeInfos(ni, ups);
+            for (const auto& e : ups) {
+              const float* src = nodeBuffers_[e.fromIndex];
+              auto& dst = portSums[e.toPort]; if (dst.size() != totalSamples) dst.assign(totalSamples, 0.0f);
+              const uint32_t srcDecl = graph.getDeclaredOutChannels(e.fromIndex, e.fromPort);
+              const uint32_t dstDecl = graph.getDeclaredInChannels(ni, e.toPort);
+              graph.accumulateEdge(src, dst, segFrames, channels, srcDecl, dstDecl, e.gain);
+            }
+            // Determine main input (port 0)
+            const float* mainIn = nullptr; if (portSums.count(0u)) mainIn = portSums[0u].data();
+            // Process node
+            Node* node = graph.nodeAt(ni);
+            if (auto* d = dynamic_cast<DelayNode*>(node)) {
+              // in-place over input
+              if (mainIn) std::copy(portSums[0u].begin(), portSums[0u].end(), nodeBuffers_[ni]);
+              ProcessContext ctx{}; ctx.sampleRate = sampleRate; ctx.frames = segFrames; ctx.blockStart = segAbs;
+              d->processInPlace(ctx, nodeBuffers_[ni], channels);
+            } else if (auto* c = dynamic_cast<CompressorNode*>(node)) {
+              if (mainIn) std::copy(portSums[0u].begin(), portSums[0u].end(), nodeBuffers_[ni]);
+              std::vector<float> sc; sc.assign(totalSamples, 0.0f);
+              auto itSC = portSums.find(1u); if (itSC != portSums.end()) sc = itSC->second;
+              ProcessContext ctx{}; ctx.sampleRate = sampleRate; ctx.frames = segFrames; ctx.blockStart = segAbs;
+              c->applySidechain(ctx, nodeBuffers_[ni], sc.data(), channels);
+            } else if (auto* m = dynamic_cast<MeterNode*>(node)) {
+              if (mainIn) std::copy(portSums[0u].begin(), portSums[0u].end(), nodeBuffers_[ni]);
+              ProcessContext ctx{}; ctx.sampleRate = sampleRate; ctx.frames = segFrames; ctx.blockStart = segAbs;
+              m->updateFromBuffer(nodeBuffers_[ni], segFrames, channels);
+            } else {
+              // Generators or nodes that ignore inputs
+              ProcessContext ctx{}; ctx.sampleRate = sampleRate; ctx.frames = segFrames; ctx.blockStart = segAbs;
+              node->process(ctx, nodeBuffers_[ni], channels);
+            }
+          }
+        }
+
+        // Mix to output with dry taps and mixer gains; stable connection order
         float* outPtr = out.data() + static_cast<size_t>((blockStart + segStart) * channels);
-        graph.process(ctx, outPtr, channels);
+        std::fill(outPtr, outPtr + totalSamples, 0.0f);
+        for (const auto& e : stableConns_) {
+          // dry tap suppression if present in mixer
+          const size_t fromIdx = idToIdx_.count(e.from) ? idToIdx_[e.from] : static_cast<size_t>(-1);
+          if (fromIdx == static_cast<size_t>(-1)) continue;
+          const float dry = e.dryPercent * (1.0f/100.0f);
+          if (dry <= 0.0f) continue;
+          if (graph.mixerGainForId(e.from) > 0.0f) continue;
+          const float* src = nodeBuffers_[fromIdx];
+          for (size_t i = 0; i < totalSamples; ++i) outPtr[i] += src[i] * dry;
+        }
+        for (size_t mi = 0; mi < graph.nodeCount(); ++mi) {
+          float gain = graph.mixerGainForId(graph.nodeIdAt(mi));
+          if (gain == 0.0f && (isSink_.size()==graph.nodeCount() ? isSink_[mi] : true)) gain = 1.0f;
+          if (gain == 0.0f) continue;
+          const float* src = nodeBuffers_[mi];
+          for (size_t i = 0; i < totalSamples; ++i) outPtr[i] += src[i] * gain;
+        }
+        if (graph.hasMixer()) {
+          const float master = graph.mixerMasterGain();
+          if (master != 1.0f) for (size_t i=0;i<totalSamples;++i) outPtr[i] *= master;
+          if (graph.mixerSoftClipEnabled()) {
+            for (size_t i=0;i<totalSamples;++i) outPtr[i] = std::tanh(outPtr[i]);
+          }
+        }
+
+        pool_.releaseAll();
       }
       while (cmdIndex < commands.size() && commands[cmdIndex].sampleTime < cutoff) ++cmdIndex;
 
@@ -181,6 +278,9 @@ private:
   BufferPool pool_;
   uint32_t channels_ = 2;
   uint32_t blockSize_ = 1024;
+  std::vector<float*> nodeBuffers_{};
+  std::vector<bool> isSink_{};
+  std::vector<GraphSpec::Connection> stableConns_{};
 };
 
 
