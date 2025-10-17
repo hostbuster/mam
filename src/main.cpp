@@ -32,6 +32,7 @@
 #include "offline/TransportGenerator.hpp"
 #include "io/AudioFileWriter.hpp"
 #include "offline/OfflineProgress.hpp"
+#include "offline/OfflineTopoScheduler.hpp"
 #include "realtime/RealtimeRenderer.hpp"
 #include "realtime/RealtimeGraphRenderer.hpp"
 #include "realtime/RealtimeSessionRenderer.hpp"
@@ -679,6 +680,9 @@ int main(int argc, char** argv) {
   double metersIntervalSec = 1.0;    // realtime meters print interval
   bool tailOverridden = false;
   bool verbose = false;              // realtime loop diagnostics
+  bool topoVerbose = false;          // topo scheduler debug prints
+  std::string offlineScheduler = "baseline"; // "baseline" | "topo"
+  uint32_t offlineBlock = 1024;      // offline block size
   uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
   bool metersPerNode = false;
   std::string metricsNdjsonPath; bool metricsScopeRacks = true; bool metricsScopeBuses = true; // nodes later
@@ -798,6 +802,16 @@ int main(int argc, char** argv) {
       printPorts = true;
     } else if (std::strcmp(a, "--meters") == 0) {
       printMeters = true;
+    } else if (std::strcmp(a, "--offline-scheduler") == 0) {
+      need(1); offlineScheduler = argv[++i];
+    } else if (std::strcmp(a, "--offline-block") == 0) {
+      need(1); offlineBlock = static_cast<uint32_t>(std::max(64, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--topo-scheduler") == 0) {
+      need(1); offlineScheduler = argv[++i];
+    } else if (std::strcmp(a, "--topo-offline-blocks") == 0) {
+      need(1); offlineBlock = static_cast<uint32_t>(std::max(64, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--topo-verbose") == 0) {
+      topoVerbose = true;
     } else if (std::strcmp(a, "--meters-interval") == 0) {
       need(1);
       metersIntervalSec = std::atof(argv[++i]);
@@ -1476,7 +1490,15 @@ int main(int argc, char** argv) {
                        formatDuration(plannedSec).c_str(), plannedSec,
                        static_cast<double>(preroll) / static_cast<double>(sr), tailMsLocal / 1000.0);
         }
-        interleaved = renderGraphWithCommands(graph, cmds, sr, channels, totalFrames);
+        if (offlineScheduler == std::string("topo")) {
+          OfflineTopoScheduler sched(channels);
+          sched.setDebug(topoVerbose || verbose);
+          sched.setBlockSize(offlineBlock);
+          std::vector<GraphSpec::Connection> conns = spec2.connections;
+          sched.render(graph, conns, cmds, sr, channels, totalFrames, interleaved);
+        } else {
+          interleaved = renderGraphWithCommands(graph, cmds, sr, channels, totalFrames);
+        }
       } catch (...) {
         if (totalFrames == 0) totalFrames = static_cast<uint64_t>(2.0 * static_cast<double>(sr) + 0.5);
         interleaved = (offlineThreads > 1) ? renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads)
@@ -1487,8 +1509,17 @@ int main(int argc, char** argv) {
       if (overrideDurationSec >= 0.0) totalFrames = static_cast<uint64_t>(overrideDurationSec * static_cast<double>(sr) + 0.5);
       else totalFrames = static_cast<uint64_t>(2.0 * static_cast<double>(sr) + 0.5);
       totalFrames += static_cast<uint64_t>((tailMs / 1000.0) * static_cast<double>(sr) + 0.5);
-      interleaved = (offlineThreads > 1) ? renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads)
-                                         : renderGraphInterleaved(graph, sr, channels, totalFrames);
+      if (offlineScheduler == std::string("topo")) {
+        OfflineTopoScheduler sched(channels);
+        sched.setDebug(topoVerbose || verbose);
+        sched.setBlockSize(offlineBlock);
+        std::vector<GraphSpec::Connection> conns;
+        std::vector<GraphSpec::CommandSpec> empty;
+        sched.render(graph, conns, empty, sr, channels, totalFrames, interleaved);
+      } else {
+        interleaved = (offlineThreads > 1) ? renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads)
+                                           : renderGraphInterleaved(graph, sr, channels, totalFrames);
+      }
     }
 
     // Auto-name WAV if requested and no explicit path was provided (or placeholder present)

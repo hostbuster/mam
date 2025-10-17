@@ -233,6 +233,9 @@ Examples:
 - `--schema-strict`: enforce JSON Schema `docs/schema.graph.v1.json` on load (realtime/offline). Enabled by default in dev builds (MAM_USE_JSON_SCHEMA=ON). Requires validator available (see build note).
 - `--trace-json path.json`: write Chrome/Perfetto-compatible trace events with per-node timings; open in Chrome `chrome://tracing` or Perfetto.
 - `--print-latency`: realtime only — print estimated graph preroll (rack) or max preroll across racks (session) at startup.
+- `--offline-scheduler topo|baseline` / `--topo-scheduler topo|baseline`: choose offline renderer; `topo` uses a command-aware path via graph.process (baseline parity) and is the foundation for a future level-parallel scheduler.
+- `--offline-block N` / `--topo-offline-blocks N`: set offline block size for the topo scheduler (default 1024; min 64).
+- `--topo-verbose`: print topo levels once at start for the current graph.
 
 LFOs and modulation matrix:
 - See `docs/LFO.md` for a guide to authoring LFOs, routing to params, LFO-on-LFO frequency modulation, per-step transport locks, and mapped routes (`min`/`max`, `map: linear|exp`).

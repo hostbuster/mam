@@ -3,7 +3,12 @@
 ### Current state
 - CLI flag `--offline-scheduler topo|baseline` switches offline path.
 - `OfflineTopoScheduler` renders via graph.process with command‑aware segmentation (parity with baseline timeline renderer for correctness).
-- Not yet implemented: real topo levels, buffer reuse/aliasing, per‑edge routing, parallelism, metrics, deterministic stable reductions, validation.
+- Topo levels: built from `connections` (serial execution) and printed when `-v` is set.
+- Block size knob: `--offline-block N` controls topo scheduler block size.
+- Topo flag aliases: `--topo-scheduler`, `--topo-offline-blocks`, `--topo-verbose` for grouped discoverability.
+- Determinism: connections are stably sorted once in topo path and applied to the Graph, ensuring fixed per‑edge reduction order in mixing.
+- Parity: sample renders match baseline (peak/RMS, sample‑exact in checks so far).
+- Not yet implemented: per‑edge routing in scheduler (still delegated to graph.process), buffer reuse/aliasing, parallelism, metrics, deterministic stable reductions, validation.
 
 ### Gaps / TODOs
 - Topological execution
@@ -38,8 +43,8 @@
    - Execute nodes in level order; keep using graph.process temporarily for mixing.
 
 2) Edge mixing in scheduler
-   - Introduce per‑node input accumulators; apply `gainPercent` and multi‑port routing; dry taps.
-   - Stable reduction order (sorted by `from`/`to` ids).
+   - (Partial) Stable connection order applied globally for deterministic mixing.
+   - Next: move mixing from Graph into scheduler: per‑node input accumulators, apply `gainPercent`/`dryPercent`, multi‑port routing; stable reduction implemented locally.
 
 3) BufferPool reuse/aliasing
    - Liveness via last‑use analysis per buffer; reuse freed buffers between levels.
@@ -61,10 +66,9 @@
    - README section documenting scheduler modes and trade‑offs.
 
 ### Work breakdown (next steps)
-- Implement topo builder and levels API (serial execution).
-- Swap mixing from graph.process to explicit per‑edge accumulation with stable order.
+- Swap mixing from graph.process to explicit per‑edge accumulation with stable order (keep serial; preserve parity). Stable connection ordering is in place; implement accumulators and dry/wet next.
 - Introduce BufferPool lifetimes and reuse in the topo loop.
-- Add a hidden `--offline-scheduler topo_debug` to print levels and buffer reuse decisions (dev aid).
+- Add a `topo_debug` mode to print levels and buffer reuse decisions (dev aid).
 
 ### Definition of done
 - For sample racks: topo serial == baseline timeline (sample‑exact).
