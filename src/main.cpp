@@ -142,6 +142,7 @@ static void printUsage(const char* exe) {
                "                      Realtime also prints per-bus meters when buses are defined in session.\n"
                "  --cpu-stats        Print block CPU avg/max and xrun count at end\n"
                "  --cpu-stats-per-node  Print per-node avg/max us at end\n"
+               "  --topo-metrics     Shortcut: enable both --cpu-stats and --cpu-stats-per-node for topo\n"
                "  --sha1             Print SHA1(samples) of rendered output (offline)\n"
                "  --rt-debug-feed   Debug realtime feeder (queue pushes, offsets)\n"
                "  --rt-debug-session Debug realtime session (initial/feeder enqueues)\n"
@@ -841,6 +842,8 @@ int main(int argc, char** argv) {
       cpuStats = true;
     } else if (std::strcmp(a, "--cpu-stats-per-node") == 0) {
       cpuStatsPerNode = true;
+    } else if (std::strcmp(a, "--topo-metrics") == 0) {
+      cpuStats = true; cpuStatsPerNode = true;
     } else if (std::strcmp(a, "--rt-debug-feed") == 0) {
       rtDebugFeed = true;
     } else if (std::strcmp(a, "--rt-debug-session") == 0) {

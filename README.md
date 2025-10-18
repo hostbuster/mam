@@ -940,6 +940,7 @@ This project is designed for realtime playback and identical offline exports. Th
 - Flags:
   - `--cpu-stats`: print block CPU avg/max time (ms) and average/max load (% of deadline), block count, and xrun count.
   - `--cpu-stats-per-node`: additionally print per‑node average/max processing time (µs).
+  - `--topo-metrics`: convenience alias enabling both of the above for the topo path.
 - Realtime:
   - Stats are printed at loop boundaries (regardless of `--verbose`) so they’re musically aligned.
 - Offline:

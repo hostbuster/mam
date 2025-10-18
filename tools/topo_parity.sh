@@ -16,8 +16,8 @@ run() {
 }
 
 sha_ref=$(run baseline base.wav --offline-scheduler baseline --offline-block 256)
-sha_base=$(run topo-serial topo_serial.wav --topo-scheduler topo --topo-threads 0 --topo-offline-blocks 256)
-sha_par=$(run topo-parallel topo_parallel.wav --topo-scheduler topo --topo-threads 4 --topo-offline-blocks 256)
+sha_base=$(run topo-serial topo_serial.wav --topo-scheduler topo --topo-threads 0 --topo-offline-blocks 256 --cpu-stats --cpu-stats-per-node)
+sha_par=$(run topo-parallel topo_parallel.wav --topo-scheduler topo --topo-threads 4 --topo-offline-blocks 256 --topo-trace topo_parity.json --cpu-stats)
 
 echo "REF: $sha_ref"
 echo "SER: $sha_base"
