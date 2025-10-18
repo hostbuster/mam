@@ -142,6 +142,7 @@ static void printUsage(const char* exe) {
                "                      Realtime also prints per-bus meters when buses are defined in session.\n"
                "  --cpu-stats        Print block CPU avg/max and xrun count at end\n"
                "  --cpu-stats-per-node  Print per-node avg/max us at end\n"
+               "  --sha1             Print SHA1(samples) of rendered output (offline)\n"
                "  --rt-debug-feed   Debug realtime feeder (queue pushes, offsets)\n"
                "  --rt-debug-session Debug realtime session (initial/feeder enqueues)\n"
                "  --session path.json  Run a multi-rack session (realtime or offline when combined with --wav)\n"
@@ -151,6 +152,10 @@ static void printUsage(const char* exe) {
                "  --loop-minutes M   Repeat transport to reach at least M minutes (offline)\n"
                "  --loop-seconds S   Repeat transport to reach at least S seconds (offline)\n"
                "  --random-seed N    Override JSON randomSeed for deterministic randomness (0 to skip)\n"
+               "  --topo-scheduler topo|baseline   Select topo offline scheduler (alias: --offline-scheduler)\n"
+               "  --topo-offline-blocks N          Topo scheduler block size (alias: --offline-block)\n"
+               "  --topo-threads N                 Level-parallel jobs (0=serial)\n"
+               "  --topo-verbose                   Print topo levels/buffer reuse diagnostics\n"
                "          [--validate path.json] [--list-nodes path.json] [--list-params kick|clap] [--list-node-types]\n"
                "\nProgress (offline):\n"
                "  --progress-ms N    Progress print interval in ms (0=disable)\n"
@@ -683,6 +688,7 @@ int main(int argc, char** argv) {
   bool topoVerbose = false;          // topo scheduler debug prints
   std::string offlineScheduler = "baseline"; // "baseline" | "topo"
   uint32_t offlineBlock = 1024;      // offline block size
+  uint32_t topoThreads = 0;          // 0=serial; >0 level-parallel jobs
   uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
   bool metersPerNode = false;
   std::string metricsNdjsonPath; bool metricsScopeRacks = true; bool metricsScopeBuses = true; // nodes later
@@ -812,6 +818,8 @@ int main(int argc, char** argv) {
       need(1); offlineBlock = static_cast<uint32_t>(std::max(64, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--topo-verbose") == 0) {
       topoVerbose = true;
+    } else if (std::strcmp(a, "--topo-threads") == 0) {
+      need(1); topoThreads = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--meters-interval") == 0) {
       need(1);
       metersIntervalSec = std::atof(argv[++i]);
@@ -1494,6 +1502,7 @@ int main(int argc, char** argv) {
           OfflineTopoScheduler sched(channels);
           sched.setDebug(topoVerbose || verbose);
           sched.setBlockSize(offlineBlock);
+          if (topoThreads > 0) sched.setParallelism(topoThreads);
           std::vector<GraphSpec::Connection> conns = spec2.connections;
           sched.render(graph, conns, cmds, sr, channels, totalFrames, interleaved);
         } else {
@@ -1513,6 +1522,7 @@ int main(int argc, char** argv) {
         OfflineTopoScheduler sched(channels);
         sched.setDebug(topoVerbose || verbose);
         sched.setBlockSize(offlineBlock);
+        if (topoThreads > 0) sched.setParallelism(topoThreads);
         std::vector<GraphSpec::Connection> conns;
         std::vector<GraphSpec::CommandSpec> empty;
         sched.render(graph, conns, empty, sr, channels, totalFrames, interleaved);

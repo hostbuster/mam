@@ -236,6 +236,7 @@ Examples:
 - `--offline-scheduler topo|baseline` / `--topo-scheduler topo|baseline`: choose offline renderer; `topo` uses a command-aware path via graph.process (baseline parity) and is the foundation for a future level-parallel scheduler.
 - `--offline-block N` / `--topo-offline-blocks N`: set offline block size for the topo scheduler (default 1024; min 64).
 - `--topo-verbose`: print topo levels once at start for the current graph.
+- `--topo-threads N`: enable level-parallel execution with N worker threads (0=serial). Deterministic: results are sample-exact vs baseline.
 
 #### Topo offline scheduler (experimental)
 
@@ -243,14 +244,26 @@ Examples:
 - Status:
   - Stable per-edge mixing and deterministic reduction order (connections sorted once).
   - Multi‑port accumulation, dry tap suppression, mixer gains, master/soft‑clip handled in scheduler.
-  - BufferPool reuse per segment to avoid repeated allocations (block-size configurable).
-  - Parity: results match baseline timeline renderer in sample‑exact tests so far.
+  - BufferPool reuse with lifetime IDs in serial path: buffers are tagged and early‑released on last downstream use per segment; block size configurable. Parallel levels use per‑node scratch to avoid races.
+  - Parity: results match baseline timeline renderer in sample‑exact tests (SHA1) in serial and level‑parallel modes.
 - Flags:
   - `--topo-scheduler topo|baseline` (or `--offline-scheduler ...`)
   - `--topo-offline-blocks N`
+  - `--topo-threads N`
   - `--topo-verbose`
 - Roadmap:
   - Lifetime‑based buffer reuse across levels, optional level‑parallel execution, metrics/tracing, and a parity test suite.
+  - Deterministic parallel JobPool with per-level barriers and instrumentation.
+
+##### Parity testing
+
+Use the built-in SHA1 comparison to ensure sample‑exact parity across modes, or run the helper script:
+
+```bash
+bash tools/topo_parity.sh ./build/mam examples/rack/acid303_sidechain_spectral_4bars.json 2 48000 42
+```
+
+The script renders baseline, topo‑serial, and topo‑parallel and checks their SHA1 hashes for equality.
 
 LFOs and modulation matrix:
 - See `docs/LFO.md` for a guide to authoring LFOs, routing to params, LFO-on-LFO frequency modulation, per-step transport locks, and mapped routes (`min`/`max`, `map: linear|exp`).

@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
+#include <atomic>
+#include <memory>
+#include <thread>
 #include "../core/Graph.hpp"
 #include "BufferPool.hpp"
 #include "OfflineProgress.hpp"
@@ -15,6 +18,7 @@
 #include "../core/DelayNode.hpp"
 #include "../core/CompressorNode.hpp"
 #include "../core/MeterNode.hpp"
+#include "../core/JobPool.hpp"
 
 // Scaffold: A minimal topological scheduler for offline rendering.
 // Current Graph has no explicit edges; this placeholder processes nodes then applies mixer.
@@ -25,6 +29,7 @@ public:
   void setChannels(uint32_t channels) { channels_ = channels; pool_.setChannels(channels); }
   void setDebug(bool on) { debug_ = on; }
   void setBlockSize(uint32_t bs) { blockSize_ = (bs >= 64u) ? bs : 64u; }
+  void setParallelism(uint32_t threads, uint32_t minWidth = 2u) { threads_ = threads; minWidth_ = (minWidth > 0 ? minWidth : 2u); }
 
   // Render 'frames' samples into interleaved output, using fixed blockSize.
   void render(Graph& graph,
@@ -119,19 +124,70 @@ public:
         graph.ensureTopology();
         const size_t totalSamples = static_cast<size_t>(segFrames) * channels;
         if (nodeBuffers_.size() != graph.nodeCount()) nodeBuffers_.assign(graph.nodeCount(), static_cast<float*>(nullptr));
-        // Acquire/zero output buffers for all nodes for this segment (reuse-aware)
-        for (size_t i = 0; i < graph.nodeCount(); ++i) {
-          auto& buf = pool_.acquire(segFrames);
-          nodeBuffers_[i] = buf.data();
-          std::fill(nodeBuffers_[i], nodeBuffers_[i] + totalSamples, 0.0f);
-          if (debug_) std::fprintf(stderr, "[offline-topo] buf node=%s ptr=%p\n", graph.nodeIdAt(i).c_str(), (void*)nodeBuffers_[i]);
+        if (nodeVectors_.size() != graph.nodeCount()) nodeVectors_.assign(graph.nodeCount(), std::vector<float>());
+        if (lifetimeIds_.size() != graph.nodeCount()) lifetimeIds_.assign(graph.nodeCount(), 0ull);
+        // Remaining downstream uses per node (for early release); sinks are retained for final mix
+        std::vector<uint32_t> remain;
+        remain.assign(graph.nodeCount(), 0u);
+        for (const auto& e : stableConns_) {
+          auto itF2 = idToIdx_.find(e.from);
+          auto itT2 = idToIdx_.find(e.to);
+          if (itF2 != idToIdx_.end() && itT2 != idToIdx_.end()) remain[itF2->second]++;
         }
         // Per-port sums for current node
         std::unordered_map<uint32_t, std::vector<float>> portSums;
 
         // Iterate levels
         for (const auto& level : levels_) {
-          for (size_t ni : level) {
+          if (threads_ > 1 && level.size() >= minWidth_) {
+            if (!jobPool_) jobPool_ = std::make_unique<JobPool>(threads_);
+            std::atomic<uint32_t> done{0};
+            const uint32_t need = static_cast<uint32_t>(level.size());
+            for (size_t ni : level) {
+              jobPool_->submit([&, ni]() {
+                // Build per-port sums from upstream edges (local)
+                std::unordered_map<uint32_t, std::vector<float>> lportSums;
+                std::vector<Graph::EdgeInfo> ups; graph.getUpstreamEdgeInfos(ni, ups);
+                for (const auto& e : ups) {
+                  const float* src = nodeBuffers_[e.fromIndex]; if (!src) continue;
+                  auto& dst = lportSums[e.toPort]; if (dst.size() != totalSamples) dst.assign(totalSamples, 0.0f);
+                  const uint32_t srcDecl = graph.getDeclaredOutChannels(e.fromIndex, e.fromPort);
+                  const uint32_t dstDecl = graph.getDeclaredInChannels(ni, e.toPort);
+                  graph.accumulateEdge(src, dst, segFrames, channels, srcDecl, dstDecl, e.gain);
+                }
+                // Ensure output buffer for this node
+                if (!nodeBuffers_[ni]) {
+                  auto& vec = nodeVectors_[ni];
+                  if (vec.size() != totalSamples) vec.assign(totalSamples, 0.0f); else std::fill(vec.begin(), vec.end(), 0.0f);
+                  nodeBuffers_[ni] = vec.data();
+                }
+                const float* mainIn2 = (lportSums.count(0u) ? lportSums[0u].data() : nullptr);
+                Node* node2 = graph.nodeAt(ni);
+                if (auto* d2 = dynamic_cast<DelayNode*>(node2)) {
+                  if (mainIn2) std::copy(lportSums[0u].begin(), lportSums[0u].end(), nodeBuffers_[ni]);
+                  ProcessContext ctx2{}; ctx2.sampleRate = sampleRate; ctx2.frames = segFrames; ctx2.blockStart = segAbs;
+                  d2->processInPlace(ctx2, nodeBuffers_[ni], channels);
+                } else if (auto* c2 = dynamic_cast<CompressorNode*>(node2)) {
+                  if (mainIn2) std::copy(lportSums[0u].begin(), lportSums[0u].end(), nodeBuffers_[ni]);
+                  std::vector<float> sc2; sc2.assign(totalSamples, 0.0f);
+                  auto itSC2 = lportSums.find(1u); if (itSC2 != lportSums.end()) sc2 = itSC2->second;
+                  ProcessContext ctx2{}; ctx2.sampleRate = sampleRate; ctx2.frames = segFrames; ctx2.blockStart = segAbs;
+                  c2->applySidechain(ctx2, nodeBuffers_[ni], sc2.data(), channels);
+                } else if (auto* m2 = dynamic_cast<MeterNode*>(node2)) {
+                  if (mainIn2) std::copy(lportSums[0u].begin(), lportSums[0u].end(), nodeBuffers_[ni]);
+                  ProcessContext ctx2{}; ctx2.sampleRate = sampleRate; ctx2.frames = segFrames; ctx2.blockStart = segAbs;
+                  m2->updateFromBuffer(nodeBuffers_[ni], segFrames, channels);
+                } else {
+                  ProcessContext ctx2{}; ctx2.sampleRate = sampleRate; ctx2.frames = segFrames; ctx2.blockStart = segAbs;
+                  node2->process(ctx2, nodeBuffers_[ni], channels);
+                }
+                done.fetch_add(1, std::memory_order_release);
+              });
+            }
+            // Spin-wait barrier (render thread only); short levels
+            while (done.load(std::memory_order_acquire) < need) std::this_thread::yield();
+          } else {
+            for (size_t ni : level) {
             // Build per-port sums from upstream edges
             portSums.clear();
             std::vector<Graph::EdgeInfo> ups; graph.getUpstreamEdgeInfos(ni, ups);
@@ -141,11 +197,31 @@ public:
               const uint32_t srcDecl = graph.getDeclaredOutChannels(e.fromIndex, e.fromPort);
               const uint32_t dstDecl = graph.getDeclaredInChannels(ni, e.toPort);
               graph.accumulateEdge(src, dst, segFrames, channels, srcDecl, dstDecl, e.gain);
+              // One downstream consumption for 'from' is satisfied
+              if (remain[e.fromIndex] > 0) {
+                remain[e.fromIndex]--;
+                const bool isSink = (!isSink_.empty() && isSink_[e.fromIndex]);
+                const bool inMixer = (graph.mixerGainForId(graph.nodeIdAt(e.fromIndex)) > 0.0f);
+                if (remain[e.fromIndex] == 0 && !isSink && !inMixer) {
+                  if (debug_) std::fprintf(stderr, "[offline-topo] release early node=%s ptr=%p\n", graph.nodeIdAt(e.fromIndex).c_str(), (void*)nodeBuffers_[e.fromIndex]);
+                  pool_.releaseById(lifetimeIds_[e.fromIndex]);
+                  nodeBuffers_[e.fromIndex] = nullptr;
+                }
+              }
             }
             // Determine main input (port 0)
             const float* mainIn = nullptr; if (portSums.count(0u)) mainIn = portSums[0u].data();
             // Process node
             Node* node = graph.nodeAt(ni);
+            // Ensure output buffer for this node
+            if (!nodeBuffers_[ni]) {
+              const uint64_t lifeId = ((static_cast<uint64_t>(segAbs) << 32) ^ static_cast<uint64_t>(ni));
+              lifetimeIds_[ni] = lifeId;
+              auto& buf = pool_.acquire(segFrames, lifeId);
+              nodeBuffers_[ni] = buf.data();
+              std::fill(nodeBuffers_[ni], nodeBuffers_[ni] + totalSamples, 0.0f);
+              if (debug_) std::fprintf(stderr, "[offline-topo] buf node=%s ptr=%p\n", graph.nodeIdAt(ni).c_str(), (void*)nodeBuffers_[ni]);
+            }
             if (auto* d = dynamic_cast<DelayNode*>(node)) {
               // in-place over input
               if (mainIn) std::copy(portSums[0u].begin(), portSums[0u].end(), nodeBuffers_[ni]);
@@ -166,6 +242,7 @@ public:
               ProcessContext ctx{}; ctx.sampleRate = sampleRate; ctx.frames = segFrames; ctx.blockStart = segAbs;
               node->process(ctx, nodeBuffers_[ni], channels);
             }
+            }
           }
         }
 
@@ -179,14 +256,14 @@ public:
           const float dry = e.dryPercent * (1.0f/100.0f);
           if (dry <= 0.0f) continue;
           if (graph.mixerGainForId(e.from) > 0.0f) continue;
-          const float* src = nodeBuffers_[fromIdx];
+          const float* src = nodeBuffers_[fromIdx]; if (!src) continue;
           for (size_t i = 0; i < totalSamples; ++i) outPtr[i] += src[i] * dry;
         }
         for (size_t mi = 0; mi < graph.nodeCount(); ++mi) {
           float gain = graph.mixerGainForId(graph.nodeIdAt(mi));
           if (gain == 0.0f && (isSink_.size()==graph.nodeCount() ? isSink_[mi] : true)) gain = 1.0f;
           if (gain == 0.0f) continue;
-          const float* src = nodeBuffers_[mi];
+          const float* src = nodeBuffers_[mi]; if (!src) continue;
           for (size_t i = 0; i < totalSamples; ++i) outPtr[i] += src[i] * gain;
         }
         if (graph.hasMixer()) {
@@ -198,7 +275,12 @@ public:
         }
 
         // Release node buffers (eligible for reuse next segment)
-        for (size_t i = 0; i < graph.nodeCount(); ++i) pool_.release(nodeBuffers_[i]);
+        for (size_t i = 0; i < graph.nodeCount(); ++i) {
+          pool_.releaseById(lifetimeIds_[i]);
+          nodeBuffers_[i] = nullptr;
+          lifetimeIds_[i] = 0ull;
+        }
+        pool_.releaseAll();
       }
       while (cmdIndex < commands.size() && commands[cmdIndex].sampleTime < cutoff) ++cmdIndex;
 
@@ -281,8 +363,13 @@ private:
   uint32_t channels_ = 2;
   uint32_t blockSize_ = 1024;
   std::vector<float*> nodeBuffers_{};
+  std::vector<std::vector<float>> nodeVectors_{}; // used in parallel path to avoid BufferPool races
   std::vector<bool> isSink_{};
   std::vector<GraphSpec::Connection> stableConns_{};
+  uint32_t threads_ = 0;
+  uint32_t minWidth_ = 2;
+  std::unique_ptr<JobPool> jobPool_{};
+  std::vector<uint64_t> lifetimeIds_{};
 };
 
 

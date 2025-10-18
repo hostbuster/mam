@@ -8,9 +8,10 @@
 - Topo flag aliases: `--topo-scheduler`, `--topo-offline-blocks`, `--topo-verbose` for grouped discoverability.
 - Determinism: connections are stably sorted once in topo path and applied to the Graph, ensuring fixed per‑edge reduction order.
 - Per‑edge mixing: moved into topo scheduler (stable accumulation, multi‑port, dry tap suppression, mixer gains, master/soft‑clip), parity preserved.
-- BufferPool reuse: active for per‑node buffers per segment; deeper lifetime‑based reuse across levels pending.
-- Parity: sample renders match baseline (peak/RMS, sample‑exact in checks so far).
-- Not yet implemented: lifetime‑based BufferPool reuse, parallel levels, metrics, validation, parity tests suite.
+- BufferPool reuse: lifetime‑ID based in serial topo path (early release on last downstream use per segment); deeper reuse across levels pending.
+- Parity: sample renders match baseline (peak/RMS, sample‑exact in checks so far). SHA1 parity validated on `acid303_sidechain_spectral_4bars.json`.
+- Level‑parallel prototype: optional `--topo-threads N` executes nodes within a level via JobPool with a per‑level barrier; deterministic and sample‑exact vs serial.
+- Not yet implemented: lifetime‑based BufferPool reuse across levels, richer metrics, validation, parity test suite scripts.
 
 ### Gaps / TODOs
 - Topological execution
@@ -24,8 +25,8 @@
   - Multi‑port fan‑in/out (use declared `ports.inputs[].channels` / `ports.outputs[].channels`).
   - Deterministic summation order for floating‑point stability (stable reduction).
 - Parallelism (optional)
-  - Level‑parallel execution via `JobPool` with per‑level barrier.
-  - Heuristics to skip parallelism for tiny graphs to avoid overhead.
+  - DONE (prototype): Level‑parallel execution via `JobPool` with per‑level barrier.
+  - Heuristics to skip parallelism for tiny graphs to avoid overhead (min width).
 - Determinism
   - Fixed traversal/summation order; ensure parallel and serial renders match sample‑exactly.
   - Seed handling for randomness.
@@ -37,7 +38,7 @@
 - Validation & safety
   - Cycle detection; port/channel mismatches; dry/wet double‑count prevention parity with runtime mixer path.
 - Tests
-  - Parity tests vs. baseline (sample‑exact), stress graphs, deterministic parallel runs.
+  - Parity tests vs. baseline (sample‑exact), stress graphs, deterministic parallel runs. Use `--sha1` to validate or run `tools/topo_parity.sh`.
 
 ### Implementation plan (milestones)
 1) Topo levels (serial, no parallel)
