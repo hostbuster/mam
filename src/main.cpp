@@ -155,6 +155,8 @@ static void printUsage(const char* exe) {
                "  --topo-scheduler topo|baseline   Select topo offline scheduler (alias: --offline-scheduler)\n"
                "  --topo-offline-blocks N          Topo scheduler block size (alias: --offline-block)\n"
                "  --topo-threads N                 Level-parallel jobs (0=serial)\n"
+               "  --topo-min-width N               Min level width to enable parallelism (default 2)\n"
+               "  --topo-min-seg-frames N          Min segment frames to parallelize (default 128)\n"
                "  --topo-verbose                   Print topo levels/buffer reuse diagnostics\n"
                "          [--validate path.json] [--list-nodes path.json] [--list-params kick|clap] [--list-node-types]\n"
                "\nProgress (offline):\n"
@@ -689,6 +691,8 @@ int main(int argc, char** argv) {
   std::string offlineScheduler = "baseline"; // "baseline" | "topo"
   uint32_t offlineBlock = 1024;      // offline block size
   uint32_t topoThreads = 0;          // 0=serial; >0 level-parallel jobs
+  uint32_t topoMinWidth = 2;         // min nodes in level to parallelize
+  uint32_t topoMinSegFrames = 128;   // min segment frames to parallelize
   uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
   bool metersPerNode = false;
   std::string metricsNdjsonPath; bool metricsScopeRacks = true; bool metricsScopeBuses = true; // nodes later
@@ -820,6 +824,10 @@ int main(int argc, char** argv) {
       topoVerbose = true;
     } else if (std::strcmp(a, "--topo-threads") == 0) {
       need(1); topoThreads = static_cast<uint32_t>(std::max(0, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--topo-min-width") == 0) {
+      need(1); topoMinWidth = static_cast<uint32_t>(std::max(1, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--topo-min-seg-frames") == 0) {
+      need(1); topoMinSegFrames = static_cast<uint32_t>(std::max(1, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--meters-interval") == 0) {
       need(1);
       metersIntervalSec = std::atof(argv[++i]);
@@ -1502,9 +1510,27 @@ int main(int argc, char** argv) {
           OfflineTopoScheduler sched(channels);
           sched.setDebug(topoVerbose || verbose);
           sched.setBlockSize(offlineBlock);
-          if (topoThreads > 0) sched.setParallelism(topoThreads);
+          if (topoThreads == 0) {
+            // Default threads from HW if user didn't specify
+            const uint32_t hw = std::max(1u, static_cast<uint32_t>(std::thread::hardware_concurrency()));
+            sched.setParallelism(hw);
+          } else {
+            sched.setParallelism(topoThreads);
+          }
+          sched.setParallelHeuristics(topoMinWidth, topoMinSegFrames);
+          if (cpuStats || cpuStatsPerNode) sched.enableCpuStats(true);
           std::vector<GraphSpec::Connection> conns = spec2.connections;
           sched.render(graph, conns, cmds, sr, channels, totalFrames, interleaved);
+          if (cpuStats || cpuStatsPerNode) {
+            const auto s = sched.getCpuSummary();
+            std::fprintf(stderr, "[offline-topo] CPU block avg=%.3fms max=%.3fms (avg=%.1f%% max=%.1f%%) blocks=%llu overruns=%llu\n",
+                         s.avgMs, s.maxMs, s.avgPercent, s.maxPercent,
+                         (unsigned long long)s.blocks, (unsigned long long)s.overruns);
+            if (cpuStatsPerNode) {
+              auto v = sched.getPerNodeCpu();
+              for (const auto& e : v) std::fprintf(stderr, "  node=%s avg=%.2fus max=%.2fus\n", e.id.c_str(), e.avgUs, e.maxUs);
+            }
+          }
         } else {
           interleaved = renderGraphWithCommands(graph, cmds, sr, channels, totalFrames);
         }
@@ -1522,10 +1548,27 @@ int main(int argc, char** argv) {
         OfflineTopoScheduler sched(channels);
         sched.setDebug(topoVerbose || verbose);
         sched.setBlockSize(offlineBlock);
-        if (topoThreads > 0) sched.setParallelism(topoThreads);
+        if (topoThreads == 0) {
+          const uint32_t hw = std::max(1u, static_cast<uint32_t>(std::thread::hardware_concurrency()));
+          sched.setParallelism(hw);
+        } else {
+          sched.setParallelism(topoThreads);
+        }
+        sched.setParallelHeuristics(topoMinWidth, topoMinSegFrames);
+        if (cpuStats || cpuStatsPerNode) sched.enableCpuStats(true);
         std::vector<GraphSpec::Connection> conns;
         std::vector<GraphSpec::CommandSpec> empty;
         sched.render(graph, conns, empty, sr, channels, totalFrames, interleaved);
+        if (cpuStats || cpuStatsPerNode) {
+          const auto s = sched.getCpuSummary();
+          std::fprintf(stderr, "[offline-topo] CPU block avg=%.3fms max=%.3fms (avg=%.1f%% max=%.1f%%) blocks=%llu overruns=%llu\n",
+                       s.avgMs, s.maxMs, s.avgPercent, s.maxPercent,
+                       (unsigned long long)s.blocks, (unsigned long long)s.overruns);
+          if (cpuStatsPerNode) {
+            auto v = sched.getPerNodeCpu();
+            for (const auto& e : v) std::fprintf(stderr, "  node=%s avg=%.2fus max=%.2fus\n", e.id.c_str(), e.avgUs, e.maxUs);
+          }
+        }
       } else {
         interleaved = (offlineThreads > 1) ? renderGraphInterleavedParallel(graph, sr, channels, totalFrames, offlineThreads)
                                            : renderGraphInterleaved(graph, sr, channels, totalFrames);

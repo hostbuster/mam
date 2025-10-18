@@ -250,7 +250,10 @@ Examples:
   - `--topo-scheduler topo|baseline` (or `--offline-scheduler ...`)
   - `--topo-offline-blocks N`
   - `--topo-threads N`
+  - `--topo-min-width N` (default 2)
+  - `--topo-min-seg-frames N` (default 128)
   - `--topo-verbose`
+  - Metrics: combine with `--cpu-stats` and `--cpu-stats-per-node` to print `[offline-topo]` block and per-node timings.
 - Roadmap:
   - Lifetime‑based buffer reuse across levels, optional level‑parallel execution, metrics/tracing, and a parity test suite.
   - Deterministic parallel JobPool with per-level barriers and instrumentation.
@@ -264,6 +267,13 @@ bash tools/topo_parity.sh ./build/mam examples/rack/acid303_sidechain_spectral_4
 ```
 
 The script renders baseline, topo‑serial, and topo‑parallel and checks their SHA1 hashes for equality.
+
+Notes on parallel heuristics and threads:
+
+- If `--topo-threads` is not specified, the topo path defaults to hardware concurrency.
+- Parallelism is only enabled when both conditions hold:
+  - level width ≥ `--topo-min-width`
+  - segment frames ≥ `--topo-min-seg-frames`
 
 LFOs and modulation matrix:
 - See `docs/LFO.md` for a guide to authoring LFOs, routing to params, LFO-on-LFO frequency modulation, per-step transport locks, and mapped routes (`min`/`max`, `map: linear|exp`).

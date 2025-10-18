@@ -30,6 +30,17 @@ public:
   void setDebug(bool on) { debug_ = on; }
   void setBlockSize(uint32_t bs) { blockSize_ = (bs >= 64u) ? bs : 64u; }
   void setParallelism(uint32_t threads, uint32_t minWidth = 2u) { threads_ = threads; minWidth_ = (minWidth > 0 ? minWidth : 2u); }
+  void setParallelHeuristics(uint32_t minWidth, uint32_t minSegFrames) { minWidth_ = (minWidth > 0 ? minWidth : 2u); minSegFrames_ = (minSegFrames > 0 ? minSegFrames : 1u); }
+
+  void enableCpuStats(bool on) {
+    cpuStatsEnabled_ = on;
+    if (on) {
+      cpuNsSum_ = 0.0L; cpuNsMax_ = 0.0; cpuPctSum_ = 0.0; cpuPctMax_ = 0.0; cpuBlocks_ = 0; cpuOverruns_ = 0;
+      nodeNsSum_.assign(ids_.size(), 0.0L);
+      nodeNsMax_.assign(ids_.size(), 0.0);
+      nodeCalls_.assign(ids_.size(), 0u);
+    }
+  }
 
   // Render 'frames' samples into interleaved output, using fixed blockSize.
   void render(Graph& graph,
@@ -121,6 +132,7 @@ public:
         }
 
         // Execute by topo levels with explicit per-edge accumulation and BufferPool reuse
+        const auto tBlockStart = cpuStatsEnabled_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         graph.ensureTopology();
         const size_t totalSamples = static_cast<size_t>(segFrames) * channels;
         if (nodeBuffers_.size() != graph.nodeCount()) nodeBuffers_.assign(graph.nodeCount(), static_cast<float*>(nullptr));
@@ -139,7 +151,7 @@ public:
 
         // Iterate levels
         for (const auto& level : levels_) {
-          if (threads_ > 1 && level.size() >= minWidth_) {
+          if (threads_ > 1 && level.size() >= minWidth_ && segFrames >= minSegFrames_) {
             if (!jobPool_) jobPool_ = std::make_unique<JobPool>(threads_);
             std::atomic<uint32_t> done{0};
             const uint32_t need = static_cast<uint32_t>(level.size());
@@ -222,6 +234,7 @@ public:
               std::fill(nodeBuffers_[ni], nodeBuffers_[ni] + totalSamples, 0.0f);
               if (debug_) std::fprintf(stderr, "[offline-topo] buf node=%s ptr=%p\n", graph.nodeIdAt(ni).c_str(), (void*)nodeBuffers_[ni]);
             }
+            const auto tNodeStart = cpuStatsEnabled_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
             if (auto* d = dynamic_cast<DelayNode*>(node)) {
               // in-place over input
               if (mainIn) std::copy(portSums[0u].begin(), portSums[0u].end(), nodeBuffers_[ni]);
@@ -241,6 +254,14 @@ public:
               // Generators or nodes that ignore inputs
               ProcessContext ctx{}; ctx.sampleRate = sampleRate; ctx.frames = segFrames; ctx.blockStart = segAbs;
               node->process(ctx, nodeBuffers_[ni], channels);
+            }
+            if (cpuStatsEnabled_) {
+              const auto tNodeEnd = std::chrono::steady_clock::now();
+              const double ns = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(tNodeEnd - tNodeStart).count());
+              if (ni >= nodeNsSum_.size()) { nodeNsSum_.resize(ni + 1, 0.0L); nodeNsMax_.resize(ni + 1, 0.0); nodeCalls_.resize(ni + 1, 0u); }
+              nodeNsSum_[ni] += static_cast<long double>(ns);
+              if (ns > nodeNsMax_[ni]) nodeNsMax_[ni] = ns;
+              nodeCalls_[ni] += 1u;
             }
             }
           }
@@ -281,6 +302,18 @@ public:
           lifetimeIds_[i] = 0ull;
         }
         pool_.releaseAll();
+        if (cpuStatsEnabled_) {
+          const auto tBlockEnd = std::chrono::steady_clock::now();
+          const double ns = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(tBlockEnd - tBlockStart).count());
+          const double budgetNs = (sampleRate > 0u) ? (1e9 * static_cast<double>(segFrames) / static_cast<double>(sampleRate)) : 0.0;
+          const double pct = (budgetNs > 0.0) ? (ns / budgetNs * 100.0) : 0.0;
+          cpuNsSum_ += static_cast<long double>(ns);
+          if (ns > cpuNsMax_) cpuNsMax_ = ns;
+          cpuPctSum_ += pct;
+          if (pct > cpuPctMax_) cpuPctMax_ = pct;
+          cpuBlocks_ += 1u;
+          if (budgetNs > 0.0 && ns > budgetNs) cpuOverruns_ += 1u;
+        }
       }
       while (cmdIndex < commands.size() && commands[cmdIndex].sampleTime < cutoff) ++cmdIndex;
 
@@ -356,6 +389,7 @@ private:
   bool debug_ = false;
   bool levelsBuilt_ = false;
   bool stableConnsApplied_ = false;
+  bool cpuStatsEnabled_ = false;
   std::vector<std::string> ids_;
   std::unordered_map<std::string,size_t> idToIdx_;
   std::vector<std::vector<size_t>> levels_;
@@ -368,8 +402,32 @@ private:
   std::vector<GraphSpec::Connection> stableConns_{};
   uint32_t threads_ = 0;
   uint32_t minWidth_ = 2;
+  uint32_t minSegFrames_ = 128; // skip parallelism for tiny splits
   std::unique_ptr<JobPool> jobPool_{};
   std::vector<uint64_t> lifetimeIds_{};
+
+  // CPU stats
+  long double cpuNsSum_ = 0.0L; double cpuNsMax_ = 0.0; double cpuPctSum_ = 0.0; double cpuPctMax_ = 0.0; uint64_t cpuBlocks_ = 0; uint64_t cpuOverruns_ = 0;
+  std::vector<long double> nodeNsSum_{}; std::vector<double> nodeNsMax_{}; std::vector<uint64_t> nodeCalls_{};
+
+public:
+  struct CpuSummary { double avgMs; double maxMs; double avgPercent; double maxPercent; uint64_t blocks; uint64_t overruns; };
+  CpuSummary getCpuSummary() const {
+    const double avgNs = (cpuBlocks_ > 0) ? static_cast<double>(cpuNsSum_ / static_cast<long double>(cpuBlocks_)) : 0.0;
+    const double avgPct = (cpuBlocks_ > 0) ? (cpuPctSum_ / static_cast<double>(cpuBlocks_)) : 0.0;
+    return CpuSummary{ avgNs / 1e6, cpuNsMax_ / 1e6, avgPct, cpuPctMax_, cpuBlocks_, cpuOverruns_ };
+  }
+  struct NodeCpu { std::string id; double avgUs; double maxUs; };
+  std::vector<NodeCpu> getPerNodeCpu() const {
+    std::vector<NodeCpu> v; v.reserve(ids_.size());
+    for (size_t i = 0; i < ids_.size(); ++i) {
+      const double avgNs = (nodeCalls_.size() > i && nodeCalls_[i] > 0)
+        ? static_cast<double>(nodeNsSum_[i] / static_cast<long double>(nodeCalls_[i])) : 0.0;
+      const double maxNs = (nodeNsMax_.size() > i) ? nodeNsMax_[i] : 0.0;
+      v.push_back(NodeCpu{ids_[i], avgNs / 1e3, maxNs / 1e3});
+    }
+    return v;
+  }
 };
 
 
