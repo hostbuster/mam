@@ -1523,9 +1523,11 @@ int main(int argc, char** argv) {
           sched.render(graph, conns, cmds, sr, channels, totalFrames, interleaved);
           if (cpuStats || cpuStatsPerNode) {
             const auto s = sched.getCpuSummary();
-            std::fprintf(stderr, "[offline-topo] CPU block avg=%.3fms max=%.3fms (avg=%.1f%% max=%.1f%%) blocks=%llu overruns=%llu\n",
+            std::fprintf(stderr, "[offline-topo] CPU block avg=%.3fms max=%.3fms (avg=%.1f%% max=%.1f%%) blocks=%llu overruns=%llu | barrier avg=%.3fms max=%.3fms (levels=%llu, parallel=%llu)\n",
                          s.avgMs, s.maxMs, s.avgPercent, s.maxPercent,
-                         (unsigned long long)s.blocks, (unsigned long long)s.overruns);
+                         (unsigned long long)s.blocks, (unsigned long long)s.overruns,
+                         s.barrierAvgMs, s.barrierMaxMs,
+                         (unsigned long long)s.barrierCount, (unsigned long long)s.parallelLevels);
             if (cpuStatsPerNode) {
               auto v = sched.getPerNodeCpu();
               for (const auto& e : v) std::fprintf(stderr, "  node=%s avg=%.2fus max=%.2fus\n", e.id.c_str(), e.avgUs, e.maxUs);
@@ -1561,9 +1563,11 @@ int main(int argc, char** argv) {
         sched.render(graph, conns, empty, sr, channels, totalFrames, interleaved);
         if (cpuStats || cpuStatsPerNode) {
           const auto s = sched.getCpuSummary();
-          std::fprintf(stderr, "[offline-topo] CPU block avg=%.3fms max=%.3fms (avg=%.1f%% max=%.1f%%) blocks=%llu overruns=%llu\n",
+          std::fprintf(stderr, "[offline-topo] CPU block avg=%.3fms max=%.3fms (avg=%.1f%% max=%.1f%%) blocks=%llu overruns=%llu | barrier avg=%.3fms max=%.3fms (levels=%llu, parallel=%llu)\n",
                        s.avgMs, s.maxMs, s.avgPercent, s.maxPercent,
-                       (unsigned long long)s.blocks, (unsigned long long)s.overruns);
+                       (unsigned long long)s.blocks, (unsigned long long)s.overruns,
+                       s.barrierAvgMs, s.barrierMaxMs,
+                       (unsigned long long)s.barrierCount, (unsigned long long)s.parallelLevels);
           if (cpuStatsPerNode) {
             auto v = sched.getPerNodeCpu();
             for (const auto& e : v) std::fprintf(stderr, "  node=%s avg=%.2fus max=%.2fus\n", e.id.c_str(), e.avgUs, e.maxUs);

@@ -254,6 +254,7 @@ Examples:
   - `--topo-min-seg-frames N` (default 128)
   - `--topo-verbose`
   - Metrics: combine with `--cpu-stats` and `--cpu-stats-per-node` to print `[offline-topo]` block and per-node timings.
+    - In parallel mode, the summary also prints barrier stats: average/max barrier time in ms, number of leveled barriers, and how many levels ran in parallel.
 - Roadmap:
   - Lifetime‑based buffer reuse across levels, optional level‑parallel execution, metrics/tracing, and a parity test suite.
   - Deterministic parallel JobPool with per-level barriers and instrumentation.

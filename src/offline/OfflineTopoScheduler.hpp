@@ -9,6 +9,7 @@
 #include <atomic>
 #include <memory>
 #include <thread>
+#include <mutex>
 #include "../core/Graph.hpp"
 #include "BufferPool.hpp"
 #include "OfflineProgress.hpp"
@@ -155,6 +156,7 @@ public:
             if (!jobPool_) jobPool_ = std::make_unique<JobPool>(threads_);
             std::atomic<uint32_t> done{0};
             const uint32_t need = static_cast<uint32_t>(level.size());
+            const auto tBarrierStart = cpuStatsEnabled_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
             for (size_t ni : level) {
               jobPool_->submit([&, ni]() {
                 // Build per-port sums from upstream edges (local)
@@ -175,6 +177,7 @@ public:
                 }
                 const float* mainIn2 = (lportSums.count(0u) ? lportSums[0u].data() : nullptr);
                 Node* node2 = graph.nodeAt(ni);
+                const auto tNodeStart = cpuStatsEnabled_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
                 if (auto* d2 = dynamic_cast<DelayNode*>(node2)) {
                   if (mainIn2) std::copy(lportSums[0u].begin(), lportSums[0u].end(), nodeBuffers_[ni]);
                   ProcessContext ctx2{}; ctx2.sampleRate = sampleRate; ctx2.frames = segFrames; ctx2.blockStart = segAbs;
@@ -193,11 +196,29 @@ public:
                   ProcessContext ctx2{}; ctx2.sampleRate = sampleRate; ctx2.frames = segFrames; ctx2.blockStart = segAbs;
                   node2->process(ctx2, nodeBuffers_[ni], channels);
                 }
+                if (cpuStatsEnabled_) {
+                  const auto tNodeEnd = std::chrono::steady_clock::now();
+                  const double ns = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(tNodeEnd - tNodeStart).count());
+                  std::lock_guard<std::mutex> lk(statsMu_);
+                  if (ni >= nodeNsSum_.size()) { nodeNsSum_.resize(ni + 1, 0.0L); nodeNsMax_.resize(ni + 1, 0.0); nodeCalls_.resize(ni + 1, 0u); }
+                  nodeNsSum_[ni] += static_cast<long double>(ns);
+                  if (ns > nodeNsMax_[ni]) nodeNsMax_[ni] = ns;
+                  nodeCalls_[ni] += 1u;
+                }
                 done.fetch_add(1, std::memory_order_release);
               });
             }
             // Spin-wait barrier (render thread only); short levels
             while (done.load(std::memory_order_acquire) < need) std::this_thread::yield();
+            if (cpuStatsEnabled_) {
+              const auto tBarrierEnd = std::chrono::steady_clock::now();
+              const double ns = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(tBarrierEnd - tBarrierStart).count());
+              std::lock_guard<std::mutex> lk(statsMu_);
+              barrierNsSum_ += static_cast<long double>(ns);
+              if (ns > barrierNsMax_) barrierNsMax_ = ns;
+              barrierCount_ += 1u;
+              parallelLevels_ += 1u;
+            }
           } else {
             for (size_t ni : level) {
             // Build per-port sums from upstream edges
@@ -409,13 +430,20 @@ private:
   // CPU stats
   long double cpuNsSum_ = 0.0L; double cpuNsMax_ = 0.0; double cpuPctSum_ = 0.0; double cpuPctMax_ = 0.0; uint64_t cpuBlocks_ = 0; uint64_t cpuOverruns_ = 0;
   std::vector<long double> nodeNsSum_{}; std::vector<double> nodeNsMax_{}; std::vector<uint64_t> nodeCalls_{};
+  // Parallel instrumentation
+  std::mutex statsMu_;
+  long double barrierNsSum_ = 0.0L; double barrierNsMax_ = 0.0; uint64_t barrierCount_ = 0; uint64_t parallelLevels_ = 0;
 
 public:
-  struct CpuSummary { double avgMs; double maxMs; double avgPercent; double maxPercent; uint64_t blocks; uint64_t overruns; };
+  struct CpuSummary {
+    double avgMs; double maxMs; double avgPercent; double maxPercent; uint64_t blocks; uint64_t overruns;
+    double barrierAvgMs; double barrierMaxMs; uint64_t barrierCount; uint64_t parallelLevels;
+  };
   CpuSummary getCpuSummary() const {
     const double avgNs = (cpuBlocks_ > 0) ? static_cast<double>(cpuNsSum_ / static_cast<long double>(cpuBlocks_)) : 0.0;
     const double avgPct = (cpuBlocks_ > 0) ? (cpuPctSum_ / static_cast<double>(cpuBlocks_)) : 0.0;
-    return CpuSummary{ avgNs / 1e6, cpuNsMax_ / 1e6, avgPct, cpuPctMax_, cpuBlocks_, cpuOverruns_ };
+    const double barrAvgNs = (barrierCount_ > 0) ? static_cast<double>(barrierNsSum_ / static_cast<long double>(barrierCount_)) : 0.0;
+    return CpuSummary{ avgNs / 1e6, cpuNsMax_ / 1e6, avgPct, cpuPctMax_, cpuBlocks_, cpuOverruns_, barrAvgNs / 1e6, barrierNsMax_ / 1e6, barrierCount_, parallelLevels_ };
   }
   struct NodeCpu { std::string id; double avgUs; double maxUs; };
   std::vector<NodeCpu> getPerNodeCpu() const {
