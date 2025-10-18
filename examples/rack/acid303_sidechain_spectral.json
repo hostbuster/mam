@@ -14,7 +14,7 @@
         "routes": [ { "sourceId": 1, "destParam": "CUTOFF_HZ", "min": 300, "max": 2400, "map": "exp" } ]
       }
     },
-    { "id": "kick1", "type": "kick", "params": { "f0": 120, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 1.0 } },
+    { "id": "kick1", "type": "kick", "params": { "f0": 2500, "fend": 35, "pitchDecayMs": 50, "ampDecayMs": 180, "gain": 1.0 } },
     { "id": "clap1", "type": "clap", "params": { "ampDecayMs": 180, "gain": 0.85 },
       "mod": {
         "lfos": [

@@ -255,6 +255,21 @@ Examples:
   - `--topo-verbose`
   - Metrics: combine with `--cpu-stats` and `--cpu-stats-per-node` to print `[offline-topo]` block and per-node timings.
     - In parallel mode, the summary also prints barrier stats: average/max barrier time in ms, number of leveled barriers, and how many levels ran in parallel.
+  - Tracing:
+    - `--topo-trace path.json`: write Chrome/Perfetto compatible trace of node executions and parallel barriers.
+    - Open the JSON in `chrome://tracing` or Perfetto.
+
+Example (topo trace):
+
+```bash
+./build/mam \
+  --rack examples/rack/acid303_sidechain_spectral.json \
+  --wav out.wav --duration 2 --sr 48000 \
+  --topo-scheduler topo --topo-threads 4 \
+  --topo-min-width 2 --topo-min-seg-frames 128 \
+  --topo-trace topo_trace.json --cpu-stats --cpu-stats-per-node
+# Open topo_trace.json in chrome://tracing
+```
 - Roadmap:
   - Lifetime‑based buffer reuse across levels, optional level‑parallel execution, metrics/tracing, and a parity test suite.
   - Deterministic parallel JobPool with per-level barriers and instrumentation.

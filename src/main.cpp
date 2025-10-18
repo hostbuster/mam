@@ -693,6 +693,7 @@ int main(int argc, char** argv) {
   uint32_t topoThreads = 0;          // 0=serial; >0 level-parallel jobs
   uint32_t topoMinWidth = 2;         // min nodes in level to parallelize
   uint32_t topoMinSegFrames = 128;   // min segment frames to parallelize
+  std::string topoTracePath;         // optional Chrome trace path
   uint32_t randomSeedOverride = 0;   // override JSON randomSeed if non-zero
   bool metersPerNode = false;
   std::string metricsNdjsonPath; bool metricsScopeRacks = true; bool metricsScopeBuses = true; // nodes later
@@ -828,6 +829,8 @@ int main(int argc, char** argv) {
       need(1); topoMinWidth = static_cast<uint32_t>(std::max(1, std::atoi(argv[++i])));
     } else if (std::strcmp(a, "--topo-min-seg-frames") == 0) {
       need(1); topoMinSegFrames = static_cast<uint32_t>(std::max(1, std::atoi(argv[++i])));
+    } else if (std::strcmp(a, "--topo-trace") == 0) {
+      need(1); topoTracePath = argv[++i];
     } else if (std::strcmp(a, "--meters-interval") == 0) {
       need(1);
       metersIntervalSec = std::atof(argv[++i]);
@@ -1519,6 +1522,7 @@ int main(int argc, char** argv) {
           }
           sched.setParallelHeuristics(topoMinWidth, topoMinSegFrames);
           if (cpuStats || cpuStatsPerNode) sched.enableCpuStats(true);
+          if (!topoTracePath.empty()) sched.enableTrace(topoTracePath.c_str());
           std::vector<GraphSpec::Connection> conns = spec2.connections;
           sched.render(graph, conns, cmds, sr, channels, totalFrames, interleaved);
           if (cpuStats || cpuStatsPerNode) {
@@ -1533,6 +1537,7 @@ int main(int argc, char** argv) {
               for (const auto& e : v) std::fprintf(stderr, "  node=%s avg=%.2fus max=%.2fus\n", e.id.c_str(), e.avgUs, e.maxUs);
             }
           }
+          if (!topoTracePath.empty()) sched.flushTrace();
         } else {
           interleaved = renderGraphWithCommands(graph, cmds, sr, channels, totalFrames);
         }

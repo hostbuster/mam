@@ -10,6 +10,7 @@
 #include <memory>
 #include <thread>
 #include <mutex>
+#include <cstdio>
 #include "../core/Graph.hpp"
 #include "BufferPool.hpp"
 #include "OfflineProgress.hpp"
@@ -41,6 +42,24 @@ public:
       nodeNsMax_.assign(ids_.size(), 0.0);
       nodeCalls_.assign(ids_.size(), 0u);
     }
+  }
+
+  void enableTrace(const char* path) {
+    if (path && *path) { traceEnabled_ = true; tracePath_ = path; trace_.clear(); traceEpoch_ = std::chrono::steady_clock::time_point{}; }
+  }
+  void flushTrace() {
+    if (!traceEnabled_ || tracePath_.empty()) return;
+    FILE* f = std::fopen(tracePath_.c_str(), "wb");
+    if (!f) return;
+    std::fprintf(f, "{\n  \"traceEvents\": [\n");
+    for (size_t i = 0; i < trace_.size(); ++i) {
+      const auto& e = trace_[i];
+      std::fprintf(f,
+        "    {\"name\":\"%s\",\"ph\":\"X\",\"ts\":%.3f,\"dur\":%.3f,\"pid\":1,\"tid\":1}%s\n",
+        e.name.c_str(), e.ts_us, e.dur_us, (i + 1 < trace_.size()) ? "," : "");
+    }
+    std::fprintf(f, "  ]\n}\n");
+    std::fclose(f);
   }
 
   // Render 'frames' samples into interleaved output, using fixed blockSize.
@@ -133,6 +152,7 @@ public:
         }
 
         // Execute by topo levels with explicit per-edge accumulation and BufferPool reuse
+        if (traceEnabled_ && traceEpoch_ == std::chrono::steady_clock::time_point{}) traceEpoch_ = std::chrono::steady_clock::now();
         const auto tBlockStart = cpuStatsEnabled_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
         graph.ensureTopology();
         const size_t totalSamples = static_cast<size_t>(segFrames) * channels;
@@ -219,6 +239,15 @@ public:
               barrierCount_ += 1u;
               parallelLevels_ += 1u;
             }
+            if (traceEnabled_) {
+              const auto tBarrierEnd = std::chrono::steady_clock::now();
+              const double ns = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(tBarrierEnd - tBarrierStart).count());
+              const double ts_us = static_cast<double>(
+                std::chrono::duration_cast<std::chrono::microseconds>(tBarrierStart - traceEpoch_).count());
+              const double dur_us = ns / 1000.0;
+              std::lock_guard<std::mutex> lk(statsMu_);
+              trace_.push_back(TraceEvt{"barrier", ts_us, dur_us});
+            }
           } else {
             for (size_t ni : level) {
             // Build per-port sums from upstream edges
@@ -283,6 +312,14 @@ public:
               nodeNsSum_[ni] += static_cast<long double>(ns);
               if (ns > nodeNsMax_[ni]) nodeNsMax_[ni] = ns;
               nodeCalls_[ni] += 1u;
+            }
+            if (traceEnabled_) {
+              const auto tNodeEnd = std::chrono::steady_clock::now();
+              const double ns = static_cast<double>(std::chrono::duration_cast<std::chrono::nanoseconds>(tNodeEnd - tNodeStart).count());
+              const double ts_us = static_cast<double>(
+                std::chrono::duration_cast<std::chrono::microseconds>(tNodeStart - traceEpoch_).count());
+              const double dur_us = ns / 1000.0;
+              trace_.push_back(TraceEvt{graph.nodeIdAt(ni), ts_us, dur_us});
             }
             }
           }
@@ -411,6 +448,8 @@ private:
   bool levelsBuilt_ = false;
   bool stableConnsApplied_ = false;
   bool cpuStatsEnabled_ = false;
+  bool traceEnabled_ = false;
+  std::string tracePath_;
   std::vector<std::string> ids_;
   std::unordered_map<std::string,size_t> idToIdx_;
   std::vector<std::vector<size_t>> levels_;
@@ -433,6 +472,10 @@ private:
   // Parallel instrumentation
   std::mutex statsMu_;
   long double barrierNsSum_ = 0.0L; double barrierNsMax_ = 0.0; uint64_t barrierCount_ = 0; uint64_t parallelLevels_ = 0;
+  // Trace
+  struct TraceEvt { std::string name; double ts_us; double dur_us; };
+  std::vector<TraceEvt> trace_{};
+  std::chrono::steady_clock::time_point traceEpoch_{};
 
 public:
   struct CpuSummary {
