@@ -7,6 +7,8 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
 ## Table of Contents
 
 - [Features](#features)
+- [Quick Start](#quick-start)
+- [Key Flags (Cheat Sheet)](#key-flags-cheat-sheet)
 - [Build (macOS)](#build-macos)
 - [Run](#run)
 - [Offline rendering](#offline-rendering)
@@ -55,6 +57,42 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
   - Benefit: faster offline renders with deterministic, debuggable behavior. See `docs/OFFLINETOPOSCHEDULER.md`.
 - **Parity tooling**: `--sha1` emits a sample hash; `tools/topo_parity.sh` validates baseline vs topo (serial/parallel), even with metrics/tracing enabled.
   - Benefit: confidence in changes and CI-friendly parity checks.
+
+## Quick Start
+
+```bash
+# Build
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j
+
+# Realtime (defaults)
+./build/mam
+
+# Offline export (2s @ 48kHz)
+./build/mam --rack examples/rack/acid303_sidechain_spectral.json \
+  --wav out.wav --sr 48000 --duration 2
+
+# Offline topo export with metrics and trace
+./build/mam --rack examples/rack/acid303_sidechain_spectral.json \
+  --wav out.wav --sr 48000 --duration 2 \
+  --topo-scheduler topo --topo-threads 4 \
+  --topo-min-width 2 --topo-min-seg-frames 128 \
+  --topo-metrics --topo-trace topo_trace.json --sha1
+```
+
+## Key Flags (Cheat Sheet)
+
+- Core
+  - `--rack path.json`, `--session path.json`, `--wav out.wav`, `--sr 48000`, `--duration 2`
+  - `--normalize`, `--peak-target -1.0`, `--sha1`
+- Topology (offline topo)
+  - `--topo-scheduler topo|baseline`, `--topo-offline-blocks N`
+  - `--topo-threads N` (0 → hardware default), `--topo-min-width N`, `--topo-min-seg-frames N`
+  - `--topo-verbose`, `--topo-metrics`, `--topo-trace trace.json`
+- Diagnostics
+  - `--print-ports`, `--print-latency`, `--dump-events`, `--print-triggers`, `--rt-debug-session`
+- Determinism & paths
+  - `--sha1` for parity; JSON `kind: rack|session`; relative rack paths resolved against sessions; search in `examples/*` and `MAM_SEARCH_PATHS`
 
 ### New in this build
 
