@@ -173,7 +173,9 @@ public:
         // Iterate levels
         for (const auto& level : levels_) {
           if (threads_ > 1 && level.size() >= minWidth_ && segFrames >= minSegFrames_) {
-            if (!jobPool_) jobPool_ = std::make_unique<JobPool>(threads_);
+            uint32_t useThreads = threads_;
+            if (level.size() < useThreads) useThreads = static_cast<uint32_t>(level.size());
+            if (!jobPool_ || jobPoolThreads_ != useThreads) { jobPool_ = std::make_unique<JobPool>(useThreads); jobPoolThreads_ = useThreads; }
             std::atomic<uint32_t> done{0};
             const uint32_t need = static_cast<uint32_t>(level.size());
             const auto tBarrierStart = cpuStatsEnabled_ ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point{};
@@ -464,6 +466,7 @@ private:
   uint32_t minWidth_ = 2;
   uint32_t minSegFrames_ = 128; // skip parallelism for tiny splits
   std::unique_ptr<JobPool> jobPool_{};
+  uint32_t jobPoolThreads_ = 0;
   std::vector<uint64_t> lifetimeIds_{};
 
   // CPU stats
