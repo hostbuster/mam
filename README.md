@@ -259,6 +259,8 @@ Examples:
     - `--topo-trace path.json`: write Chrome/Perfetto compatible trace of node executions and parallel barriers.
     - Open the JSON in `chrome://tracing` or Perfetto.
 
+See detailed docs: `docs/OFFLINETOPOSCHEDULER.md`.
+
 Example (topo trace):
 
 ```bash
