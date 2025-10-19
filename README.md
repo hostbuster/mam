@@ -4,6 +4,21 @@ A modern C++17 audio playfield. The first module is a small macOS command-line a
 
 This repository will grow into a platform for rapid prototyping of audio ideas, with a focus on maintainability, performance, and clarity guided by the C++ Core Guidelines.
 
+## Table of Contents
+
+- [Features](#features)
+- [Build (macOS)](#build-macos)
+- [Run](#run)
+- [Offline rendering](#offline-rendering)
+- [Topology and meters](#topology-and-meters)
+- [Topo offline scheduler](#topo-offline-scheduler-experimental)
+- [JSON file kinds (discriminator)](#json-file-kinds-discriminator)
+- [Threading strategy](#threading-strategy)
+- [Performance and Performance Tuning](#performance-and-performance-tuning)
+- [Architecture Overview](#architecture-overview)
+- [Project Structure](#project-structure)
+- [Development Path](#development-path)
+
 ## Features
 
 - **CoreAudio output**: Low-latency render callback to the default device.
@@ -28,6 +43,18 @@ This repository will grow into a platform for rapid prototyping of audio ideas, 
   - Benefit: preserves brightness and space; kick ducks bass freqs without dulling mids/highs.
 - **Concurrency scaffolding**: Command queue for sample-accurate control, offline job pool.
   - Benefit: glitch-free control changes in realtime and faster-than-realtime offline renders.
+- **Multi-port routing (MVP)**: Nodes can declare multiple input/output ports; supports sidechain (port 1) for compressors and channel adaptation.
+  - Benefit: flexible routing for advanced processing like keyed compression.
+- **Session rack mute/solo**: Per-rack `muted` / `solo` respected in realtime and offline; solo takes precedence.
+  - Benefit: quick A/B and focused editing across racks.
+- **Better diagnostics**: `--print-triggers` uses parameter names and shows origin tags `RACK`/`SESS`; `--print-ports`, `--print-latency` for visibility.
+  - Benefit: easier debugging of transport, parameter automation, and latency.
+- **File kinds and path resolution**: JSON `kind: rack|session` with defaults that search `examples/rack` and `examples/session`; session rack paths resolve relative to the session.
+  - Benefit: portable projects and simpler CLI usage.
+- **Offline Topo Scheduler (deterministic DAG)**: Level‑parallel execution with heuristics, lifetime‑ID `BufferPool` reuse, metrics and trace, SHA1 parity with baseline.
+  - Benefit: faster offline renders with deterministic, debuggable behavior. See `docs/OFFLINETOPOSCHEDULER.md`.
+- **Parity tooling**: `--sha1` emits a sample hash; `tools/topo_parity.sh` validates baseline vs topo (serial/parallel), even with metrics/tracing enabled.
+  - Benefit: confidence in changes and CI-friendly parity checks.
 
 ### New in this build
 
